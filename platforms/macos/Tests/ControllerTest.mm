@@ -1,0 +1,161 @@
+// Drives PKInputController with real key events against a fake text client,
+// covering what a user does: type a sentence, fix a doubtful word, commit.
+// Expects data.txt next to the executable (NSBundle.mainBundle's resources).
+#import <Carbon/Carbon.h>
+#import <InputMethodKit/InputMethodKit.h>
+
+#import "../Sources/CandidatePanel.h"
+
+#include <cassert>
+#include <cstdio>
+
+@interface PKInputController : IMKInputController
+@end
+
+@interface FakeClient : NSObject
+@property(nonatomic, strong) NSMutableString *committed;
+@property(nonatomic, copy) NSString *marked;
+@end
+
+@implementation FakeClient
+- (instancetype)init {
+  if ((self = [super init])) {
+    _committed = [NSMutableString string];
+    _marked = @"";
+  }
+  return self;
+}
+- (void)insertText:(id)string replacementRange:(NSRange)range {
+  [_committed appendString:[string isKindOfClass:NSAttributedString.class] ? [string string] : string];
+  _marked = @"";
+}
+- (void)setMarkedText:(id)string selectionRange:(NSRange)selection replacementRange:(NSRange)range {
+  _marked = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
+}
+- (NSDictionary *)attributesForCharacterIndex:(NSUInteger)index lineHeightRectangle:(NSRect *)rect {
+  *rect = NSMakeRect(200, 600, 0, 20);
+  return @{};
+}
+- (NSString *)bundleIdentifier {
+  return @"org.projectkey.test";
+}
+@end
+
+namespace {
+
+NSEvent *Key(NSString *characters, unsigned short keyCode = 0, NSEventModifierFlags flags = 0) {
+  return [NSEvent keyEventWithType:NSEventTypeKeyDown
+                          location:NSZeroPoint
+                     modifierFlags:flags
+                         timestamp:0
+                      windowNumber:0
+                           context:nil
+                        characters:characters
+       charactersIgnoringModifiers:characters
+                         isARepeat:NO
+                           keyCode:keyCode];
+}
+
+NSEvent *Shift(BOOL down) {
+  return [NSEvent keyEventWithType:NSEventTypeFlagsChanged
+                          location:NSZeroPoint
+                     modifierFlags:down ? NSEventModifierFlagShift : 0
+                         timestamp:0
+                      windowNumber:0
+                           context:nil
+                        characters:@""
+       charactersIgnoringModifiers:@""
+                         isARepeat:NO
+                           keyCode:kVK_Shift];
+}
+
+void Type(PKInputController *controller, FakeClient *client, NSString *keys) {
+  for (NSUInteger i = 0; i < keys.length; i++) {
+    NSString *key = [keys substringWithRange:NSMakeRange(i, 1)];
+    NSEvent *event = [key isEqualToString:@" "] ? Key(key, kVK_Space) : Key(key);
+    assert([controller handleEvent:event client:client]);
+  }
+}
+
+}  // namespace
+
+int main() {
+  @autoreleasepool {
+    [NSApplication sharedApplication];
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
+    FakeClient *client = [[FakeClient alloc] init];
+    PKInputController *controller = [[PKInputController alloc] init];
+
+    // 我們把舊的程式重構成模組: the engine guesses 城市 and nothing is committed yet.
+    Type(controller, client, @"ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3");
+    assert(client.committed.length == 0);
+    assert([client.marked containsString:@"城市"]);
+
+    // Space opens candidates on the doubtful 城市; 2 picks the second one, 程式.
+    assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
+    assert([controller handleEvent:Key(@"2") client:client]);
+    assert([client.marked containsString:@"的程式"]);
+
+    // Enter commits the sentence as shown.
+    assert([controller handleEvent:Key(@"\r", kVK_Return) client:client]);
+    assert([client.committed containsString:@"的程式重"] && client.marked.length == 0);
+    NSUInteger before = client.committed.length;
+
+    // Tone 1 via space, shifted punctuation, Delete, Esc.
+    Type(controller, client, @"rup wu0 ");
+    assert([controller handleEvent:Key(@"<", 0, NSEventModifierFlagShift) client:client]);
+    assert([client.marked isEqualToString:@"今天，"]);
+    assert([controller handleEvent:Key(@"\x7f", kVK_Delete) client:client]);
+    assert([client.marked isEqualToString:@"今天"]);
+    assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
+    assert(client.marked.length == 0 && client.committed.length == before);
+
+    // Arrows move the cursor between syllables; typing and Forward Delete act there.
+    Type(controller, client, @"rup wu0 ");
+    [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"ProofPreview"];  // always show the proof row
+    assert([controller handleEvent:Key(@"", kVK_LeftArrow) client:client]);
+    assert(PKCandidatePanel.shared.content.caret == 1);
+    Type(controller, client, @"ji");
+    assert(PKCandidatePanel.shared.content.caret == 1 && PKCandidatePanel.shared.content.pendingReading.length == 2);
+    Type(controller, client, @"3");
+    assert(PKCandidatePanel.shared.content.caret == 2);
+    assert([client.marked isEqualToString:@"今我天"]);
+    assert([controller handleEvent:Key(@"", kVK_ForwardDelete) client:client]);
+    assert([client.marked isEqualToString:@"今我"]);
+    assert([controller handleEvent:Key(@"", kVK_Home) client:client]);
+    assert([controller handleEvent:Key(@"", kVK_ForwardDelete) client:client]);
+    assert([client.marked isEqualToString:@"我"]);
+    assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
+
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
+
+    // Up on the first candidate page stays there instead of wrapping to the last.
+    Type(controller, client, @"rup wu0 ");
+    assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
+    assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
+    assert(PKCandidatePanel.shared.visible && [PKCandidatePanel.shared.content.pageLabel hasPrefix:@"1/"]);
+    assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
+    assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
+    assert(client.marked.length == 0 && client.committed.length == before);
+
+    // With nothing composed, editing keys belong to the app.
+    assert(![controller handleEvent:Key(@"\x7f", kVK_Delete) client:client]);
+    assert(![controller handleEvent:Key(@"\r", kVK_Return) client:client]);
+
+    // A shortcut commits the composition first and passes through.
+    Type(controller, client, @"rup ");
+    assert(![controller handleEvent:Key(@"c", kVK_ANSI_C, NSEventModifierFlagCommand) client:client]);
+    assert([client.committed hasSuffix:@"今"]);
+
+    // Tapping Shift switches to English: keys pass through; tapping again switches back.
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    assert(![controller handleEvent:Key(@"r") client:client]);
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    assert([controller handleEvent:Key(@"r") client:client]);
+
+    std::printf("ControllerTest passed\n");
+  }
+  return 0;
+}

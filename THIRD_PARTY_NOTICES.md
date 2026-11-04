@@ -4,9 +4,12 @@ Project Key 以 MIT 授權發布（見 [LICENSE](LICENSE)）。本檔列出 repo
 
 ## repo 內含
 
-### McBopomofo 詞庫衍生的注音
+### McBopomofo
 
-`tests/corpus/corpus.tsv` 的 `zhuyin` 欄位由 McBopomofo 詞庫自動標註後再人工修正。詞庫版本為 commit `257da536ddaf590aae0e74e6adb9b415988344f6`，來源：https://github.com/openvanilla/McBopomofo
+來源：https://github.com/openvanilla/McBopomofo ，commit `257da536ddaf590aae0e74e6adb9b415988344f6`。
+
+- `tests/corpus/corpus.tsv` 的 `zhuyin` 欄位由 McBopomofo 詞庫自動標註後再人工修正。
+- macOS 輸入法（`platforms/macos`）在建置時下載 McBopomofo 的引擎（gramambular2、Mandarin、McBopomofoLM）並連結進執行檔，詞庫 `data.txt` 隨 App 發布。App 內附授權條文 `McBopomofo-LICENSE.txt`。
 
 ```
 MIT License
