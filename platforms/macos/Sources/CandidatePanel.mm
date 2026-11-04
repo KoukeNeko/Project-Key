@@ -36,6 +36,9 @@ constexpr CGFloat kRadius = 14, kPillRadius = 8, kGapToText = 8, kAnchorInset = 
 // its marks (2px, 3px under the line, inset 1px per side) below it.
 constexpr CGFloat kProofTop = 6.5, kProofBottom = 11.5, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
 constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
+// Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
+NSString *const kReplacedArrow = @" → ";
+constexpr CGFloat kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5;
 // Candidate row: padding 6 6 6 8; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
 constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
 constexpr CGFloat kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
@@ -171,7 +174,9 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   CGFloat width = 0;
   if (self.content.showsProof) {
     NSString *sentence = [[self.content.segments componentsJoinedByString:@""] stringByAppendingString:self.content.pendingReading];
-    width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + kProofRight);
+    CGFloat key = self.content.keyHint ? kKeyGap + [self keyWidth] : 0;
+    if (self.content.replacedText) key += [self widthOf:[self.content.replacedText stringByAppendingString:kReplacedArrow] font:_proofFont];
+    width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + key + kProofRight);
   }
   if (self.content.rows) {
     // As wide as the fullest visible row, so a short single row stays compact.
@@ -270,6 +275,22 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   }
 }
 
+- (CGFloat)keyWidth {
+  return MAX(kKeyHeight, [self widthOf:self.content.keyHint font:_labelFont] + 2 * kKeyPadding);
+}
+
+- (void)drawKeyHintAt:(CGFloat)lineTop {
+  CGFloat width = [self keyWidth];
+  NSRect cap = NSMakeRect(NSWidth(self.bounds) - kProofRight - width, lineTop + (kProofLine - kKeyHeight) / 2, width, kKeyHeight);
+  NSBezierPath *outline = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(cap, 0.5, 0.5) xRadius:kKeyRadius yRadius:kKeyRadius];
+  outline.lineWidth = 1;
+  [self.mutedColor setStroke];
+  [outline stroke];
+  NSDictionary *attributes = Attributes(_labelFont, self.mutedColor);
+  NSSize size = [self.content.keyHint sizeWithAttributes:attributes];
+  [self.content.keyHint drawAtPoint:NSMakePoint(NSMidX(cap) - size.width / 2, NSMidY(cap) - size.height / 2) withAttributes:attributes];
+}
+
 - (void)drawProofAt:(CGFloat)top {
   CGFloat x = kProofLeft;
   // The line stays centered; marks sit in the space below it, so they come and
@@ -277,7 +298,16 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   CGFloat lineTop = top + (kProofTop + kProofBottom) / 2;
   CGFloat textTop = TextTop(_proofFont, lineTop, kProofLine);
   CGFloat markTop = lineTop + kProofLine + kMarkGap;
+  if (self.content.keyHint) [self drawKeyHintAt:lineTop];
   NSDictionary *muted = Attributes(_proofFont, self.mutedColor);
+  if (self.content.replacedText) {
+    NSMutableDictionary *struck = [muted mutableCopy];
+    struck[NSStrikethroughStyleAttributeName] = @(NSUnderlineStyleSingle);
+    [self.content.replacedText drawAtPoint:NSMakePoint(x, textTop) withAttributes:struck];
+    x += [self widthOf:self.content.replacedText font:_proofFont];
+    [kReplacedArrow drawAtPoint:NSMakePoint(x, textTop) withAttributes:muted];
+    x += [self widthOf:kReplacedArrow font:_proofFont];
+  }
   NSUInteger length = [self.content.segments componentsJoinedByString:@""].length;
   NSUInteger start = 0;
   // The pending reading, or a caret line when there is none, sits at the cursor.

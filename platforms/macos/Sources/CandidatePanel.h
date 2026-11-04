@@ -16,6 +16,8 @@ FOUNDATION_EXPORT BOOL PKGlassAvailable(void);  // C linkage, for SettingsForm.s
 @property(nonatomic, copy) NSString *pendingReading;
 @property(nonatomic) NSUInteger caret;  // characters of the joined segments before the cursor
 @property(nonatomic) BOOL showsProof;
+@property(nonatomic, copy, nullable) NSString *keyHint;  // a key drawn as a keycap at the end of the proof row
+@property(nonatomic, copy, nullable) NSString *replacedText;  // struck out before the proof text, with an arrow
 // Visible rows of the candidate grid; nil hides the candidate area. Each row
 // holds at most PKGridColumns columns, and a long candidate spans several.
 @property(nonatomic, copy, nullable) NSArray<NSArray<NSString *> *> *rows;

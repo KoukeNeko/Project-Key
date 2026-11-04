@@ -55,6 +55,11 @@ int main(int argc, const char *argv[]) {
       content.doubtful = [NSIndexSet indexSet];
       content.caret = 2;
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"plain.png"] atomically:YES];
+      content.segments = @[ @"我好" ];
+      content.caret = 2;
+      content.keyHint = @"⇧";
+      content.replacedText = @"ji3cl3";
+      [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"hint.png"] atomically:YES];
       NSView *form = [PKSettingsForm makeViewWithClearChoices:^{
       }];
       NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, form.fittingSize.width, form.fittingSize.height)
