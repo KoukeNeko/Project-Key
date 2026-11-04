@@ -260,7 +260,14 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     NSRectFill(NSMakeRect(0, self.proofBelow ? proofTop - 1 : self.proofHeight, NSWidth(bounds), 1));
   }
   if (self.content.showsProof) [self drawProofAt:proofTop];
-  if (self.content.rows) [self drawCandidatesAt:rowTop width:NSWidth(bounds)];
+  if (self.content.rows) {
+    // While the window grows above the text, rows laid out for the final size
+    // would run over the pinned proof row; keep them above it.
+    [NSGraphicsContext saveGraphicsState];
+    if (self.proofBelow && self.content.showsProof) NSRectClip(NSMakeRect(0, 0, NSWidth(bounds), proofTop - 1));
+    [self drawCandidatesAt:rowTop width:NSWidth(bounds)];
+    [NSGraphicsContext restoreGraphicsState];
+  }
 }
 
 - (void)drawProofAt:(CGFloat)top {

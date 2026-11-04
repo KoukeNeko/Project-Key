@@ -26,8 +26,16 @@
   return self;
 }
 - (void)insertText:(id)string replacementRange:(NSRange)range {
-  [_committed appendString:[string isKindOfClass:NSAttributedString.class] ? [string string] : string];
+  NSString *text = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
+  if (range.location == NSNotFound) {
+    [_committed appendString:text];
+  } else {
+    [_committed replaceCharactersInRange:range withString:text];
+  }
   _marked = @"";
+}
+- (NSRange)selectedRange {
+  return NSMakeRange(_committed.length, 0);
 }
 - (void)setMarkedText:(id)string selectionRange:(NSRange)selection replacementRange:(NSRange)range {
   _marked = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
@@ -189,6 +197,20 @@ int main() {
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
     assert([controller handleEvent:Key(@"r") client:client]);
+    while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+
+    // Zhuyin typed in English mode: a lone Shift turns the whole syllables at
+    // the end (ji3cl3, 我好) into a composition and leaves the English alone.
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    for (NSString *key in @[ @"h", @"e", @"l", @"l", @"o", @" ", @"j", @"i", @"3", @"c", @"l", @"3" ]) {
+      assert(![controller handleEvent:Key(key) client:client]);
+      [client.committed appendString:key];  // what the app does with a key passed through
+    }
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    assert([client.committed hasSuffix:@"hello "] && [client.marked isEqualToString:@"我好"]);
+    assert([controller handleEvent:Key(@"r") client:client]);  // back in 中
 
     std::printf("ControllerTest passed\n");
   }
