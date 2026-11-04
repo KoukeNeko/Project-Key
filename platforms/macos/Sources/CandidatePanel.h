@@ -18,6 +18,9 @@ BOOL PKGlassAvailable(void);
 @property(nonatomic) BOOL showsProof;
 @property(nonatomic, copy, nullable) NSArray<NSString *> *candidates;  // this page only; nil hides the row
 @property(nonatomic) NSInteger selection;                             // index within the page
+// 0: one row. Otherwise the page is a grid this many columns wide; only the
+// selection's row carries the 1-7 labels.
+@property(nonatomic) NSInteger columns;
 @property(nonatomic, copy, nullable) NSString *pageLabel;               // "1/3", nil for a single page
 @end
 
