@@ -99,8 +99,22 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return self.content.showsProof ? kProofTop + kProofLine + kProofBottom : 0;
 }
 
+- (NSInteger)gridRows {
+  NSInteger columns = self.content.columns;
+  return columns ? (self.content.candidates.count + columns - 1) / columns : 1;
+}
+
 - (CGFloat)rowHeight {
-  return self.content.candidates ? kRowTop + kCellTop + kCellLine + kCellBottom + kRowBottom : 0;
+  if (!self.content.candidates) return 0;
+  CGFloat cell = kCellTop + kCellLine + kCellBottom;
+  return kRowTop + self.gridRows * cell + (self.gridRows - 1) * kCellGap + kRowBottom;
+}
+
+// Grid columns share the widest cell so they line up.
+- (CGFloat)columnWidth {
+  CGFloat width = 0;
+  for (NSUInteger i = 0; i < self.content.candidates.count; i++) width = MAX(width, [self cellWidth:i]);
+  return width;
 }
 
 - (CGFloat)widthOf:(NSString *)string font:(NSFont *)font {
@@ -108,7 +122,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (CGFloat)cellWidth:(NSUInteger)index {
-  NSString *label = [NSString stringWithFormat:@"%lu", index + 1];
+  NSInteger columns = self.content.columns;
+  NSString *label = [NSString stringWithFormat:@"%lu", columns ? index % columns + 1 : index + 1];
   return kCellSide + [self widthOf:label font:_labelFont] + kLabelGap +
          [self widthOf:self.content.candidates[index] font:_candidateFont] + kCellSide;
 }
@@ -129,7 +144,11 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   }
   if (self.content.candidates) {
     CGFloat row = kRowLeft + kRowRight;
-    for (NSUInteger i = 0; i < self.content.candidates.count; i++) row += [self cellWidth:i] + kCellGap;
+    if (self.content.columns) {
+      row += self.content.columns * (self.columnWidth + kCellGap);
+    } else {
+      for (NSUInteger i = 0; i < self.content.candidates.count; i++) row += [self cellWidth:i] + kCellGap;
+    }
     if (self.content.pageLabel) row += kPageLeft + [self widthOf:self.content.pageLabel font:_pageFont] + kPageRight;
     width = MAX(width, row);
   }
@@ -208,25 +227,37 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (void)drawCandidatesAt:(CGFloat)top width:(CGFloat)width {
-  CGFloat x = kRowLeft;
+  NSInteger columns = self.content.columns;
+  NSInteger labeledRow = columns ? self.content.selection / columns : 0;
+  CGFloat columnWidth = columns ? self.columnWidth : 0;
+  CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
   CGFloat cellTop = top + kRowTop;
-  CGFloat textTop = TextTop(_candidateFont, cellTop + kCellTop, kCellLine);
-  CGFloat labelTop = textTop + _candidateFont.ascender - _labelFont.ascender;  // share the baseline
+  CGFloat x = kRowLeft;
   for (NSUInteger i = 0; i < self.content.candidates.count; i++) {
+    NSInteger row = columns ? i / columns : 0;
+    if (columns) {
+      x = kRowLeft + (i % columns) * (columnWidth + kCellGap);
+      cellTop = top + kRowTop + row * (cellHeight + kCellGap);
+    }
+    CGFloat textTop = TextTop(_candidateFont, cellTop + kCellTop, kCellLine);
+    CGFloat labelTop = textTop + _candidateFont.ascender - _labelFont.ascender;  // share the baseline
     BOOL on = (NSInteger)i == self.content.selection;
-    CGFloat cell = [self cellWidth:i];
+    CGFloat cell = columns ? columnWidth : [self cellWidth:i];
     if (on) {
       [kAccent setFill];
-      NSRect pill = NSMakeRect(x, cellTop, cell, kCellTop + kCellLine + kCellBottom);
+      NSRect pill = NSMakeRect(x, cellTop, cell, cellHeight);
       [[NSBezierPath bezierPathWithRoundedRect:pill xRadius:kPillRadius yRadius:kPillRadius] fill];
     }
-    NSString *label = [NSString stringWithFormat:@"%lu", i + 1];
-    [label drawAtPoint:NSMakePoint(x + kCellSide, labelTop)
-        withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : self.mutedColor)];
+    NSString *label = [NSString stringWithFormat:@"%lu", columns ? i % columns + 1 : i + 1];
+    if (row == labeledRow) {
+      [label drawAtPoint:NSMakePoint(x + kCellSide, labelTop)
+          withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : self.mutedColor)];
+    }
     CGFloat textX = x + kCellSide + [self widthOf:label font:_labelFont] + kLabelGap;
     [self.content.candidates[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, on ? NSColor.whiteColor : self.textColor)];
-    x += cell + kCellGap;
+    if (!columns) x += cell + kCellGap;
   }
+  cellTop = top + kRowTop;  // the page label sits on the first row
   if (self.content.pageLabel) {
     CGFloat labelWidth = [self widthOf:self.content.pageLabel font:_pageFont];
     CGFloat pageTop = TextTop(_pageFont, cellTop + kCellTop, kCellLine);

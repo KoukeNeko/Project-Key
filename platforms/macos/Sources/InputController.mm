@@ -14,7 +14,8 @@ using ProjectKey::Segment;
 
 namespace {
 
-constexpr NSInteger kPerPage = 7;
+constexpr NSInteger kPerPage = 7;      // also the columns of the expanded grid
+constexpr NSInteger kExpandedRows = 5;  // rows the expanded grid shows at once
 NSString *const kProofModeKey = @"ProofPreview";
 NSString *const kLastOnProofModeKey = @"ProofPreviewLastOn";
 
@@ -64,6 +65,8 @@ BOOL gEnglishMode = NO;
   size_t _activeStart;  // start reading of the segment being chosen
   std::vector<std::string> _candidates;
   NSInteger _selection;
+  BOOL _expanded;          // candidates shown as a grid, one page per row
+  NSInteger _firstRow;     // first grid row on screen
   BOOL _shiftAlone;
 }
 
@@ -283,19 +286,37 @@ BOOL gEnglishMode = NO;
     case kVK_RightArrow:
       _selection = MIN(count - 1, _selection + 1);
       break;
-    case kVK_Space:
-    case kVK_PageDown:
     case kVK_DownArrow:
-      _selection = (page + 1) % pages * kPerPage;
-      break;
-    case kVK_PageUp:
-      _selection = MAX(page - 1, 0) * kPerPage;  // wrapping back lands on the rarest page
+      // Down opens the grid: every page as a row, moving down in the same column.
+      if (page + 1 < pages) {
+        _expanded = YES;
+        _selection = MIN(count - 1, _selection + kPerPage);
+      }
       break;
     case kVK_UpArrow:
-      if (page == 0) {
-        _choosing = NO;  // past the first page, Up returns to the sentence
-      } else {
+      if (_expanded && page > 0) {
+        _selection -= kPerPage;
+      } else if (_expanded) {
+        _expanded = NO;  // Up from the grid's first row folds it back
+      } else if (page > 0) {
         _selection = (page - 1) * kPerPage;
+      } else {
+        _choosing = NO;  // past the first page, Up returns to the sentence
+      }
+      break;
+    case kVK_Space:
+    case kVK_PageDown:
+      if (_expanded) {
+        _selection = MIN(count - 1, _selection + kExpandedRows * kPerPage);
+      } else {
+        _selection = (page + 1) % pages * kPerPage;
+      }
+      break;
+    case kVK_PageUp:
+      if (_expanded) {
+        _selection = _selection >= kExpandedRows * kPerPage ? _selection - kExpandedRows * kPerPage : _selection % kPerPage;
+      } else {
+        _selection = MAX(page - 1, 0) * kPerPage;  // wrapping back lands on the rarest page
       }
       break;
     case kVK_Return:
@@ -308,6 +329,12 @@ BOOL gEnglishMode = NO;
       return YES;
     }
     case kVK_Escape:
+      if (_expanded) {
+        _expanded = NO;
+      } else {
+        _choosing = NO;
+      }
+      break;
     case kVK_Delete:
       _choosing = NO;
       break;
@@ -315,7 +342,7 @@ BOOL gEnglishMode = NO;
       NSString *characters = event.characters;
       unichar c = characters.length == 1 ? [characters characterAtIndex:0] : 0;
       if (c >= '1' && c < '1' + kPerPage) {
-        NSInteger index = page * kPerPage + (c - '1');
+        NSInteger index = page * kPerPage + (c - '1');  // the selection's row carries the labels
         if (index < count) [self pick:index client:client];
         return YES;
       }
@@ -377,6 +404,8 @@ BOOL gEnglishMode = NO;
   std::vector<std::string> candidates = _composer->candidates(*segment);
   if (candidates.empty()) return;
   _choosing = YES;
+  _expanded = NO;
+  _firstRow = 0;
   _activeStart = start;
   _candidates = std::move(candidates);
   auto current = std::find(_candidates.begin(), _candidates.end(), segment->text);
@@ -470,13 +499,22 @@ BOOL gEnglishMode = NO;
   content.showsProof = showsProof;
   if (_choosing) {
     NSInteger page = _selection / kPerPage, count = (NSInteger)_candidates.size();
-    NSMutableArray<NSString *> *pageCandidates = [NSMutableArray array];
-    for (NSInteger i = page * kPerPage; i < MIN(count, (page + 1) * kPerPage); i++) {
-      [pageCandidates addObject:String(_candidates[i])];
-    }
-    content.candidates = pageCandidates;
-    content.selection = _selection - page * kPerPage;
     NSInteger pages = (count + kPerPage - 1) / kPerPage;
+    // Collapsed: the selection's page. Expanded: up to kExpandedRows pages as rows, scrolled to the selection.
+    NSInteger first = page, rows = 1;
+    if (_expanded) {
+      _firstRow = MIN(_firstRow, page);
+      _firstRow = MAX(_firstRow, page - kExpandedRows + 1);
+      first = _firstRow;
+      rows = kExpandedRows;
+      content.columns = kPerPage;
+    }
+    NSMutableArray<NSString *> *visible = [NSMutableArray array];
+    for (NSInteger i = first * kPerPage; i < MIN(count, (first + rows) * kPerPage); i++) {
+      [visible addObject:String(_candidates[i])];
+    }
+    content.candidates = visible;
+    content.selection = _selection - first * kPerPage;
     content.pageLabel = pages > 1 ? [NSString stringWithFormat:@"%ld/%ld", page + 1, pages] : nil;
   }
   NSRect lineRect = NSZeroRect;

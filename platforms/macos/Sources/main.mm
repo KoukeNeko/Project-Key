@@ -32,6 +32,17 @@ int main(int argc, const char *argv[]) {
       content.showsProof = NO;
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"proof-off.png"] atomically:YES];
       content.showsProof = YES;
+      content.candidates = @[ @"程式", @"城市", @"成事", @"乘勢", @"呈示", @"程", @"城", @"成", @"乘", @"承", @"誠", @"呈",
+                              @"盛", @"橙", @"懲", @"澄", @"丞", @"騁", @"埕", @"珵", @"裎", @"晟", @"棖" ];
+      content.columns = 7;
+      content.selection = 8;
+      content.pageLabel = @"2/4";
+      [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"expanded.png"] atomically:YES];
+      content.columns = 0;
+      content.candidates = @[ @"程式", @"城市", @"成事", @"乘勢", @"呈示", @"程", @"城" ];
+      content.selection = 0;
+      content.pageLabel = @"1/9";
+      content.showsProof = YES;
       content.candidates = nil;
       content.activeSegment = -1;
       content.segments = @[ @"我們", @"把", @"舊的", @"程式", @"重構", @"成" ];

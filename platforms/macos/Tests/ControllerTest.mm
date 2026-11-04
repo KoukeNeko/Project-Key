@@ -129,14 +129,27 @@ int main() {
 
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
 
-    // Up pages back; on the first page it closes the candidates and keeps the sentence.
+    // Down expands the pages into a grid, one row per page; Up walks back up,
+    // folds the grid on its first row, and closes the candidates after that.
     Type(controller, client, @"rup wu0 ");
     assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
+    assert(PKCandidatePanel.shared.content.columns == 0);
     assert([controller handleEvent:Key(@"", kVK_DownArrow) client:client]);
+    PKPanelContent *grid = PKCandidatePanel.shared.content;
+    assert(grid.columns == 7 && grid.candidates.count > 7 && grid.selection == 7 && [grid.pageLabel hasPrefix:@"2/"]);
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
-    assert(PKCandidatePanel.shared.visible && [PKCandidatePanel.shared.content.pageLabel hasPrefix:@"1/"]);
+    assert(PKCandidatePanel.shared.content.columns == 7 && PKCandidatePanel.shared.content.selection == 0);
+    assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
+    assert(PKCandidatePanel.shared.content.columns == 0 && PKCandidatePanel.shared.content.candidates);
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
     assert(PKCandidatePanel.shared.content.candidates == nil && [client.marked isEqualToString:@"今天"]);
+
+    // In the grid, number keys pick from the selection's row.
+    assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
+    assert([controller handleEvent:Key(@"", kVK_DownArrow) client:client]);
+    NSString *secondRowFirst = PKCandidatePanel.shared.content.candidates[7];
+    assert([controller handleEvent:Key(@"1") client:client]);
+    assert([client.marked hasPrefix:secondRowFirst]);
     assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
     assert(client.marked.length == 0 && client.committed.length == before);
 
