@@ -5,12 +5,14 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "Bigram.h"
 #include "Mandarin/Mandarin.h"
 #include "McBopomofoLM.h"
+#include "UserOverrideModel.h"
 #include "gramambular2/reading_grid.h"
 
 namespace ProjectKey {
@@ -25,10 +27,15 @@ struct Segment {
 
 class Composer {
  public:
-  // With a bigram model, each word is scored in the context of the word before
-  // it: log10(weight * P(word | previous) + (1 - weight) * 10^unigram score).
+  // With a context model, each word is scored in the context of the two words
+  // before it: log10(weight * context + (1 - weight) * 10^unigram score), where
+  // context is P(word | previous), mixed with P(word | two previous) by
+  // trigramWeight when the model has that triple.
+  // With a user model, choices are remembered by the word before them and the
+  // reading, and a remembered word wins the walk the next time.
   explicit Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr<const Bigram> bigram = nullptr,
-                    double contextWeight = 0.3);
+                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr, double contextWeight = 0.3,
+                    double trigramWeight = 0.5);
 
   enum class KeyResult { kHandled, kInvalid };
 
@@ -58,6 +65,10 @@ class Composer {
   std::string pendingReading() const { return reading_.composedString(); }
   std::string text() const;
 
+  // The segment starting at `start`, or, inside a segment, its part from
+  // `start` on (with empty text), so a later syllable of a phrase can be chosen.
+  std::optional<Segment> segmentFrom(size_t start) const;
+
   // Candidates for the segment: same-length phrases first, then the shorter
   // phrases that start where the segment starts.
   std::vector<std::string> candidates(const Segment& segment);
@@ -67,11 +78,13 @@ class Composer {
   KeyResult insertPendingSyllable();
   bool startsWithSegment(const Segment& segment, const std::string& reading) const;
   void walk();
-  double wordScore(const std::string* previous, const std::string& word, double unigramScore) const;
+  double wordScore(uint32_t first, uint32_t second, uint32_t word, double unigramScore) const;
 
   std::shared_ptr<McBopomofo::McBopomofoLM> lm_;
   std::shared_ptr<const Bigram> bigram_;
   double contextWeight_;
+  double trigramWeight_;
+  std::shared_ptr<McBopomofo::UserOverrideModel> userModel_;
   Formosa::Gramambular2::ReadingGrid grid_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
   std::vector<Segment> segments_;

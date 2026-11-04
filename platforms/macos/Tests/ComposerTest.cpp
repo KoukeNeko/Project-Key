@@ -97,6 +97,24 @@ int main(int argc, char** argv) {
   assert(contextual.text() == "第一列時");
   std::remove(path.c_str());
 
+  // The user model: after choosing 列 following 第一 once, the next walk keeps it.
+  auto userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+  Composer learning(lm, nullptr, userModel);
+  type(learning, "2u4u xu,4g6");
+  const ProjectKey::Segment* hunt = nullptr;
+  for (const auto& segment : learning.segments()) {
+    if (segment.text == "獵食") hunt = &segment;
+  }
+  assert(hunt && learning.choose(*hunt, "列"));
+  assert(learning.text().rfind("第一列", 0) == 0);
+  learning.clear();
+  type(learning, "2u4u xu,4g6");
+  assert(learning.text().rfind("第一列", 0) == 0);
+  // Other contexts are unaffected.
+  learning.clear();
+  type(learning, "xu,4g6");
+  assert(learning.text() == "獵食");
+
   std::printf("ComposerTest passed\n");
   return 0;
 }

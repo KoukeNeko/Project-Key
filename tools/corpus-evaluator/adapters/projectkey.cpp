@@ -1,6 +1,6 @@
 // Engine adapter for Project Key's macOS composer: McBopomofo's grid and
-// dictionary, plus the context bigram model when one is given.
-// Usage: projectkey <data.txt> [bigram.bin] [context weight]
+// dictionary, plus the context model when one is given.
+// Usage: projectkey <data.txt> [bigram.bin] [context weight] [trigram weight]
 #include <chrono>
 #include <cstdio>
 #include <iostream>
@@ -11,7 +11,7 @@
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "usage: " << argv[0] << " <data.txt> [bigram.bin] [context weight]\n";
+    std::cerr << "usage: " << argv[0] << " <data.txt> [bigram.bin] [context weight] [trigram weight]\n";
     return 2;
   }
   auto model = std::make_shared<McBopomofo::McBopomofoLM>();
@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
-  ProjectKey::Composer composer(model, bigram, argc >= 4 ? std::stod(argv[3]) : 0.3);
+  ProjectKey::Composer composer(model, bigram, nullptr, argc >= 4 ? std::stod(argv[3]) : 0.3, argc >= 5 ? std::stod(argv[4]) : 0.5);
 
   std::string line;
   while (std::getline(std::cin, line)) {
