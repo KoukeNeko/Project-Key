@@ -123,6 +123,12 @@ int main() {
     assert([client.committed containsString:@"的程式重"] && client.marked.length == 0);
     NSUInteger before = client.committed.length;
 
+    // Punctuation without Shift: ' and \ both give 、, [ and ] the corner brackets.
+    Type(controller, client, @"'\\[]");
+    assert([client.marked isEqualToString:@"、、「」"]);
+    assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
+    assert(client.marked.length == 0);
+
     // Tone 1 via space, shifted punctuation, Delete, Esc.
     Type(controller, client, @"rup wu0 ");
     assert([controller handleEvent:Key(@"<", 0, NSEventModifierFlagShift) client:client]);
