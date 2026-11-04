@@ -1,5 +1,7 @@
 #import "SettingsWindow.h"
 
+#import "CandidatePanel.h"
+
 @implementation PKSettingsWindow
 
 + (NSWindow *)window {
@@ -11,12 +13,22 @@
           toObject:NSUserDefaultsController.sharedUserDefaultsController
        withKeyPath:@"values.ProofPreview"
            options:nil];
-    NSGridView *grid = [NSGridView gridViewWithViews:@[ @[ [NSTextField labelWithString:@"整句預覽"], proof ] ]];
+    NSPopUpButton *appearance = [[NSPopUpButton alloc] init];
+    [appearance addItemsWithTitles:@[ @"深色", @"Liquid Glass" ]];
+    [appearance bind:NSSelectedIndexBinding
+            toObject:NSUserDefaultsController.sharedUserDefaultsController
+         withKeyPath:[@"values." stringByAppendingString:PKAppearanceKey]
+             options:nil];
+    appearance.enabled = PKGlassAvailable();  // Liquid Glass needs macOS 26
+    NSGridView *grid = [NSGridView gridViewWithViews:@[
+      @[ [NSTextField labelWithString:@"外觀"], appearance ],
+      @[ [NSTextField labelWithString:@"整句預覽"], proof ],
+    ]];
     [grid columnAtIndex:0].xPlacement = NSGridCellPlacementTrailing;
     grid.rowAlignment = NSGridRowAlignmentFirstBaseline;
     grid.translatesAutoresizingMaskIntoConstraints = NO;
 
-    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 360, 80)
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 360, 120)
                                                    styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
                                                      backing:NSBackingStoreBuffered
                                                        defer:YES];

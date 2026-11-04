@@ -5,6 +5,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+// NSUserDefaults key for the window style: 0 dark, 1 Liquid Glass (macOS 26 and later).
+extern NSString *const PKAppearanceKey;
+BOOL PKGlassAvailable(void);
+
 @interface PKPanelContent : NSObject
 @property(nonatomic, copy) NSArray<NSString *> *segments;
 @property(nonatomic, copy) NSIndexSet *doubtful;
