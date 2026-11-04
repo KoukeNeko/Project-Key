@@ -29,8 +29,9 @@ NSColor *const kDoubtMark = Hex(0x3fb9a3, 0.7);
 NSColor *const kEdge = Hex(0x000000, 0.5);
 
 constexpr CGFloat kRadius = 14, kPillRadius = 8, kGapToText = 8, kAnchorInset = 16;
-// Proof row: padding 10 16 8 19, 20px line, 2px marks 3px under the line, inset 1px per side.
-constexpr CGFloat kProofTop = 10, kProofBottom = 8, kProofLeft = 19, kProofRight = 16, kProofLine = 20;
+// Proof row: 38px tall like the prototype's 10/20/8, but with the line and its
+// marks (2px, 3px under the line, inset 1px per side) centered vertically.
+constexpr CGFloat kProofTop = 6.5, kProofBottom = 11.5, kProofLeft = 19, kProofRight = 16, kProofLine = 20;
 constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 // Candidate row: padding 6 6 6 8; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
 constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
