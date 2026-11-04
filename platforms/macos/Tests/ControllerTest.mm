@@ -65,6 +65,19 @@ NSEvent *Key(NSString *characters, unsigned short keyCode = 0, NSEventModifierFl
                            keyCode:keyCode];
 }
 
+NSEvent *CapsLock(BOOL on) {
+  return [NSEvent keyEventWithType:NSEventTypeFlagsChanged
+                          location:NSZeroPoint
+                     modifierFlags:on ? NSEventModifierFlagCapsLock : 0
+                         timestamp:0
+                      windowNumber:0
+                           context:nil
+                        characters:@""
+       charactersIgnoringModifiers:@""
+                         isARepeat:NO
+                           keyCode:kVK_CapsLock];
+}
+
 NSEvent *Shift(BOOL down) {
   return [NSEvent keyEventWithType:NSEventTypeFlagsChanged
                           location:NSZeroPoint
@@ -242,6 +255,25 @@ int main() {
     Type(controller, client, @"su ");
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+
+    // Caps Lock switches 中/英 on each press; the lock it leaves on does not capitalize.
+    [controller handleEvent:CapsLock(YES) client:client];
+    NSUInteger beforeCaps = client.committed.length;
+    assert([controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock) client:client]);
+    assert([client.committed hasSuffix:@"r"] && client.committed.length == beforeCaps + 1);
+    assert(![controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock | NSEventModifierFlagShift) client:client]);
+    [controller handleEvent:CapsLock(NO) client:client];
+    assert([controller handleEvent:Key(@"r") client:client] && client.marked.length);  // back in 中
+    while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+    // Back in 中 with the lock on (after Shift switched), letters are still Zhuyin keys.
+    [controller handleEvent:CapsLock(YES) client:client];
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    assert([controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock) client:client] && [client.marked isEqualToString:@"ㄐ"]);
+    while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+    [controller handleEvent:CapsLock(NO) client:client];
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];  // leave it in 中
 
     std::printf("ControllerTest passed\n");
   }

@@ -12,6 +12,7 @@ FOUNDATION_EXPORT NSString *const PKChoosingProofKey;    // the row under the ca
 FOUNDATION_EXPORT NSString *const PKAdjacentKeysKey;     // match readings one key off
 FOUNDATION_EXPORT NSString *const PKRememberChoicesKey;  // the user override model
 FOUNDATION_EXPORT NSString *const PKShiftToggleKey;      // a lone Shift switches 中/英
+FOUNDATION_EXPORT NSString *const PKCapsLockToggleKey;   // Caps Lock switches 中/英 and letters stay lowercase
 FOUNDATION_EXPORT NSString *const PKEnglishToZhuyinKey;  // that Shift turns Zhuyin typed in 英 into a composition
 FOUNDATION_EXPORT NSString *const PKZhuyinToEnglishKey;  // and English typed in 中 back into English
 
