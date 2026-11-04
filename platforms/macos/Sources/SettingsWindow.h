@@ -6,7 +6,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-FOUNDATION_EXPORT NSString *const PKProofPreviewKey;     // 0 always, 1 when something is doubtful, 2 off
+// Proof row modes: 0 always, 1 when something is doubtful, 2 off.
+FOUNDATION_EXPORT NSString *const PKProofPreviewKey;     // the bubble beside the text while typing
+FOUNDATION_EXPORT NSString *const PKChoosingProofKey;    // the row under the candidates while choosing
 FOUNDATION_EXPORT NSString *const PKAdjacentKeysKey;     // match readings one key off
 FOUNDATION_EXPORT NSString *const PKRememberChoicesKey;  // the user override model
 FOUNDATION_EXPORT NSString *const PKShiftToggleKey;      // a lone Shift switches 中/英

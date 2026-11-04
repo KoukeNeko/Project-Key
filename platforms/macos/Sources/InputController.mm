@@ -16,7 +16,6 @@ using ProjectKey::Segment;
 namespace {
 
 constexpr NSInteger kExpandedRows = 5;  // rows the expanded grid shows at once
-NSString *const kLastOnProofModeKey = @"ProofPreviewLastOn";
 
 // Same three choices as the prototype's 整句預覽 setting.
 enum ProofMode : NSInteger { kProofAlways = 0, kProofWhenDoubtful = 1, kProofOff = 2 };
@@ -86,6 +85,8 @@ BOOL gEnglishMode = NO;
   // What English mode let through since the last other key, so a lone Shift
   // can turn Zhuyin typed in the wrong mode back into a composition.
   NSMutableString *_englishRun;
+  // Text the next marked text replaces: the English a lone Shift converted.
+  NSRange _replacing;
 }
 
 - (instancetype)initWithServer:(IMKServer *)server delegate:(id)delegate client:(id)client {
@@ -105,6 +106,7 @@ BOOL gEnglishMode = NO;
 
 // Settings take effect on the next composition.
 - (void)makeComposer {
+  if (!_composer) _replacing = NSMakeRange(NSNotFound, 0);
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     [PKSettingsWindow registerDefaults];
@@ -124,6 +126,7 @@ BOOL gEnglishMode = NO;
 }
 
 - (void)deactivateServer:(id)sender {
+  [self forgetEnglishRun];
   [self commitTo:sender];
   [super deactivateServer:sender];
 }
@@ -134,20 +137,23 @@ BOOL gEnglishMode = NO;
 
 #pragma mark - Proof preview setting
 
-- (ProofMode)proofMode {
-  return (ProofMode)[NSUserDefaults.standardUserDefaults integerForKey:PKProofPreviewKey];
+// While choosing, the candidate window's own setting applies; otherwise the bubble's.
+- (NSString *)proofKey {
+  return _choosing ? PKChoosingProofKey : PKProofPreviewKey;
 }
 
-- (void)setProofMode:(ProofMode)mode {
-  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-  if (mode != kProofOff) [defaults setInteger:mode forKey:kLastOnProofModeKey];
-  [defaults setInteger:mode forKey:PKProofPreviewKey];
+- (ProofMode)proofMode {
+  return (ProofMode)[NSUserDefaults.standardUserDefaults integerForKey:self.proofKey];
 }
 
 - (void)toggleProof {
-  [self setProofMode:self.proofMode == kProofOff
-                         ? (ProofMode)[NSUserDefaults.standardUserDefaults integerForKey:kLastOnProofModeKey]
-                         : kProofOff];
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  NSString *lastOnKey = [self.proofKey stringByAppendingString:@"LastOn"];
+  ProofMode mode = self.proofMode;
+  if (mode != kProofOff) [defaults setInteger:mode forKey:lastOnKey];
+  // Never toggled before: back on means 永遠, since 有可疑字時 may still show nothing.
+  ProofMode on = [defaults objectForKey:lastOnKey] ? (ProofMode)[defaults integerForKey:lastOnKey] : kProofAlways;
+  [defaults setInteger:mode == kProofOff ? on : kProofOff forKey:self.proofKey];
 }
 
 - (BOOL)proofVisible {
@@ -168,13 +174,6 @@ BOOL gEnglishMode = NO;
 
 - (NSMenu *)menu {
   NSMenu *menu = [[NSMenu alloc] init];
-  NSArray *titles = @[ @"整句預覽：永遠", @"整句預覽：有可疑字時", @"整句預覽：關閉" ];
-  SEL actions[] = {@selector(proofAlways:), @selector(proofWhenDoubtful:), @selector(proofOff:)};
-  for (NSInteger mode = kProofAlways; mode <= kProofOff; mode++) {
-    NSMenuItem *item = [menu addItemWithTitle:titles[mode] action:actions[mode] keyEquivalent:@""];
-    item.state = self.proofMode == mode ? NSControlStateValueOn : NSControlStateValueOff;
-  }
-  [menu addItem:NSMenuItem.separatorItem];
   [menu addItemWithTitle:@"設定…" action:@selector(showSettings:) keyEquivalent:@""];
   return menu;
 }
@@ -183,18 +182,6 @@ BOOL gEnglishMode = NO;
   [PKSettingsWindow showWithClearChoices:^{
     *SharedUserModel() = NewUserModel();
   }];
-}
-
-- (void)proofAlways:(id)sender {
-  [self setProofMode:kProofAlways];
-}
-
-- (void)proofWhenDoubtful:(id)sender {
-  [self setProofMode:kProofWhenDoubtful];
-}
-
-- (void)proofOff:(id)sender {
-  [self setProofMode:kProofOff];
 }
 
 #pragma mark - Keys
@@ -212,6 +199,7 @@ BOOL gEnglishMode = NO;
         _shiftAlone = NO;
         [self commitTo:client];
         if (gEnglishMode && [self convertEnglishRun:client]) return NO;
+        [self forgetEnglishRun];
         gEnglishMode = !gEnglishMode;
         NSRect lineRect = NSZeroRect;
         [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
@@ -231,7 +219,7 @@ BOOL gEnglishMode = NO;
   }
 
   if (flags & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption)) {
-    [_englishRun setString:@""];
+    [self forgetEnglishRun];
     BOOL proofToggle = (flags & NSEventModifierFlagControl) && (flags & NSEventModifierFlagShift) && event.keyCode == kVK_ANSI_P;
     if (proofToggle && !_composer->isEmpty()) {
       [self toggleProof];
@@ -243,12 +231,18 @@ BOOL gEnglishMode = NO;
   }
   if (gEnglishMode) {
     [self trackEnglish:event flags:flags];
+    [self showEnglishHint:client];
     return NO;
   }
   return _choosing ? [self handleChoosing:event flags:flags client:client] : [self handleComposing:event flags:flags client:client];
 }
 
 #pragma mark - English typed as Zhuyin
+
+- (void)forgetEnglishRun {
+  [_englishRun setString:@""];
+  if (PKCandidatePanel.shared.content.keyHint) [PKCandidatePanel.shared hide];
+}
 
 - (void)trackEnglish:(NSEvent *)event flags:(NSEventModifierFlags)flags {
   if (!_englishRun) _englishRun = [NSMutableString string];
@@ -263,30 +257,27 @@ BOOL gEnglishMode = NO;
   }
 }
 
-// Replaces the end of the English run that is whole Zhuyin syllables with a
-// composition of them and switches to 中. False when nothing there is Zhuyin.
-- (BOOL)convertEnglishRun:(id)client {
+// The keys at the end of the English run that are whole Zhuyin syllables, and
+// how many spaces follow them; empty when none are.
+- (std::string)zhuyinAtEnd:(size_t *)trailingSpaces {
   std::string run = _englishRun.UTF8String ?: "";
-  [_englishRun setString:@""];
-  size_t trailingSpaces = 0;
-  while (trailingSpaces < run.size() && run[run.size() - 1 - trailingSpaces] == ' ') trailingSpaces++;
+  size_t spaces = 0;
+  while (spaces < run.size() && run[run.size() - 1 - spaces] == ' ') spaces++;
+  if (trailingSpaces) *trailingSpaces = spaces;
   // Syllables end at a tone key, or at a space for the first tone; walk back
   // from the end while they are whole.
-  std::string body = run.substr(0, run.size() - trailingSpaces);
+  std::string body = run.substr(0, run.size() - spaces);
   size_t start = body.size();
   while (start > 0) {
     size_t begin = start - 1;
     while (begin > 0 && !std::strchr(" 3467", body[begin - 1])) begin--;
-    std::string syllable = body.substr(begin, start - begin);
-    if (!_composer->isSyllableKeys(syllable)) break;
+    if (!_composer->isSyllableKeys(body.substr(begin, start - begin))) break;
     start = begin;
   }
-  if (start == body.size()) return NO;
-  std::string keys = body.substr(start);
-  NSRange selection = [client selectedRange];
-  NSUInteger length = keys.size() + trailingSpaces;
-  if (selection.location == NSNotFound || selection.location < length) return NO;
-  [client insertText:@"" replacementRange:NSMakeRange(selection.location - length, length)];
+  return body.substr(start);
+}
+
+- (void)typeKeys:(const std::string &)keys {
   for (char key : keys) {
     if (key == ' ') {
       _composer->completeWithFirstTone();
@@ -294,6 +285,48 @@ BOOL gEnglishMode = NO;
       _composer->typeReadingKey(key);
     }
   }
+}
+
+// While English mode passes through Zhuyin, shows what a lone Shift would turn
+// it into. Only once a tone key is in it: plain words like "so " can happen to
+// spell a first-tone syllable.
+- (void)showEnglishHint:(id)client {
+  size_t trailingSpaces = 0;
+  std::string keys = [self zhuyinAtEnd:&trailingSpaces];
+  if (keys.find_first_of("3467") == std::string::npos) {
+    if (PKCandidatePanel.shared.content.keyHint) [PKCandidatePanel.shared hide];
+    return;
+  }
+  [self typeKeys:keys];
+  PKPanelContent *content = [[PKPanelContent alloc] init];
+  content.segments = @[ String(_composer->text()) ];
+  content.doubtful = [NSIndexSet indexSet];
+  content.activeSegment = -1;
+  content.pendingReading = @"";
+  content.caret = content.segments.firstObject.length;
+  content.showsProof = YES;
+  content.keyHint = @"⇧";
+  content.replacedText = String(keys + std::string(trailingSpaces, ' '));  // the English that goes
+  _composer->clear();
+  NSRect lineRect = NSZeroRect;
+  [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
+  [PKCandidatePanel.shared show:content below:lineRect];
+}
+
+// Replaces the end of the English run that is whole Zhuyin syllables with a
+// composition of them and switches to 中. False when nothing there is Zhuyin.
+- (BOOL)convertEnglishRun:(id)client {
+  size_t trailingSpaces = 0;
+  std::string keys = [self zhuyinAtEnd:&trailingSpaces];
+  [_englishRun setString:@""];
+  if (keys.empty()) return NO;
+  NSRange selection = [client selectedRange];
+  NSUInteger length = keys.size() + trailingSpaces;
+  if (selection.location == NSNotFound || selection.location < length) return NO;
+  // The composition takes the English's place as marked text; apps honor a
+  // replacement range there more widely than an empty insertText.
+  _replacing = NSMakeRange(selection.location - length, length);
+  [self typeKeys:keys];
   gEnglishMode = NO;
   [self refresh:client];
   NSRect lineRect = NSZeroRect;
@@ -610,7 +643,8 @@ BOOL gEnglishMode = NO;
   }
   [client setMarkedText:attributed
          selectionRange:NSMakeRange(caret, 0)
-       replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
+       replacementRange:_replacing];
+  _replacing = NSMakeRange(NSNotFound, 0);
 
   BOOL showsProof = [self proofVisible];
   if (!_choosing && !showsProof) {

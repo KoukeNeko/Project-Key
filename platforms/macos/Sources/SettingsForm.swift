@@ -7,7 +7,8 @@ struct SettingsForm: View {
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
   @AppStorage(PKAppearanceKey) private var appearance = 0
-  @AppStorage(PKProofPreviewKey) private var proofPreview = 0
+  @AppStorage(PKProofPreviewKey) private var proofPreview = 1
+  @AppStorage(PKChoosingProofKey) private var choosingProof = 1
   @State private var cleared = false
   let clearChoices: () -> Void
 
@@ -30,7 +31,12 @@ struct SettingsForm: View {
           Text("Liquid Glass").tag(1)
         }
         .disabled(!PKGlassAvailable())
-        Picker("整句預覽", selection: $proofPreview) {
+        Picker("輸入時的整句預覽", selection: $proofPreview) {
+          Text("永遠").tag(0)
+          Text("有可疑字時").tag(1)
+          Text("關閉").tag(2)
+        }
+        Picker("選字時的整句預覽", selection: $choosingProof) {
           Text("永遠").tag(0)
           Text("有可疑字時").tag(1)
           Text("關閉").tag(2)

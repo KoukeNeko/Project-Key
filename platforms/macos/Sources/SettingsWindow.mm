@@ -3,6 +3,7 @@
 #import "ProjectKey-Swift.h"
 
 NSString *const PKProofPreviewKey = @"ProofPreview";
+NSString *const PKChoosingProofKey = @"ChoosingProof";
 NSString *const PKAdjacentKeysKey = @"AdjacentKeys";
 NSString *const PKRememberChoicesKey = @"RememberChoices";
 NSString *const PKShiftToggleKey = @"ShiftToggle";
@@ -14,6 +15,8 @@ NSString *const PKShiftToggleKey = @"ShiftToggle";
     PKAdjacentKeysKey : @YES,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,
+    PKProofPreviewKey : @1,
+    PKChoosingProofKey : @1,
   }];
 }
 

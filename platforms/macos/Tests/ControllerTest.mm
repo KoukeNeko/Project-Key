@@ -38,6 +38,7 @@
   return NSMakeRange(_committed.length, 0);
 }
 - (void)setMarkedText:(id)string selectionRange:(NSRange)selection replacementRange:(NSRange)range {
+  if (range.location != NSNotFound) [_committed deleteCharactersInRange:range];  // the marked text takes its place
   _marked = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
 }
 - (NSDictionary *)attributesForCharacterIndex:(NSUInteger)index lineHeightRectangle:(NSRect *)rect {
@@ -168,7 +169,7 @@ int main() {
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
     assert(PKCandidatePanel.shared.content.rows.count == 1);
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
-    assert(PKCandidatePanel.shared.content.rows == nil && [client.marked isEqualToString:@"今天"]);
+    assert((!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.rows == nil) && [client.marked isEqualToString:@"今天"]);
 
     // In the grid, number keys pick from the selection's row.
     assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
@@ -206,10 +207,16 @@ int main() {
     for (NSString *key in @[ @"h", @"e", @"l", @"l", @"o", @" ", @"j", @"i", @"3", @"c", @"l", @"3" ]) {
       assert(![controller handleEvent:Key(key) client:client]);
       [client.committed appendString:key];  // what the app does with a key passed through
+      // No preview for plain English; with a tone key in it, the preview shows the result and ⇧.
+      if ([key isEqualToString:@"o"]) assert(!PKCandidatePanel.shared.visible);
     }
+    PKPanelContent *hint = PKCandidatePanel.shared.content;
+    assert(PKCandidatePanel.shared.visible && [hint.keyHint isEqualToString:@"⇧"]);
+    assert([[hint.segments componentsJoinedByString:@""] isEqualToString:@"我好"] && [hint.replacedText isEqualToString:@"ji3cl3"]);
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
     assert([client.committed hasSuffix:@"hello "] && [client.marked isEqualToString:@"我好"]);
+    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     assert([controller handleEvent:Key(@"r") client:client]);  // back in 中
 
     std::printf("ControllerTest passed\n");
