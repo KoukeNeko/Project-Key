@@ -24,6 +24,13 @@
 		<dict>
 			<key>org.projectkey.inputmethod.ProjectKey.Bopomofo</key>
 			<dict>
+				<key>TISIconIsTemplate</key>
+				<true/>
+				<key>TISIconLabels</key>
+				<dict>
+					<key>Primary</key>
+					<string>ㄅ</string>
+				</dict>
 				<key>TISIntendedLanguage</key>
 				<string>zh-Hant</string>
 				<key>tsInputModeAlternateMenuIconFileKey</key>

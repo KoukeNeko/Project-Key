@@ -129,12 +129,14 @@ int main() {
 
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
 
-    // Up on the first candidate page stays there instead of wrapping to the last.
+    // Up pages back; on the first page it closes the candidates and keeps the sentence.
     Type(controller, client, @"rup wu0 ");
     assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
+    assert([controller handleEvent:Key(@"", kVK_DownArrow) client:client]);
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
     assert(PKCandidatePanel.shared.visible && [PKCandidatePanel.shared.content.pageLabel hasPrefix:@"1/"]);
-    assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
+    assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
+    assert(PKCandidatePanel.shared.content.candidates == nil && [client.marked isEqualToString:@"今天"]);
     assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
     assert(client.marked.length == 0 && client.committed.length == before);
 

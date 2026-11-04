@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 #include "../Sources/Composer.h"
@@ -80,6 +81,21 @@ int main(int argc, char** argv) {
   assert(composer.isEmpty());
   type(composer, "rup wu0 ");
   assert(composer.text() == "今天");
+
+  // Context: alone, ㄌㄧㄝˋ ㄕˊ walks to the phrase 獵食; a bigram model that has
+  // seen 第一 列 時 picks the two single characters after 第一.
+  composer.clear();
+  type(composer, "2u4u xu,4g6");
+  assert(composer.text() == "第一獵食");
+  std::string path = std::string(std::getenv("TMPDIR") ?: "/tmp") + "/ComposerTest-bigram.bin";
+  // Ids: 0 第一, 1 列, 2 時; keys are previous << 32 | next, sorted.
+  assert(ProjectKey::Bigram::save(path, {"第一", "列", "時"}, {{0ull << 32 | 1, -0.5f}, {1ull << 32 | 2, -0.5f}}));
+  auto bigram = std::make_shared<ProjectKey::Bigram>();
+  assert(bigram->load(path));
+  Composer contextual(lm, bigram);
+  type(contextual, "2u4u xu,4g6");
+  assert(contextual.text() == "第一列時");
+  std::remove(path.c_str());
 
   std::printf("ComposerTest passed\n");
   return 0;

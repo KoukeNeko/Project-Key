@@ -21,7 +21,7 @@ NSColor *const kAccentSoft = Hex(0x3fb9a3);
 NSColor *const kDoubtMark = Hex(0x3fb9a3, 0.7);
 NSColor *const kEdge = Hex(0x000000, 0.5);
 
-constexpr CGFloat kRadius = 14, kPillRadius = 8, kMinWidth = 460, kGapToText = 8, kAnchorInset = 16;
+constexpr CGFloat kRadius = 14, kPillRadius = 8, kGapToText = 8, kAnchorInset = 16;
 // Proof row: padding 10 16 8 19, 20px line, 2px marks 3px under the line, inset 1px per side.
 constexpr CGFloat kProofTop = 10, kProofBottom = 8, kProofLeft = 19, kProofRight = 16, kProofLine = 20;
 constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
@@ -88,7 +88,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (NSSize)fittingSize {
-  CGFloat width = kMinWidth;
+  CGFloat width = 0;
   if (self.content.showsProof) {
     NSString *sentence = [[self.content.segments componentsJoinedByString:@""] stringByAppendingString:self.content.pendingReading];
     width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + kProofRight);
@@ -284,6 +284,83 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   rep.size = size;
   [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
   return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+}
+
+@end
+
+@implementation PKModeIndicator {
+  NSPanel *_panel;
+  NSTextField *_label;
+  NSUInteger _generation;
+}
+
++ (instancetype)shared {
+  static PKModeIndicator *shared;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    shared = [[PKModeIndicator alloc] init];
+  });
+  return shared;
+}
+
+- (instancetype)init {
+  if ((self = [super init])) {
+    _panel = [[NSPanel alloc] initWithContentRect:NSZeroRect
+                                        styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
+                                          backing:NSBackingStoreBuffered
+                                            defer:YES];
+    _panel.level = NSPopUpMenuWindowLevel + 1;
+    _panel.opaque = NO;
+    _panel.backgroundColor = NSColor.clearColor;
+    _panel.hasShadow = YES;
+    _panel.ignoresMouseEvents = YES;
+    _panel.canHide = NO;
+    _panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
+    NSView *background = [[NSView alloc] init];
+    background.wantsLayer = YES;
+    background.layer.backgroundColor = kBackground.CGColor;
+    background.layer.cornerRadius = kPillRadius;
+    background.layer.borderColor = kEdge.CGColor;
+    background.layer.borderWidth = 0.5;
+    _label = [NSTextField labelWithString:@""];
+    _label.font = [NSFont fontWithName:@"PingFang TC Medium" size:15] ?: [NSFont systemFontOfSize:15 weight:NSFontWeightMedium];
+    _label.textColor = kText;
+    _label.alignment = NSTextAlignmentCenter;
+    [background addSubview:_label];
+    _panel.contentView = background;
+  }
+  return self;
+}
+
+- (void)show:(NSString *)label below:(NSRect)lineRect {
+  constexpr CGFloat kSide = 30, kHold = 0.8, kFadeIn = 0.12, kFadeOut = 0.25;
+  _label.stringValue = label;
+  [_label sizeToFit];
+  CGFloat width = MAX(kSide, NSWidth(_label.frame) + 20);
+  _label.frame = NSMakeRect(0, (kSide - NSHeight(_label.frame)) / 2, width, NSHeight(_label.frame));
+  NSRect frame = NSMakeRect(NSMinX(lineRect), NSMinY(lineRect) - kGapToText - kSide, width, kSide);
+  NSScreen *screen = NSScreen.mainScreen;
+  for (NSScreen *candidate in NSScreen.screens) {
+    if (NSPointInRect(lineRect.origin, candidate.frame)) screen = candidate;
+  }
+  if (NSMinY(frame) < NSMinY(screen.visibleFrame)) frame.origin.y = NSMaxY(lineRect) + kGapToText;
+  [_panel setFrame:frame display:YES];
+  NSUInteger generation = ++_generation;
+  _panel.alphaValue = 0;
+  [_panel orderFront:nil];
+  [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+    context.duration = kFadeIn;
+    self->_panel.animator.alphaValue = 1;
+  }];
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((kFadeIn + kHold) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    if (generation != self->_generation) return;  // a newer switch restarted the badge
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+      context.duration = kFadeOut;
+      self->_panel.animator.alphaValue = 0;
+    } completionHandler:^{
+      if (generation == self->_generation) [self->_panel orderOut:nil];
+    }];
+  });
 }
 
 @end
