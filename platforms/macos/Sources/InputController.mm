@@ -85,6 +85,10 @@ BOOL gEnglishMode = NO;
   // What English mode let through since the last other key, so a lone Shift
   // can turn Zhuyin typed in the wrong mode back into a composition.
   NSMutableString *_englishRun;
+  // The keys behind the composition while it is only typed syllables, so a
+  // lone Shift can turn English typed in the wrong mode back into English.
+  std::string _zhuyinKeys;
+  BOOL _zhuyinEdited;  // another key changed the composition apart from _zhuyinKeys
   // Text the next marked text replaces: the English a lone Shift converted.
   NSRange _replacing;
 }
@@ -197,6 +201,7 @@ BOOL gEnglishMode = NO;
         _shiftAlone = YES;
       } else if (_shiftAlone) {
         _shiftAlone = NO;
+        if (!gEnglishMode && [self convertZhuyinKeys:client]) return NO;
         [self commitTo:client];
         if (gEnglishMode && [self convertEnglishRun:client]) return NO;
         [self forgetEnglishRun];
@@ -234,6 +239,7 @@ BOOL gEnglishMode = NO;
     [self showEnglishHint:client];
     return NO;
   }
+  [self trackZhuyin:event flags:flags];
   return _choosing ? [self handleChoosing:event flags:flags client:client] : [self handleComposing:event flags:flags client:client];
 }
 
@@ -315,6 +321,65 @@ BOOL gEnglishMode = NO;
 
 // Replaces the end of the English run that is whole Zhuyin syllables with a
 // composition of them and switches to 中. False when nothing there is Zhuyin.
+#pragma mark - Zhuyin that is English
+
+- (void)trackZhuyin:(NSEvent *)event flags:(NSEventModifierFlags)flags {
+  if (_composer->isEmpty()) {
+    _zhuyinKeys.clear();
+    _zhuyinEdited = NO;
+  }
+  NSString *characters = event.characters;
+  unichar c = characters.length == 1 ? [characters characterAtIndex:0] : 0;
+  BOOL typing = !_choosing && !(flags & NSEventModifierFlagShift) &&
+                (event.keyCode == kVK_Space ? _composer->hasPendingReading() : c < 128 && _composer->isReadingKey((char)c));
+  // Any other key (Delete, arrows, choosing) edits the composition apart from the keys.
+  if (typing) {
+    _zhuyinKeys += (char)c;
+  } else {
+    _zhuyinEdited = YES;
+  }
+}
+
+// The keys behind the composition as English when they spell words that are
+// not themselves Zhuyin syllables; nil otherwise.
+- (NSString *)englishTyped {
+  if (_zhuyinEdited) return nil;
+  NSString *keys = String(_zhuyinKeys);
+  NSCharacterSet *notLetters = [[NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyz "] invertedSet];
+  if ([keys stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length < 2 ||
+      [keys rangeOfCharacterFromSet:notLetters].location != NSNotFound) {
+    return nil;
+  }
+  // "su " or "wu " is a first-tone syllable as well as a spelling the checker allows.
+  BOOL syllables = YES;
+  for (NSString *word in [keys componentsSeparatedByString:@" "]) {
+    if (word.length && !_composer->isSyllableKeys(std::string(word.UTF8String) + " ")) syllables = NO;
+  }
+  if (syllables) return nil;
+  NSRange misspelled = [NSSpellChecker.sharedSpellChecker checkSpellingOfString:keys
+                                                                     startingAt:0
+                                                                       language:@"en"
+                                                                           wrap:NO
+                                                         inSpellDocumentWithTag:0
+                                                                      wordCount:NULL];
+  return misspelled.location == NSNotFound ? keys : nil;
+}
+
+// Replaces a composition typed as English keys with that English and switches to 英.
+- (BOOL)convertZhuyinKeys:(id)client {
+  NSString *english = _composer->isEmpty() || _choosing ? nil : [self englishTyped];
+  if (!english) return NO;
+  [client insertText:english replacementRange:NSMakeRange(NSNotFound, NSNotFound)];  // takes the marked text's place
+  _composer->clear();
+  _zhuyinKeys.clear();
+  [PKCandidatePanel.shared hide];
+  gEnglishMode = YES;
+  NSRect lineRect = NSZeroRect;
+  [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
+  [PKModeIndicator.shared show:@"A" below:lineRect];
+  return YES;
+}
+
 - (BOOL)convertEnglishRun:(id)client {
   size_t trailingSpaces = 0;
   std::string keys = [self zhuyinAtEnd:&trailingSpaces];
@@ -646,6 +711,22 @@ BOOL gEnglishMode = NO;
        replacementRange:_replacing];
   _replacing = NSMakeRange(NSNotFound, 0);
 
+  NSString *english = _choosing ? nil : [self englishTyped];
+  if (english) {  // what a lone Shift would turn it into
+    PKPanelContent *content = [[PKPanelContent alloc] init];
+    content.segments = @[ english ];
+    content.doubtful = [NSIndexSet indexSet];
+    content.activeSegment = -1;
+    content.pendingReading = @"";
+    content.caret = english.length;
+    content.showsProof = YES;
+    content.keyHint = @"⇧";
+    content.replacedText = marked;
+    NSRect lineRect = NSZeroRect;
+    [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
+    [PKCandidatePanel.shared show:content below:lineRect];
+    return;
+  }
   BOOL showsProof = [self proofVisible];
   if (!_choosing && !showsProof) {
     [PKCandidatePanel.shared hide];
