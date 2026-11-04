@@ -232,6 +232,12 @@ int main() {
     assert(![controller handleEvent:Key(@"r") client:client]);  // now in 英
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
+    // Turned off in settings: no preview, and Shift only switches modes.
+    [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"ZhuyinToEnglish"];
+    Type(controller, client, @"hello");
+    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
+    while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ZhuyinToEnglish"];
     // Real Zhuyin is left alone, even when it spells something: "su " is 妮 as well as "su".
     Type(controller, client, @"su ");
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);

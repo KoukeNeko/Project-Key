@@ -6,6 +6,8 @@ struct SettingsForm: View {
   @AppStorage(PKAdjacentKeysKey) private var adjacentKeys = true
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
+  @AppStorage(PKEnglishToZhuyinKey) private var englishToZhuyin = true
+  @AppStorage(PKZhuyinToEnglishKey) private var zhuyinToEnglish = true
   @AppStorage(PKAppearanceKey) private var appearance = 0
   @AppStorage(PKProofPreviewKey) private var proofPreview = 1
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
@@ -44,6 +46,11 @@ struct SettingsForm: View {
       }
       Section("按鍵") {
         Toggle("單按 ⇧ 切換中英", isOn: $shiftToggle)
+        Group {
+          Toggle("英文轉注音", isOn: $englishToZhuyin)
+          Toggle("注音轉英文", isOn: $zhuyinToEnglish)
+        }
+        .disabled(!shiftToggle)
       }
     }
     .formStyle(.grouped)

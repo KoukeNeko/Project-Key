@@ -298,7 +298,7 @@ BOOL gEnglishMode = NO;
 // spell a first-tone syllable.
 - (void)showEnglishHint:(id)client {
   size_t trailingSpaces = 0;
-  std::string keys = [self zhuyinAtEnd:&trailingSpaces];
+  std::string keys = [NSUserDefaults.standardUserDefaults boolForKey:PKEnglishToZhuyinKey] ? [self zhuyinAtEnd:&trailingSpaces] : "";
   if (keys.find_first_of("3467") == std::string::npos) {
     if (PKCandidatePanel.shared.content.keyHint) [PKCandidatePanel.shared hide];
     return;
@@ -343,7 +343,7 @@ BOOL gEnglishMode = NO;
 // The keys behind the composition as English when they spell words that are
 // not themselves Zhuyin syllables; nil otherwise.
 - (NSString *)englishTyped {
-  if (_zhuyinEdited) return nil;
+  if (_zhuyinEdited || ![NSUserDefaults.standardUserDefaults boolForKey:PKZhuyinToEnglishKey]) return nil;
   NSString *keys = String(_zhuyinKeys);
   NSCharacterSet *notLetters = [[NSCharacterSet characterSetWithCharactersInString:@"abcdefghijklmnopqrstuvwxyz "] invertedSet];
   if ([keys stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length < 2 ||
@@ -382,7 +382,7 @@ BOOL gEnglishMode = NO;
 
 - (BOOL)convertEnglishRun:(id)client {
   size_t trailingSpaces = 0;
-  std::string keys = [self zhuyinAtEnd:&trailingSpaces];
+  std::string keys = [NSUserDefaults.standardUserDefaults boolForKey:PKEnglishToZhuyinKey] ? [self zhuyinAtEnd:&trailingSpaces] : "";
   [_englishRun setString:@""];
   if (keys.empty()) return NO;
   NSRange selection = [client selectedRange];
