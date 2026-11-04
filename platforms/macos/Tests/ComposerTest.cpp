@@ -1,6 +1,7 @@
 // Usage: ComposerTest <path to data.txt>
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -96,6 +97,21 @@ int main(int argc, char** argv) {
   type(contextual, "2u4u xu,4g6");
   assert(contextual.text() == "第一列時");
   std::remove(path.c_str());
+
+  // Adjacent keys: ㄧㄡˇ (u.3) is one key off ㄧㄝˇ (u,3); with context that
+  // knows 這個 也 不 (McBopomofo has no phrase 不錯), the slip comes out as 也.
+  std::string slipPath = std::string(std::getenv("TMPDIR") ?: "/tmp") + "/ComposerTest-slip.bin";
+  // Ids: 0 這個, 1 也, 2 不.
+  assert(ProjectKey::Bigram::save(slipPath, {"這個", "也", "不"}, {{0ull << 32 | 1, -0.1f}, {1ull << 32 | 2, -0.1f}}));
+  auto slipModel = std::make_shared<ProjectKey::Bigram>();
+  assert(slipModel->load(slipPath));
+  Composer slipping(lm, slipModel);
+  type(slipping, "5k4ek7u.31j4hji4");
+  assert(slipping.text() == "這個也不錯");
+  Composer exact(lm, slipModel, nullptr, 0.3, 0.5, -INFINITY);
+  type(exact, "5k4ek7u.31j4hji4");
+  assert(exact.text() != "這個也不錯");
+  std::remove(slipPath.c_str());
 
   // The user model: after choosing 列 following 第一 once, the next walk keeps it.
   auto userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);

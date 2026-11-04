@@ -33,15 +33,24 @@ class Composer {
   // trigramWeight when the model has that triple.
   // With a user model, choices are remembered by the word before them and the
   // reading, and a remembered word wins the walk the next time.
+  // Each syllable also matches the readings one adjacent key away (a slip
+  // such as ㄧㄡˇ for ㄧㄝˇ), scored adjacentKeyScore lower; -infinity turns it off.
   explicit Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr<const Bigram> bigram = nullptr,
-                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr, double contextWeight = 0.3,
-                    double trigramWeight = 0.5);
+                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
+                    double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
+                    double adjacentKeyScore = kAdjacentKeyScore);
+
+  static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -2;
 
   enum class KeyResult { kHandled, kInvalid };
 
   bool isEmpty() const { return grid_.length() == 0 && reading_.isEmpty(); }
   bool hasPendingReading() const { return !reading_.isEmpty(); }
   bool isReadingKey(char key) const { return reading_.isValidKey(key); }
+  // Whether `keys` type exactly one dictionary syllable: each key sets its own
+  // component (none replaces another, as in English words), ending with a tone
+  // key or, for the first tone, a space.
+  bool isSyllableKeys(const std::string& keys) const;
 
   // Adds a Daqian key; a tone key completes the syllable.
   KeyResult typeReadingKey(char key);
@@ -85,6 +94,7 @@ class Composer {
   double contextWeight_;
   double trigramWeight_;
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel_;
+  double adjacentKeyScore_;
   Formosa::Gramambular2::ReadingGrid grid_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
   std::vector<Segment> segments_;
