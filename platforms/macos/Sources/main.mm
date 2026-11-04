@@ -3,6 +3,7 @@
 #import <InputMethodKit/InputMethodKit.h>
 
 #import "CandidatePanel.h"
+#import "ProjectKey-Swift.h"
 
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
@@ -54,6 +55,18 @@ int main(int argc, const char *argv[]) {
       content.doubtful = [NSIndexSet indexSet];
       content.caret = 2;
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"plain.png"] atomically:YES];
+      NSView *form = [PKSettingsForm makeViewWithClearChoices:^{
+      }];
+      NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, form.fittingSize.width, form.fittingSize.height)
+                                                     styleMask:NSWindowStyleMaskBorderless
+                                                       backing:NSBackingStoreBuffered
+                                                         defer:NO];
+      window.contentView = form;
+      [form layoutSubtreeIfNeeded];
+      [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+      NSBitmapImageRep *rep = [form bitmapImageRepForCachingDisplayInRect:form.bounds];
+      [form cacheDisplayInRect:form.bounds toBitmapImageRep:rep];
+      [[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:[dir stringByAppendingPathComponent:@"settings.png"] atomically:YES];
       return 0;
     }
     NSString *connection = bundle.infoDictionary[@"InputMethodConnectionName"];

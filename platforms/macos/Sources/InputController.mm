@@ -2,6 +2,7 @@
 #import <InputMethodKit/InputMethodKit.h>
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 #include <optional>
 
@@ -15,7 +16,6 @@ using ProjectKey::Segment;
 namespace {
 
 constexpr NSInteger kExpandedRows = 5;  // rows the expanded grid shows at once
-NSString *const kProofModeKey = @"ProofPreview";
 NSString *const kLastOnProofModeKey = @"ProofPreviewLastOn";
 
 // Same three choices as the prototype's 整句預覽 setting.
@@ -34,8 +34,12 @@ std::shared_ptr<McBopomofo::McBopomofoLM> SharedLanguageModel() {
 
 // Choices the user made, shared by every input session. Kept in memory only,
 // with McBopomofo's capacity and 1.5-hour half-life.
+McBopomofo::UserOverrideModel NewUserModel() {
+  return McBopomofo::UserOverrideModel(500, 5400.0);
+}
+
 std::shared_ptr<McBopomofo::UserOverrideModel> SharedUserModel() {
-  static auto model = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+  static auto model = std::make_shared<McBopomofo::UserOverrideModel>(NewUserModel());
   return model;
 }
 
@@ -78,11 +82,15 @@ BOOL gEnglishMode = NO;
   BOOL _expanded;          // several rows shown; collapsed shows only the selection's row
   NSInteger _firstRow;     // first grid row on screen
   BOOL _shiftAlone;
+  BOOL _adjacentKeys, _rememberChoices;  // the settings _composer was made with
+  // What English mode let through since the last other key, so a lone Shift
+  // can turn Zhuyin typed in the wrong mode back into a composition.
+  NSMutableString *_englishRun;
 }
 
 - (instancetype)initWithServer:(IMKServer *)server delegate:(id)delegate client:(id)client {
   if ((self = [super initWithServer:server delegate:delegate client:client])) {
-    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram(), SharedUserModel());
+    [self makeComposer];
   }
   return self;
 }
@@ -90,9 +98,25 @@ BOOL gEnglishMode = NO;
 // Without an IMK server or client; ControllerTest drives the controller this way.
 - (instancetype)init {
   if ((self = [super init])) {
-    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram(), SharedUserModel());
+    [self makeComposer];
   }
   return self;
+}
+
+// Settings take effect on the next composition.
+- (void)makeComposer {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [PKSettingsWindow registerDefaults];
+  });
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+  BOOL adjacentKeys = [defaults boolForKey:PKAdjacentKeysKey], rememberChoices = [defaults boolForKey:PKRememberChoicesKey];
+  if (_composer && adjacentKeys == _adjacentKeys && rememberChoices == _rememberChoices) return;
+  _adjacentKeys = adjacentKeys;
+  _rememberChoices = rememberChoices;
+  _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram(), rememberChoices ? SharedUserModel() : nullptr,
+                                         Composer::kContextWeight, Composer::kTrigramWeight,
+                                         adjacentKeys ? Composer::kAdjacentKeyScore : -INFINITY);
 }
 
 - (NSUInteger)recognizedEvents:(id)sender {
@@ -111,13 +135,13 @@ BOOL gEnglishMode = NO;
 #pragma mark - Proof preview setting
 
 - (ProofMode)proofMode {
-  return (ProofMode)[NSUserDefaults.standardUserDefaults integerForKey:kProofModeKey];
+  return (ProofMode)[NSUserDefaults.standardUserDefaults integerForKey:PKProofPreviewKey];
 }
 
 - (void)setProofMode:(ProofMode)mode {
   NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
   if (mode != kProofOff) [defaults setInteger:mode forKey:kLastOnProofModeKey];
-  [defaults setInteger:mode forKey:kProofModeKey];
+  [defaults setInteger:mode forKey:PKProofPreviewKey];
 }
 
 - (void)toggleProof {
@@ -156,7 +180,9 @@ BOOL gEnglishMode = NO;
 }
 
 - (void)showSettings:(id)sender {
-  [PKSettingsWindow show];
+  [PKSettingsWindow showWithClearChoices:^{
+    *SharedUserModel() = NewUserModel();
+  }];
 }
 
 - (void)proofAlways:(id)sender {
@@ -178,11 +204,14 @@ BOOL gEnglishMode = NO;
   if (event.type == NSEventTypeFlagsChanged) {
     // A Shift press and release with no key in between switches 中/英.
     if (event.keyCode == kVK_Shift || event.keyCode == kVK_RightShift) {
-      if (flags & NSEventModifierFlagShift) {
+      if (![NSUserDefaults.standardUserDefaults boolForKey:PKShiftToggleKey]) {
+        _shiftAlone = NO;
+      } else if (flags & NSEventModifierFlagShift) {
         _shiftAlone = YES;
       } else if (_shiftAlone) {
         _shiftAlone = NO;
         [self commitTo:client];
+        if (gEnglishMode && [self convertEnglishRun:client]) return NO;
         gEnglishMode = !gEnglishMode;
         NSRect lineRect = NSZeroRect;
         [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
@@ -195,8 +224,14 @@ BOOL gEnglishMode = NO;
   }
   if (event.type != NSEventTypeKeyDown) return NO;
   _shiftAlone = NO;
+  if (_composer->isEmpty()) {
+    [self makeComposer];
+    // With the Shift switch turned off there is no way back to 中.
+    if (gEnglishMode && ![NSUserDefaults.standardUserDefaults boolForKey:PKShiftToggleKey]) gEnglishMode = NO;
+  }
 
   if (flags & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption)) {
+    [_englishRun setString:@""];
     BOOL proofToggle = (flags & NSEventModifierFlagControl) && (flags & NSEventModifierFlagShift) && event.keyCode == kVK_ANSI_P;
     if (proofToggle && !_composer->isEmpty()) {
       [self toggleProof];
@@ -206,8 +241,65 @@ BOOL gEnglishMode = NO;
     [self commitTo:client];  // let the shortcut act on committed text
     return NO;
   }
-  if (gEnglishMode) return NO;
+  if (gEnglishMode) {
+    [self trackEnglish:event flags:flags];
+    return NO;
+  }
   return _choosing ? [self handleChoosing:event flags:flags client:client] : [self handleComposing:event flags:flags client:client];
+}
+
+#pragma mark - English typed as Zhuyin
+
+- (void)trackEnglish:(NSEvent *)event flags:(NSEventModifierFlags)flags {
+  if (!_englishRun) _englishRun = [NSMutableString string];
+  NSString *characters = event.characters;
+  unichar c = characters.length == 1 ? [characters characterAtIndex:0] : 0;
+  if (event.keyCode == kVK_Delete) {
+    if (_englishRun.length) [_englishRun deleteCharactersInRange:NSMakeRange(_englishRun.length - 1, 1)];
+  } else if (!(flags & NSEventModifierFlagShift) && (c == ' ' || (c < 128 && _composer->isReadingKey((char)c)))) {
+    [_englishRun appendString:characters];
+  } else {
+    [_englishRun setString:@""];
+  }
+}
+
+// Replaces the end of the English run that is whole Zhuyin syllables with a
+// composition of them and switches to 中. False when nothing there is Zhuyin.
+- (BOOL)convertEnglishRun:(id)client {
+  std::string run = _englishRun.UTF8String ?: "";
+  [_englishRun setString:@""];
+  size_t trailingSpaces = 0;
+  while (trailingSpaces < run.size() && run[run.size() - 1 - trailingSpaces] == ' ') trailingSpaces++;
+  // Syllables end at a tone key, or at a space for the first tone; walk back
+  // from the end while they are whole.
+  std::string body = run.substr(0, run.size() - trailingSpaces);
+  size_t start = body.size();
+  while (start > 0) {
+    size_t begin = start - 1;
+    while (begin > 0 && !std::strchr(" 3467", body[begin - 1])) begin--;
+    std::string syllable = body.substr(begin, start - begin);
+    if (!_composer->isSyllableKeys(syllable)) break;
+    start = begin;
+  }
+  if (start == body.size()) return NO;
+  std::string keys = body.substr(start);
+  NSRange selection = [client selectedRange];
+  NSUInteger length = keys.size() + trailingSpaces;
+  if (selection.location == NSNotFound || selection.location < length) return NO;
+  [client insertText:@"" replacementRange:NSMakeRange(selection.location - length, length)];
+  for (char key : keys) {
+    if (key == ' ') {
+      _composer->completeWithFirstTone();
+    } else {
+      _composer->typeReadingKey(key);
+    }
+  }
+  gEnglishMode = NO;
+  [self refresh:client];
+  NSRect lineRect = NSZeroRect;
+  [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
+  [PKModeIndicator.shared show:@"ㄅ" below:lineRect];
+  return YES;
 }
 
 - (BOOL)handleComposing:(NSEvent *)event flags:(NSEventModifierFlags)flags client:(id)client {
