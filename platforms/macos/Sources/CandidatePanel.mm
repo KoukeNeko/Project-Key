@@ -1,5 +1,12 @@
 #import "CandidatePanel.h"
 
+NSString *const PKAppearanceKey = @"Appearance";
+
+BOOL PKGlassAvailable(void) {
+  if (@available(macOS 26.0, *)) return YES;
+  return NO;
+}
+
 @implementation PKPanelContent
 @end
 
@@ -30,6 +37,23 @@ constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
 constexpr CGFloat kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
 constexpr CGFloat kPageLeft = 12, kPageRight = 10;
 
+BOOL UsesGlass() {
+  return PKGlassAvailable() && [NSUserDefaults.standardUserDefaults integerForKey:PKAppearanceKey] == 1;
+}
+
+// Wraps `content` in a Liquid Glass view, or returns it as is for the dark style.
+NSView *Container(NSView *content, BOOL glass, CGFloat radius) {
+  if (@available(macOS 26.0, *)) {
+    if (glass) {
+      NSGlassEffectView *view = [[NSGlassEffectView alloc] init];
+      view.cornerRadius = radius;
+      view.contentView = content;
+      return view;
+    }
+  }
+  return content;
+}
+
 NSFont *TextFont(CGFloat size) {
   return [NSFont fontWithName:@"PingFang TC" size:size] ?: [NSFont systemFontOfSize:size];
 }
@@ -48,6 +72,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 @interface PKCandidateView : NSView
 @property(nonatomic, strong) PKPanelContent *content;
 @property(nonatomic) BOOL proofBelow;  // window above the text: proof row last, next to the text
+@property(nonatomic) BOOL glass;  // on Liquid Glass: no fill, system label colors
 - (NSSize)fittingSize;
 @end
 
@@ -87,6 +112,14 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
          [self widthOf:self.content.candidates[index] font:_candidateFont] + kCellSide;
 }
 
+- (NSColor *)textColor {
+  return self.glass ? NSColor.labelColor : kText;
+}
+
+- (NSColor *)mutedColor {
+  return self.glass ? NSColor.secondaryLabelColor : kMuted;
+}
+
 - (NSSize)fittingSize {
   CGFloat width = 0;
   if (self.content.showsProof) {
@@ -105,18 +138,20 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 - (void)drawRect:(NSRect)dirtyRect {
   NSRect bounds = self.bounds;
-  NSBezierPath *shape = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(bounds, 0.25, 0.25) xRadius:kRadius yRadius:kRadius];
-  [kBackground setFill];
-  [shape fill];
-  [kEdge setStroke];
-  shape.lineWidth = 0.5;
-  [shape stroke];
+  if (!self.glass) {
+    NSBezierPath *shape = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(bounds, 0.25, 0.25) xRadius:kRadius yRadius:kRadius];
+    [kBackground setFill];
+    [shape fill];
+    [kEdge setStroke];
+    shape.lineWidth = 0.5;
+    [shape stroke];
+  }
 
   BOOL both = self.content.showsProof && self.content.candidates;
   CGFloat proofTop = self.proofBelow ? self.rowHeight + (both ? 1 : 0) : 0;
   CGFloat rowTop = self.proofBelow ? 0 : self.proofHeight + (both ? 1 : 0);
   if (both) {
-    [kLine setFill];
+    [(self.glass ? NSColor.separatorColor : kLine) setFill];
     NSRectFill(NSMakeRect(0, self.proofBelow ? self.rowHeight : self.proofHeight, NSWidth(bounds), 1));
   }
   if (self.content.showsProof) [self drawProofAt:proofTop];
@@ -127,7 +162,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   CGFloat x = kProofLeft;
   CGFloat textTop = TextTop(_proofFont, top + kProofTop, kProofLine);
   CGFloat markTop = top + kProofTop + kProofLine + kMarkGap;
-  NSDictionary *muted = Attributes(_proofFont, kMuted);
+  NSDictionary *muted = Attributes(_proofFont, self.mutedColor);
   NSUInteger length = [self.content.segments componentsJoinedByString:@""].length;
   NSUInteger start = 0;
   // The pending reading, or a caret line when there is none, sits at the cursor.
@@ -145,7 +180,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   for (NSUInteger i = 0; i < self.content.segments.count; i++) {
     NSString *segment = self.content.segments[i];
     BOOL active = (NSInteger)i == self.content.activeSegment;
-    NSDictionary *attributes = Attributes(_proofFont, active ? kAccentSoft : kMuted);
+    NSDictionary *attributes = Attributes(_proofFont, active ? kAccentSoft : self.mutedColor);
     CGFloat left = x;
     NSUInteger split = self.content.caret > start && self.content.caret < start + segment.length ? self.content.caret - start : 0;
     if (split) {
@@ -186,16 +221,16 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     }
     NSString *label = [NSString stringWithFormat:@"%lu", i + 1];
     [label drawAtPoint:NSMakePoint(x + kCellSide, labelTop)
-        withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : kMuted)];
+        withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : self.mutedColor)];
     CGFloat textX = x + kCellSide + [self widthOf:label font:_labelFont] + kLabelGap;
-    [self.content.candidates[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, on ? NSColor.whiteColor : kText)];
+    [self.content.candidates[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, on ? NSColor.whiteColor : self.textColor)];
     x += cell + kCellGap;
   }
   if (self.content.pageLabel) {
     CGFloat labelWidth = [self widthOf:self.content.pageLabel font:_pageFont];
     CGFloat pageTop = TextTop(_pageFont, cellTop + kCellTop, kCellLine);
     [self.content.pageLabel drawAtPoint:NSMakePoint(width - kRowRight - kPageRight - labelWidth, pageTop)
-                         withAttributes:Attributes(_pageFont, kMuted)];
+                         withAttributes:Attributes(_pageFont, self.mutedColor)];
   }
 }
 
@@ -230,12 +265,17 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     _panel.canHide = NO;
     _panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
     _view = [[PKCandidateView alloc] initWithFrame:NSZeroRect];
-    _panel.contentView = _view;
   }
   return self;
 }
 
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect {
+  BOOL glass = UsesGlass();
+  if (glass != _view.glass || !_panel.contentView) {
+    _view.glass = glass;
+    [_view removeFromSuperview];
+    _panel.contentView = Container(_view, glass, kRadius);
+  }
   _view.content = content;
   NSSize size = [_view fittingSize];
   NSScreen *screen = NSScreen.mainScreen;
@@ -290,8 +330,10 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 @implementation PKModeIndicator {
   NSPanel *_panel;
+  NSView *_labelHost;
   NSTextField *_label;
   NSUInteger _generation;
+  BOOL _glass;
 }
 
 + (instancetype)shared {
@@ -316,24 +358,29 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     _panel.ignoresMouseEvents = YES;
     _panel.canHide = NO;
     _panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
-    NSView *background = [[NSView alloc] init];
-    background.wantsLayer = YES;
-    background.layer.backgroundColor = kBackground.CGColor;
-    background.layer.cornerRadius = kPillRadius;
-    background.layer.borderColor = kEdge.CGColor;
-    background.layer.borderWidth = 0.5;
+    _labelHost = [[NSView alloc] init];
+    _labelHost.wantsLayer = YES;
+    _labelHost.layer.cornerRadius = kPillRadius;
     _label = [NSTextField labelWithString:@""];
     _label.font = [NSFont fontWithName:@"PingFang TC Medium" size:15] ?: [NSFont systemFontOfSize:15 weight:NSFontWeightMedium];
-    _label.textColor = kText;
     _label.alignment = NSTextAlignmentCenter;
-    [background addSubview:_label];
-    _panel.contentView = background;
+    [_labelHost addSubview:_label];
   }
   return self;
 }
 
 - (void)show:(NSString *)label below:(NSRect)lineRect {
   constexpr CGFloat kSide = 30, kHold = 0.8, kFadeIn = 0.12, kFadeOut = 0.25;
+  BOOL glass = UsesGlass();
+  if (glass != _glass || !_panel.contentView) {
+    _glass = glass;
+    _labelHost.layer.backgroundColor = glass ? nil : kBackground.CGColor;
+    _labelHost.layer.borderColor = glass ? nil : kEdge.CGColor;
+    _labelHost.layer.borderWidth = glass ? 0 : 0.5;
+    _label.textColor = glass ? NSColor.labelColor : kText;
+    [_labelHost removeFromSuperview];
+    _panel.contentView = Container(_labelHost, glass, kPillRadius);
+  }
   _label.stringValue = label;
   [_label sizeToFit];
   CGFloat width = MAX(kSide, NSWidth(_label.frame) + 20);
