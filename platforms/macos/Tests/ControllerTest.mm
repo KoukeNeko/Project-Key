@@ -219,6 +219,24 @@ int main() {
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     assert([controller handleEvent:Key(@"r") client:client]);  // back in 中
 
+    // The reverse: English typed in 中 shows what a lone Shift turns it into,
+    // and the Shift puts the English in place of the composition and switches to 英.
+    while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+    Type(controller, client, @"hello");
+    PKPanelContent *english = PKCandidatePanel.shared.content;
+    assert(PKCandidatePanel.shared.visible && [english.keyHint isEqualToString:@"⇧"]);
+    assert([english.segments.firstObject isEqualToString:@"hello"] && [english.replacedText isEqualToString:client.marked]);
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    assert([client.committed hasSuffix:@"hello"] && client.marked.length == 0);
+    assert(![controller handleEvent:Key(@"r") client:client]);  // now in 英
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    // Real Zhuyin is left alone, even when it spells something: "su " is 妮 as well as "su".
+    Type(controller, client, @"su ");
+    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
+    while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+
     std::printf("ControllerTest passed\n");
   }
   return 0;
