@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "Bigram.h"
 #include "Mandarin/Mandarin.h"
 #include "McBopomofoLM.h"
 #include "gramambular2/reading_grid.h"
@@ -24,7 +25,10 @@ struct Segment {
 
 class Composer {
  public:
-  explicit Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm);
+  // With a bigram model, each word is scored in the context of the word before
+  // it: log10(weight * P(word | previous) + (1 - weight) * 10^unigram score).
+  explicit Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr<const Bigram> bigram = nullptr,
+                    double contextWeight = 0.3);
 
   enum class KeyResult { kHandled, kInvalid };
 
@@ -63,8 +67,11 @@ class Composer {
   KeyResult insertPendingSyllable();
   bool startsWithSegment(const Segment& segment, const std::string& reading) const;
   void walk();
+  double wordScore(const std::string* previous, const std::string& word, double unigramScore) const;
 
   std::shared_ptr<McBopomofo::McBopomofoLM> lm_;
+  std::shared_ptr<const Bigram> bigram_;
+  double contextWeight_;
   Formosa::Gramambular2::ReadingGrid grid_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
   std::vector<Segment> segments_;

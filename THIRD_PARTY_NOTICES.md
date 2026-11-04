@@ -37,7 +37,7 @@ SOFTWARE.
 
 ## 執行時下載，不隨 repo 散布
 
-`tools/corpus-evaluator/setup.sh` 和 `annotate.py` 會把下列元件下載到 `.cache/`（已列入 `.gitignore`），只用於本機評測。
+`tools/corpus-evaluator/setup.sh`、`annotate.py` 和 `tools/bigram-trainer/train.sh` 會把下列元件下載到各自的 `.cache/`（已列入 `.gitignore`），只用於本機評測。由維基百科統計出的 `bigram.bin` 若存在，`platforms/macos/build.sh` 會把它放進本機建置的 App；它能否隨產品散布尚未確認。
 
 | 元件 | 授權 | 用途 |
 |---|---|---|
@@ -46,5 +46,7 @@ SOFTWARE.
 | [OpenCC](https://github.com/BYVoid/OpenCC) 資料（隨 Homebrew librime 安裝） | Apache-2.0 | RIME 臺灣字形轉換 |
 | [libchewing](https://github.com/chewing/libchewing) | LGPL-2.1 | 評測引擎 |
 | [McBopomofo](https://github.com/openvanilla/McBopomofo) 引擎與詞庫 | MIT | 評測引擎、注音標註來源 |
+| [中文維基百科](https://zh.wikipedia.org)（Hugging Face `wikimedia/wikipedia` 20231101.zh 第一個分片） | CC BY-SA 4.0 | `tools/bigram-trainer` 的訓練文字 |
+| [pyarrow](https://arrow.apache.org) | Apache-2.0 | 讀取維基百科分片 |
 
 日後產品若隨附其中任何元件，須把對應的授權條文移到「repo 內含」一節。LGPL 元件還必須保持可替換。

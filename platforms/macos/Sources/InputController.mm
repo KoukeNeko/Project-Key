@@ -6,6 +6,7 @@
 #include <optional>
 
 #import "CandidatePanel.h"
+#import "SettingsWindow.h"
 #include "Composer.h"
 
 using ProjectKey::Composer;
@@ -31,6 +32,20 @@ std::shared_ptr<McBopomofo::McBopomofoLM> SharedLanguageModel() {
   return lm;
 }
 
+std::shared_ptr<const ProjectKey::Bigram> SharedBigram() {
+  static std::shared_ptr<const ProjectKey::Bigram> bigram = []() -> std::shared_ptr<const ProjectKey::Bigram> {
+    NSString *path = [NSBundle.mainBundle pathForResource:@"bigram" ofType:@"bin"];
+    if (!path) return nullptr;
+    auto model = std::make_shared<ProjectKey::Bigram>();
+    if (!model->load(path.fileSystemRepresentation)) {
+      NSLog(@"Project Key: cannot load %@", path);
+      return nullptr;
+    }
+    return model;
+  }();
+  return bigram;
+}
+
 NSString *String(const std::string &s) {
   return [[NSString alloc] initWithBytes:s.data() length:s.size() encoding:NSUTF8StringEncoding] ?: @"";
 }
@@ -54,7 +69,7 @@ BOOL gEnglishMode = NO;
 
 - (instancetype)initWithServer:(IMKServer *)server delegate:(id)delegate client:(id)client {
   if ((self = [super initWithServer:server delegate:delegate client:client])) {
-    _composer = std::make_unique<Composer>(SharedLanguageModel());
+    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram());
   }
   return self;
 }
@@ -62,7 +77,7 @@ BOOL gEnglishMode = NO;
 // Without an IMK server or client; ControllerTest drives the controller this way.
 - (instancetype)init {
   if ((self = [super init])) {
-    _composer = std::make_unique<Composer>(SharedLanguageModel());
+    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram());
   }
   return self;
 }
@@ -122,7 +137,13 @@ BOOL gEnglishMode = NO;
     NSMenuItem *item = [menu addItemWithTitle:titles[mode] action:actions[mode] keyEquivalent:@""];
     item.state = self.proofMode == mode ? NSControlStateValueOn : NSControlStateValueOff;
   }
+  [menu addItem:NSMenuItem.separatorItem];
+  [menu addItemWithTitle:@"設定…" action:@selector(showSettings:) keyEquivalent:@""];
   return menu;
+}
+
+- (void)showSettings:(id)sender {
+  [PKSettingsWindow show];
 }
 
 - (void)proofAlways:(id)sender {
@@ -150,6 +171,9 @@ BOOL gEnglishMode = NO;
         _shiftAlone = NO;
         [self commitTo:client];
         gEnglishMode = !gEnglishMode;
+        NSRect lineRect = NSZeroRect;
+        [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
+        [PKModeIndicator.shared show:gEnglishMode ? @"A" : @"ㄅ" below:lineRect];
       }
     } else {
       _shiftAlone = NO;
@@ -265,8 +289,14 @@ BOOL gEnglishMode = NO;
       _selection = (page + 1) % pages * kPerPage;
       break;
     case kVK_PageUp:
-    case kVK_UpArrow:
       _selection = MAX(page - 1, 0) * kPerPage;  // wrapping back lands on the rarest page
+      break;
+    case kVK_UpArrow:
+      if (page == 0) {
+        _choosing = NO;  // past the first page, Up returns to the sentence
+      } else {
+        _selection = (page - 1) * kPerPage;
+      }
       break;
     case kVK_Return:
     case kVK_ANSI_KeypadEnter:

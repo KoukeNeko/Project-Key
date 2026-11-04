@@ -28,4 +28,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSData *)pngForContent:(PKPanelContent *)content proofBelow:(BOOL)proofBelow;
 @end
 
+// The 中／英 badge shown under the caret when Shift switches modes; it fades out by itself.
+@interface PKModeIndicator : NSObject
++ (instancetype)shared;
+- (void)show:(NSString *)label below:(NSRect)lineRect;
+@end
+
 NS_ASSUME_NONNULL_END

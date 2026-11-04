@@ -22,12 +22,12 @@ cmake -S "$MCB/Source/Engine" -B "$MCB/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE
 cmake --build "$MCB/build" --target McBopomofoLMLib MandarinLib gramambular2_lib >/dev/null
 
 # shellcheck disable=SC2086
-c++ $CXXFLAGS Sources/Composer.cpp Tests/ComposerTest.cpp $LIBS -o $BUILD/ComposerTest
+c++ $CXXFLAGS Sources/Composer.cpp Sources/Bigram.cpp Tests/ComposerTest.cpp $LIBS -o $BUILD/ComposerTest
 $BUILD/ComposerTest "$MCB/Source/Data/data.txt"
 # ControllerTest finds data.txt next to itself, as the app finds it in Resources.
 ln -sf "$PWD/$MCB/Source/Data/data.txt" $BUILD/data.txt
 # shellcheck disable=SC2086
-c++ $CXXFLAGS -fobjc-arc Sources/Composer.cpp Sources/CandidatePanel.mm Sources/InputController.mm Tests/ControllerTest.mm $LIBS \
+c++ $CXXFLAGS -fobjc-arc Sources/Composer.cpp Sources/Bigram.cpp Sources/CandidatePanel.mm Sources/SettingsWindow.mm Sources/InputController.mm Tests/ControllerTest.mm $LIBS \
   -framework Cocoa -framework InputMethodKit -framework Carbon -o $BUILD/ControllerTest
 if ! out=$($BUILD/ControllerTest 2>&1); then echo "$out" >&2; exit 1; fi
 echo "$out" | grep -v 'Keyboard Layouts\|TISFileInterrogator' || true  # system noise from loading input sources
@@ -42,5 +42,8 @@ cp Resources/Info.plist "$APP/Contents/"
 cp Resources/icon.tiff "$MCB/Source/Data/data.txt" "$APP/Contents/Resources/"
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp "$MCB/LICENSE.txt" "$APP/Contents/Resources/McBopomofo-LICENSE.txt"
+# Context ranking model from tools/bigram-trainer; the app falls back to unigrams without it.
+BIGRAM=../../tools/bigram-trainer/.cache/bigram.bin
+if [ -f "$BIGRAM" ]; then cp "$BIGRAM" "$APP/Contents/Resources/"; else echo "no $BIGRAM: building without context ranking"; fi
 codesign --force --sign - "$APP"
 echo "built $APP"
