@@ -1,12 +1,13 @@
-// Trains word bigrams for the macOS input method.
+// Trains word bigrams and trigrams for the macOS input method.
 // Usage: train <McBopomofo data.txt> <min pair count> <output> < text
 // Segments each run of Han characters into dictionary words by maximizing the
 // sum of McBopomofo unigram scores, the same scores the input method walks
-// with, then counts adjacent word pairs inside each run, including the pairs
-// with the run boundary (Bigram::kBoundary) at its start and end.
+// with, then counts adjacent word pairs and triples inside each run, including
+// the run boundary (Bigram::kBoundary) at its start and end.
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -71,11 +72,15 @@ int main(int argc, char** argv) {
 
   std::unordered_map<std::string, uint32_t> ids;
   std::vector<std::string> words;
-  std::unordered_map<uint64_t, uint32_t> pairCounts;
+  std::unordered_map<uint64_t, uint32_t> pairCounts, tripleCounts;
   std::vector<uint32_t> previousCounts;  // times each word is followed by another word
   auto idOf = [&](const std::string& word) {
     auto [it, inserted] = ids.emplace(word, static_cast<uint32_t>(words.size()));
     if (inserted) {
+      if (words.size() >> ProjectKey::Bigram::kTripleIdBits) {
+        std::cerr << "too many distinct words for trigram keys\n";
+        std::exit(1);
+      }
       words.push_back(word);
       previousCounts.push_back(0);
     }
@@ -126,6 +131,7 @@ int main(int argc, char** argv) {
         uint32_t previous = segmented[k], next = segmented[k - 1];  // segmented is reversed
         pairCounts[static_cast<uint64_t>(previous) << 32 | next]++;
         previousCounts[previous]++;
+        if (k + 1 < segmented.size()) tripleCounts[ProjectKey::Bigram::TripleKey(segmented[k + 1], previous, next)]++;
       }
       tokens += segmented.size() - 2;
       runs++;
@@ -152,13 +158,28 @@ int main(int argc, char** argv) {
     double probability = static_cast<double>(count) / previousCounts[previous];
     pairs.push_back({static_cast<uint64_t>(newId(previous)) << 32 | newId(next), static_cast<float>(std::log10(probability))});
   }
+  // P(next | first, second): a pair's count is how often it is followed by a
+  // word, except a pair ending at the boundary, which has no triples.
+  constexpr uint64_t kIdMask = (1ull << ProjectKey::Bigram::kTripleIdBits) - 1;
+  std::vector<ProjectKey::Bigram::Pair> triples;
+  for (const auto& [key, count] : tripleCounts) {
+    if (count < minCount) continue;
+    uint32_t first = static_cast<uint32_t>(key >> (2 * ProjectKey::Bigram::kTripleIdBits));
+    uint32_t second = static_cast<uint32_t>(key >> ProjectKey::Bigram::kTripleIdBits & kIdMask);
+    uint32_t next = static_cast<uint32_t>(key & kIdMask);
+    double probability = static_cast<double>(count) / pairCounts[static_cast<uint64_t>(first) << 32 | second];
+    triples.push_back({ProjectKey::Bigram::TripleKey(newId(first), newId(second), newId(next)),
+                       static_cast<float>(std::log10(probability))});
+  }
   std::sort(pairs.begin(), pairs.end(), [](const auto& a, const auto& b) { return a.key < b.key; });
-  if (!ProjectKey::Bigram::save(argv[3], keptWords, pairs)) {
+  std::sort(triples.begin(), triples.end(), [](const auto& a, const auto& b) { return a.key < b.key; });
+  if (!ProjectKey::Bigram::save(argv[3], keptWords, pairs, triples)) {
     std::cerr << "cannot write " << argv[3] << "\n";
     return 1;
   }
   std::fprintf(stderr, "%llu runs, ", static_cast<unsigned long long>(runs));
-  std::fprintf(stderr, "%llu tokens, %zu distinct pairs, kept %zu pairs over %zu words\n",
-               static_cast<unsigned long long>(tokens), pairCounts.size(), pairs.size(), keptWords.size());
+  std::fprintf(stderr, "%llu tokens, %zu distinct pairs, kept %zu pairs over %zu words, kept %zu of %zu triples\n",
+               static_cast<unsigned long long>(tokens), pairCounts.size(), pairs.size(), keptWords.size(),
+               triples.size(), tripleCounts.size());
   return 0;
 }

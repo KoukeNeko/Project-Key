@@ -1,6 +1,7 @@
 #include "Composer.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace ProjectKey {
@@ -18,14 +19,27 @@ constexpr size_t kWordsPerNode = 10;
 // Unigram fallback for the composition's end: about 19% of the words in the
 // bigram training text end a run of Han characters.
 constexpr double kEndScore = -0.72;
-const std::string kBoundary = Bigram::kBoundary;
+// Words outside the context model, and the missing word before the first.
+constexpr uint32_t kNoWord = UINT32_MAX;
+
+double Now() {
+  return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+// The user model's key: the word before (empty at the start) and the reading.
+std::string UserKey(const std::string& previousReading, const std::string& previousValue, const std::string& reading) {
+  return (previousReading.empty() ? "" : "(" + previousReading + "," + previousValue + ")") + "|" + reading;
+}
 }  // namespace
 
 Composer::Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr<const Bigram> bigram,
-                   double contextWeight)
+                   std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
+                   double trigramWeight)
     : lm_(lm),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
       contextWeight_(contextWeight),
+      trigramWeight_(trigramWeight),
+      userModel_(std::move(userModel)),
       grid_(lm),
       reading_(BopomofoKeyboardLayout::StandardLayout()) {}
 
@@ -90,37 +104,55 @@ std::string Composer::text() const {
   return result;
 }
 
-double Composer::wordScore(const std::string* previous, const std::string& word, double unigramScore) const {
-  if (!bigram_) return unigramScore;
-  std::optional<double> context = previous ? bigram_->log10Probability(*previous, word) : std::nullopt;
-  if (!context) return unigramScore + std::log10(1 - contextWeight_);
-  return std::log10(contextWeight_ * std::pow(10, *context) + (1 - contextWeight_) * std::pow(10, unigramScore));
+double Composer::wordScore(uint32_t first, uint32_t second, uint32_t word, double unigramScore) const {
+  std::optional<double> pair =
+      second != kNoWord && word != kNoWord ? bigram_->log10Probability(second, word) : std::nullopt;
+  if (!pair) return unigramScore + std::log10(1 - contextWeight_);
+  double context = std::pow(10, *pair);
+  // A triple implies its pair, so only pairs the model knows need the lookup.
+  if (std::optional<double> triple = first != kNoWord ? bigram_->log10Probability(first, second, word) : std::nullopt) {
+    context = trigramWeight_ * std::pow(10, *triple) + (1 - trigramWeight_) * context;
+  }
+  return std::log10(contextWeight_ * context + (1 - contextWeight_) * std::pow(10, unigramScore));
 }
 
-// Viterbi over (node, word) choices. Without a bigram model only each node's
-// top word can win, which is exactly gramambular2's own walk.
+// Viterbi over (node, word) choices, keeping one path per choice and the choice
+// before it so each word sees the two words before it. Without a context model
+// only each node's top word can win (other words only when the user picked
+// them), which is exactly gramambular2's own walk.
 void Composer::walk() {
+  struct State {
+    int previous;  // choice before this one, -1 at the start
+    double best;
+    int back;  // index into the previous choice's states
+  };
   struct Choice {
     size_t start, length;
     ReadingGrid::NodePtr node;
     std::string value;
+    uint32_t id;
     double unigramScore;
-    double best = -INFINITY;
-    int back = -1;
+    std::vector<State> states;
   };
   const std::vector<ReadingGrid::Span>& spans = grid_.spans();
   const size_t n = spans.size();
+  const uint32_t boundary = bigram_ ? bigram_->id(Bigram::kBoundary).value_or(kNoWord) : kNoWord;
+  auto idOf = [&](const std::string& value) { return bigram_ ? bigram_->id(value).value_or(kNoWord) : kNoWord; };
+  auto score = [&](uint32_t first, uint32_t second, uint32_t word, double unigramScore) {
+    return bigram_ ? wordScore(first, second, word, unigramScore) : unigramScore;
+  };
   std::vector<Choice> choices;
   std::vector<std::vector<int>> endingAt(n + 1);
   for (size_t start = 0; start < n; start++) {
     for (size_t length = 1; length <= spans[start].maxLength(); length++) {
       const ReadingGrid::NodePtr& node = spans[start].nodeOf(length);
       if (!node) continue;
-      auto add = [&](std::string value, double score) {
+      auto add = [&](std::string value, double unigramScore) {
         endingAt[start + length].push_back(static_cast<int>(choices.size()));
-        choices.push_back({start, length, node, std::move(value), score});
+        uint32_t id = idOf(value);
+        choices.push_back({start, length, node, std::move(value), id, unigramScore, {}});
       };
-      if (node->isOverridden() || !bigram_) {
+      if (node->isOverridden() || (!bigram_ && !userModel_)) {
         add(node->value(), node->score());
       } else {
         const auto& unigrams = node->unigrams();
@@ -128,53 +160,100 @@ void Composer::walk() {
       }
     }
   }
+  // A word the user picked after the same word is certain: probability 1.
+  const double now = Now();
+  auto learned = [&](int previous, const Choice& choice) {
+    if (!userModel_ || choice.node->isOverridden()) return false;
+    const std::string empty;
+    const Choice* before = previous >= 0 ? &choices[previous] : nullptr;
+    std::string key = UserKey(before ? before->node->reading() : empty, before ? before->value : empty, choice.node->reading());
+    return userModel_->suggest(key, now).candidate == choice.value;
+  };
   // Choices are in start order, so every predecessor is final before it is used.
   for (Choice& choice : choices) {
     if (choice.start == 0) {
-      choice.best = wordScore(&kBoundary, choice.value, choice.unigramScore);
+      double first = learned(-1, choice) ? 0 : score(kNoWord, boundary, choice.id, choice.unigramScore);
+      choice.states.push_back({-1, first, -1});
       continue;
     }
     for (int previous : endingAt[choice.start]) {
-      double score = choices[previous].best + wordScore(&choices[previous].value, choice.value, choice.unigramScore);
-      if (score > choice.best) {
-        choice.best = score;
-        choice.back = previous;
+      const Choice& before = choices[previous];
+      State state{previous, -INFINITY, -1};
+      bool certain = learned(previous, choice);
+      for (size_t k = 0; k < before.states.size(); k++) {
+        uint32_t first = before.states[k].previous >= 0 ? choices[before.states[k].previous].id : boundary;
+        double total = before.states[k].best + (certain ? 0 : score(first, before.id, choice.id, choice.unigramScore));
+        if (total > state.best) {
+          state.best = total;
+          state.back = static_cast<int>(k);
+        }
+      }
+      choice.states.push_back(state);
+    }
+  }
+  int last = -1, lastState = -1;
+  double lastScore = -INFINITY;
+  for (int end : endingAt[n]) {
+    for (size_t k = 0; k < choices[end].states.size(); k++) {
+      const State& state = choices[end].states[k];
+      uint32_t first = state.previous >= 0 ? choices[state.previous].id : boundary;
+      double total = state.best + score(first, choices[end].id, boundary, kEndScore);
+      if (total > lastScore) {
+        lastScore = total;
+        last = end;
+        lastState = static_cast<int>(k);
       }
     }
   }
   std::vector<int> path;
-  int last = -1;
-  double lastScore = -INFINITY;
-  for (int end : endingAt[n]) {
-    double score = choices[end].best + wordScore(&choices[end].value, kBoundary, kEndScore);
-    if (score > lastScore) {
-      lastScore = score;
-      last = end;
-    }
+  for (int at = last, k = lastState; at >= 0;) {
+    path.insert(path.begin(), at);
+    const State& state = choices[at].states[k];
+    at = state.previous;
+    k = state.back;
   }
-  for (int at = last; at >= 0; at = choices[at].back) path.insert(path.begin(), at);
 
   // A word is doubtful when another word of the same node scores within the gap
   // in the same context.
   segments_.clear();
+  auto idAt = [&](long i) { return i < 0 || i >= static_cast<long>(path.size()) ? boundary : choices[path[i]].id; };
   for (size_t i = 0; i < path.size(); i++) {
     const Choice& choice = choices[path[i]];
-    const std::string* previous = i > 0 ? &choices[path[i - 1]].value : &kBoundary;
-    const Choice* next = i + 1 < path.size() ? &choices[path[i + 1]] : nullptr;
-    auto local = [&](const std::string& value, double unigramScore) {
-      return wordScore(previous, value, unigramScore) +
-             (next ? wordScore(&value, next->value, next->unigramScore) : wordScore(&value, kBoundary, kEndScore));
+    long at = static_cast<long>(i);
+    uint32_t first = i > 0 ? idAt(at - 2) : kNoWord, previous = idAt(at - 1);
+    bool hasNext = i + 1 < path.size();
+    const Choice* next = hasNext ? &choices[path[i + 1]] : nullptr;
+    auto local = [&](uint32_t word, double unigramScore) {
+      double total = score(first, previous, word, unigramScore);
+      total += score(previous, word, idAt(at + 1), next ? next->unigramScore : kEndScore);
+      if (next) total += score(word, next->id, idAt(at + 2), i + 2 < path.size() ? choices[path[i + 2]].unigramScore : kEndScore);
+      return total;
     };
     bool doubtful = false;
-    if (!choice.node->isOverridden()) {
-      double chosen = local(choice.value, choice.unigramScore);
+    if (!choice.node->isOverridden() && !learned(i > 0 ? path[i - 1] : -1, choice)) {
+      double chosen = local(choice.id, choice.unigramScore);
       const auto& unigrams = choice.node->unigrams();
       for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()) && !doubtful; k++) {
-        if (unigrams[k].value() != choice.value) doubtful = chosen - local(unigrams[k].value(), unigrams[k].score()) < kDoubtfulScoreGap;
+        if (unigrams[k].value() != choice.value) {
+          doubtful = chosen - local(idOf(unigrams[k].value()), unigrams[k].score()) < kDoubtfulScoreGap;
+        }
       }
     }
     segments_.push_back({choice.value, choice.node->reading(), choice.start, choice.length, doubtful});
   }
+}
+
+std::optional<Segment> Composer::segmentFrom(size_t start) const {
+  for (const Segment& segment : segments_) {
+    if (start < segment.start || start >= segment.start + segment.length) continue;
+    if (start == segment.start) return segment;
+    std::string reading = segment.reading;
+    for (size_t skip = start - segment.start; skip > 0; skip--) {
+      reading.erase(0, reading.find(grid_.readingSeparator()) + grid_.readingSeparator().size());
+    }
+    return Segment{"", reading, start, segment.start + segment.length - start, false};
+  }
+  return std::nullopt;
 }
 
 // candidatesAt() returns every node overlapping the location; keep the ones
@@ -195,10 +274,21 @@ std::vector<std::string> Composer::candidates(const Segment& segment) {
 }
 
 bool Composer::choose(const Segment& segment, const std::string& value) {
+  const size_t start = segment.start;  // walk() rebuilds segments_, which `segment` may belong to
   for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(segment.start)) {
     if (candidate.value != value || !startsWithSegment(segment, candidate.reading)) continue;
     if (grid_.overrideCandidate(segment.start, candidate)) {
       walk();
+      if (userModel_) {
+        std::string previousReading, previousValue;
+        for (const Segment& before : segments_) {
+          if (before.start + before.length == start) {
+            previousReading = before.reading;
+            previousValue = before.text;
+          }
+        }
+        userModel_->observe(UserKey(previousReading, previousValue, candidate.reading), value, Now());
+      }
       return true;
     }
   }

@@ -23,6 +23,7 @@ void Write(std::ofstream& out, const T& value) {
 bool Bigram::load(const std::string& path) {
   ids_.clear();
   pairs_.clear();
+  triples_.clear();
   std::ifstream in(path, std::ios::binary);
   char magic[sizeof kMagic];
   if (!in.read(magic, sizeof magic) || std::memcmp(magic, kMagic, sizeof kMagic) != 0) return false;
@@ -43,10 +44,17 @@ bool Bigram::load(const std::string& path) {
     pairs_.clear();
     return false;
   }
+  uint32_t tripleCount = 0;
+  if (!Read(in, tripleCount)) return true;  // a bigram-only model
+  triples_.resize(tripleCount);
+  if (!in.read(reinterpret_cast<char*>(triples_.data()), static_cast<std::streamsize>(tripleCount * sizeof(Pair)))) {
+    triples_.clear();
+  }
   return true;
 }
 
-bool Bigram::save(const std::string& path, const std::vector<std::string>& words, const std::vector<Pair>& pairs) {
+bool Bigram::save(const std::string& path, const std::vector<std::string>& words, const std::vector<Pair>& pairs,
+                  const std::vector<Pair>& triples) {
   std::ofstream out(path, std::ios::binary);
   out.write(kMagic, sizeof kMagic);
   Write(out, static_cast<uint32_t>(words.size()));
@@ -56,17 +64,33 @@ bool Bigram::save(const std::string& path, const std::vector<std::string>& words
   }
   Write(out, static_cast<uint32_t>(pairs.size()));
   out.write(reinterpret_cast<const char*>(pairs.data()), static_cast<std::streamsize>(pairs.size() * sizeof(Pair)));
+  if (!triples.empty()) {
+    Write(out, static_cast<uint32_t>(triples.size()));
+    out.write(reinterpret_cast<const char*>(triples.data()), static_cast<std::streamsize>(triples.size() * sizeof(Pair)));
+  }
   return static_cast<bool>(out);
 }
 
-std::optional<double> Bigram::log10Probability(const std::string& previous, const std::string& next) const {
-  auto p = ids_.find(previous);
-  auto n = ids_.find(next);
-  if (p == ids_.end() || n == ids_.end()) return std::nullopt;
-  uint64_t key = static_cast<uint64_t>(p->second) << 32 | n->second;
-  auto it = std::lower_bound(pairs_.begin(), pairs_.end(), key, [](const Pair& pair, uint64_t k) { return pair.key < k; });
-  if (it == pairs_.end() || it->key != key) return std::nullopt;
+std::optional<uint32_t> Bigram::id(const std::string& word) const {
+  auto it = ids_.find(word);
+  if (it == ids_.end()) return std::nullopt;
+  return it->second;
+}
+
+namespace {
+std::optional<double> Find(const std::vector<Bigram::Pair>& records, uint64_t key) {
+  auto it = std::lower_bound(records.begin(), records.end(), key, [](const Bigram::Pair& r, uint64_t k) { return r.key < k; });
+  if (it == records.end() || it->key != key) return std::nullopt;
   return it->log10Probability;
+}
+}  // namespace
+
+std::optional<double> Bigram::log10Probability(uint32_t previous, uint32_t next) const {
+  return Find(pairs_, static_cast<uint64_t>(previous) << 32 | next);
+}
+
+std::optional<double> Bigram::log10Probability(uint32_t first, uint32_t second, uint32_t next) const {
+  return Find(triples_, TripleKey(first, second, next));
 }
 
 }  // namespace ProjectKey
