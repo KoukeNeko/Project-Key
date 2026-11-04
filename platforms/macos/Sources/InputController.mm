@@ -500,7 +500,9 @@ BOOL gEnglishMode = NO;
     [self refresh:client];
     return YES;
   }
-  if ((flags & NSEventModifierFlagShift) && _composer->insertPunctuation(key)) {
+  // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on '.
+  if (key == '\\' && !(flags & NSEventModifierFlagShift)) key = '\'';
+  if (_composer->insertPunctuation(key)) {
     [self refresh:client];
     return YES;
   }
