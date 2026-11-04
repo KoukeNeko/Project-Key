@@ -7,6 +7,7 @@ NSString *const PKChoosingProofKey = @"ChoosingProof";
 NSString *const PKAdjacentKeysKey = @"AdjacentKeys";
 NSString *const PKRememberChoicesKey = @"RememberChoices";
 NSString *const PKShiftToggleKey = @"ShiftToggle";
+NSString *const PKCapsLockToggleKey = @"CapsLockToggle";
 NSString *const PKEnglishToZhuyinKey = @"EnglishToZhuyin";
 NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
 
@@ -17,6 +18,7 @@ NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
     PKAdjacentKeysKey : @YES,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,
+    PKCapsLockToggleKey : @YES,
     PKEnglishToZhuyinKey : @YES,
     PKZhuyinToEnglishKey : @YES,
     PKProofPreviewKey : @1,

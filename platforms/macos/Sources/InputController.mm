@@ -192,10 +192,22 @@ BOOL gEnglishMode = NO;
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)client {
   NSEventModifierFlags flags = event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
   if (event.type == NSEventTypeFlagsChanged) {
+    // Each Caps Lock press switches 中/英, like the system's own Caps Lock switch.
+    if (event.keyCode == kVK_CapsLock && [defaults boolForKey:PKCapsLockToggleKey]) {
+      _shiftAlone = NO;
+      [self commitTo:client];
+      [self forgetEnglishRun];
+      gEnglishMode = !gEnglishMode;
+      NSRect lineRect = NSZeroRect;
+      [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];
+      [PKModeIndicator.shared show:gEnglishMode ? @"A" : @"ㄅ" below:lineRect];
+      return NO;
+    }
     // A Shift press and release with no key in between switches 中/英.
     if (event.keyCode == kVK_Shift || event.keyCode == kVK_RightShift) {
-      if (![NSUserDefaults.standardUserDefaults boolForKey:PKShiftToggleKey]) {
+      if (![defaults boolForKey:PKShiftToggleKey]) {
         _shiftAlone = NO;
       } else if (flags & NSEventModifierFlagShift) {
         _shiftAlone = YES;
@@ -219,8 +231,26 @@ BOOL gEnglishMode = NO;
   _shiftAlone = NO;
   if (_composer->isEmpty()) {
     [self makeComposer];
-    // With the Shift switch turned off there is no way back to 中.
-    if (gEnglishMode && ![NSUserDefaults.standardUserDefaults boolForKey:PKShiftToggleKey]) gEnglishMode = NO;
+    // With both switches turned off there is no way back to 中.
+    if (gEnglishMode && ![defaults boolForKey:PKShiftToggleKey] && ![defaults boolForKey:PKCapsLockToggleKey]) gEnglishMode = NO;
+  }
+  // Caps Lock is the switch, so the lock it leaves on does not capitalize: the
+  // key acts as its lowercase letter (Shift still capitalizes).
+  NSString *lowered = event.characters.lowercaseString;
+  BOOL capsLetter = (flags & NSEventModifierFlagCapsLock) && !(flags & NSEventModifierFlagShift) &&
+                    [defaults boolForKey:PKCapsLockToggleKey] && ![lowered isEqualToString:event.characters];
+  if (capsLetter) {
+    flags &= ~NSEventModifierFlagCapsLock;
+    event = [NSEvent keyEventWithType:event.type
+                             location:event.locationInWindow
+                        modifierFlags:flags
+                            timestamp:event.timestamp
+                         windowNumber:event.windowNumber
+                              context:nil
+                           characters:lowered
+          charactersIgnoringModifiers:lowered
+                            isARepeat:event.isARepeat
+                              keyCode:event.keyCode];
   }
 
   if (flags & (NSEventModifierFlagCommand | NSEventModifierFlagControl | NSEventModifierFlagOption)) {
@@ -236,8 +266,10 @@ BOOL gEnglishMode = NO;
   }
   if (gEnglishMode) {
     [self trackEnglish:event flags:flags];
+    // Passed through, the app would capitalize it; insert the lowercase letter instead.
+    if (capsLetter) [client insertText:lowered replacementRange:NSMakeRange(NSNotFound, NSNotFound)];
     [self showEnglishHint:client];
-    return NO;
+    return capsLetter;
   }
   [self trackZhuyin:event flags:flags];
   return _choosing ? [self handleChoosing:event flags:flags client:client] : [self handleComposing:event flags:flags client:client];
