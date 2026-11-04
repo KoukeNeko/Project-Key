@@ -32,9 +32,10 @@ NSColor *const kDoubtMark = Hex(0x3fb9a3, 0.7);
 NSColor *const kEdge = Hex(0x000000, 0.5);
 
 constexpr CGFloat kRadius = 14, kPillRadius = 8, kGapToText = 8, kAnchorInset = 16;
-// Proof row: 38px tall like the prototype's 10/20/8, with the line centered and
-// its marks (2px, 3px under the line, inset 1px per side) below it.
-constexpr CGFloat kProofTop = 6.5, kProofBottom = 11.5, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
+// Proof row: 38px tall, the 20px line centered with 9px above and below; its
+// marks (2px, 3px under the line, inset 1px per side) sit in the bottom pad.
+// Text starts 19px in on both rows: kRowLeft + kCellSide = kProofLeft.
+constexpr CGFloat kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
 constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 // Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
 NSString *const kReplacedArrow = @" → ";
@@ -42,7 +43,7 @@ constexpr CGFloat kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5
 // Candidate row: padding 6 6 6 8; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
 constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
 constexpr CGFloat kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
-constexpr CGFloat kPageLeft = 12, kPageRight = 10;
+constexpr CGFloat kPageLeft = 12, kPageRight = 13;  // kRowRight + kPageRight = kProofRight
 // Motion: the selection slides, the grid grows and folds.
 constexpr NSTimeInterval kSlideDuration = 0.12, kResizeDuration = 0.16;
 
@@ -148,7 +149,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (CGFloat)proofHeight {
-  return self.content.showsProof ? kProofTop + kProofLine + kProofBottom : 0;
+  return self.content.showsProof ? kProofPad + kProofLine + kProofPad : 0;  // marks sit in the bottom pad
 }
 
 - (CGFloat)rowHeight {
@@ -295,7 +296,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   CGFloat x = kProofLeft;
   // The line stays centered; marks sit in the space below it, so they come and
   // go without moving the text.
-  CGFloat lineTop = top + (kProofTop + kProofBottom) / 2;
+  CGFloat lineTop = top + kProofPad;
   CGFloat textTop = TextTop(_proofFont, lineTop, kProofLine);
   CGFloat markTop = lineTop + kProofLine + kMarkGap;
   if (self.content.keyHint) [self drawKeyHintAt:lineTop];
@@ -554,13 +555,12 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 // left when the screen ends. Both hang from the text, so their tops already line up.
 static NSRect Beside(NSRect badge, NSRect rect) {
   if (!NSIntersectsRect(badge, rect)) return badge;
-  constexpr CGFloat kGap = 6;
   NSScreen *screen = NSScreen.mainScreen;
   for (NSScreen *candidate in NSScreen.screens) {
     if (NSIntersectsRect(rect, candidate.frame)) screen = candidate;
   }
-  badge.origin.x = NSMaxX(rect) + kGap;
-  if (NSMaxX(badge) > NSMaxX(screen.visibleFrame)) badge.origin.x = NSMinX(rect) - kGap - NSWidth(badge);
+  badge.origin.x = NSMaxX(rect) + kGapToText;
+  if (NSMaxX(badge) > NSMaxX(screen.visibleFrame)) badge.origin.x = NSMinX(rect) - kGapToText - NSWidth(badge);
   return badge;
 }
 
@@ -582,7 +582,7 @@ static NSRect Beside(NSRect badge, NSRect rect) {
   }
   _label.stringValue = label;
   [_label sizeToFit];
-  CGFloat width = MAX(kSide, NSWidth(_label.frame) + 20);
+  CGFloat width = MAX(kSide, NSWidth(_label.frame) + 2 * kCellSide);
   _label.frame = NSMakeRect(0, (kSide - NSHeight(_label.frame)) / 2, width, NSHeight(_label.frame));
   NSRect frame = NSMakeRect(NSMinX(lineRect), NSMinY(lineRect) - kGapToText - kSide, width, kSide);
   NSScreen *screen = NSScreen.mainScreen;
