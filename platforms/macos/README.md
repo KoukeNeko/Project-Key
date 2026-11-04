@@ -21,19 +21,19 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 |---|---|---|
 | 組字中 | 注音鍵、聲調鍵 3 4 6 7 | 輸入注音；聲調鍵結束音節 |
 | | Space | 結束一聲音節；沒有未完成的注音時，開啟候選 |
-| | ↓、Tab | 開啟候選：游標在句尾時從第一個可疑處開始，否則從游標後的詞開始 |
+| | ↓、Tab | 開啟候選：游標在句尾時從第一個可疑處開始，否則從游標後的字開始（游標在詞中間時，可單獨換掉後半的字） |
 | | Enter | 送出整句 |
 | | ←、→、Home、End | 在字與字之間移動游標，新輸入的字插在游標處 |
 | | Delete | 刪除一個注音符號或游標前的字 |
 | | ⌦ | 刪除游標後的字 |
 | | Esc | 清除未完成的注音；再按一次清除整句 |
 | | ⇧ + 標點鍵 | 全形標點，例如 ⇧, 輸入「，」 |
-| 選字中 | 1–7 | 選字，選完跳到下一個可疑處；展開時選取所在那一列 |
+| 選字中 | 1–6 | 選取所在那一列的字，選完跳到下一個可疑處 |
 | | ←、→ | 移動選取 |
-| | ↓ | 展開成多列候選（每頁一列），移到下一列 |
-| | Space、PageDown | 下一頁；展開時往下捲 5 列 |
-| | ↑ | 上一列；展開時在第一列收合，未展開時在第一頁關閉候選、回到組字 |
-| | PageUp | 上一頁，停在第一頁；展開時往上捲 5 列 |
+| | ↓ | 展開成多列候選，移到下一列的同一欄。每列 6 欄，長詞佔多欄 |
+| | Space、PageDown | 下一列；展開時往下捲 5 列 |
+| | ↑ | 上一列；展開時在第一列收合，未展開時在第一列關閉候選、回到組字 |
+| | PageUp | 上一列，停在第一列；展開時往上捲 5 列 |
 | | Enter | 選定目前候選 |
 | | Tab、⇧Tab | 跳到下一個／上一個可疑處 |
 | | Esc | 展開時收合，否則回到組字 |
@@ -49,7 +49,9 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 
 ## 上下文排序
 
-有 `tools/bigram-trainer/.cache/bigram.bin` 時，`build.sh` 會把它放進 App，組字器改用詞 bigram 依前後文選字；沒有時與 McBopomofo 的選字結果相同。評測結果見 `tools/corpus-evaluator/results/2026-11-05-bigram.md`。
+有 `tools/bigram-trainer/.cache/bigram.bin` 時，`build.sh` 會把它放進 App，組字器依前兩個詞選字（bigram 與 trigram）；沒有時與 McBopomofo 的選字結果相同。評測結果見 `tools/corpus-evaluator/results/2026-11-05-bigram.md`。
+
+選過的字會依「前一個詞＋讀音」記下來，之後同樣的前文會優先選它（沿用 McBopomofo 的 UserOverrideModel，只存在記憶體，半衰期 1.5 小時，輸入法程式重新啟動後清空）。
 
 ## 尚未實作
 

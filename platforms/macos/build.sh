@@ -28,7 +28,7 @@ $BUILD/ComposerTest "$MCB/Source/Data/data.txt"
 ln -sf "$PWD/$MCB/Source/Data/data.txt" $BUILD/data.txt
 # shellcheck disable=SC2086
 c++ $CXXFLAGS -fobjc-arc Sources/Composer.cpp Sources/Bigram.cpp Sources/CandidatePanel.mm Sources/SettingsWindow.mm Sources/InputController.mm Tests/ControllerTest.mm $LIBS \
-  -framework Cocoa -framework InputMethodKit -framework Carbon -o $BUILD/ControllerTest
+  -framework Cocoa -framework QuartzCore -framework InputMethodKit -framework Carbon -o $BUILD/ControllerTest
 if ! out=$($BUILD/ControllerTest 2>&1); then echo "$out" >&2; exit 1; fi
 echo "$out" | grep -v 'Keyboard Layouts\|TISFileInterrogator' || true  # system noise from loading input sources
 
@@ -36,7 +36,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # shellcheck disable=SC2086
 c++ $CXXFLAGS -fobjc-arc Sources/*.cpp Sources/*.mm $LIBS \
-  -framework Cocoa -framework InputMethodKit -framework Carbon \
+  -framework Cocoa -framework QuartzCore -framework InputMethodKit -framework Carbon \
   -o "$APP/Contents/MacOS/ProjectKey"
 cp Resources/Info.plist "$APP/Contents/"
 cp Resources/icon.tiff "$MCB/Source/Data/data.txt" "$APP/Contents/Resources/"
