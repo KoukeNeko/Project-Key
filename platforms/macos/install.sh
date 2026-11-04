@@ -7,10 +7,12 @@ APP=.build/ProjectKey.app
 DEST="$HOME/Library/Input Methods/ProjectKey.app"
 [ -d "$APP" ] || { echo "run ./build.sh first" >&2; exit 1; }
 
-# A running copy keeps the old binary loaded; the system relaunches it on the next key.
+# A running copy keeps the old binary loaded. The system does not always
+# relaunch a killed input method, so the new copy is started below.
 pkill -x ProjectKey || true
 mkdir -p "$HOME/Library/Input Methods"
 rm -rf "$DEST"
 cp -R "$APP" "$DEST"
 "$DEST/Contents/MacOS/ProjectKey" --register
+open -g "$DEST"
 echo "installed $DEST"
