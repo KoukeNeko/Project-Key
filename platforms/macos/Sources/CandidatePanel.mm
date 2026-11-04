@@ -443,6 +443,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   _view.proofBelow = NSMinY(frame) < NSMinY(visible);
   if (_view.proofBelow) frame.origin.y = NSMaxY(lineRect) + kGapToText;
   frame.origin.x = MAX(NSMinX(visible), MIN(NSMinX(frame), NSMaxX(visible) - size.width));
+  [PKModeIndicator.shared avoid:frame];  // both sit under the caret
   [_view moveSelectionAnimated:animate];
   if (animate && !NSEqualSizes(_panel.frame.size, frame.size)) {
     [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
@@ -462,6 +463,10 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 - (void)hide {
   [_panel orderOut:nil];
+}
+
+- (NSRect)frame {
+  return _panel.frame;
 }
 
 - (BOOL)isVisible {
@@ -498,6 +503,10 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
 }
 
+@end
+
+@interface PKCandidatePanel (Frame)
+- (NSRect)frame;
 @end
 
 @implementation PKModeIndicator {
@@ -541,6 +550,24 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return self;
 }
 
+// The badge's frame moved beside `rect` when it overlaps it: right of it, or
+// left when the screen ends. Both hang from the text, so their tops already line up.
+static NSRect Beside(NSRect badge, NSRect rect) {
+  if (!NSIntersectsRect(badge, rect)) return badge;
+  constexpr CGFloat kGap = 6;
+  NSScreen *screen = NSScreen.mainScreen;
+  for (NSScreen *candidate in NSScreen.screens) {
+    if (NSIntersectsRect(rect, candidate.frame)) screen = candidate;
+  }
+  badge.origin.x = NSMaxX(rect) + kGap;
+  if (NSMaxX(badge) > NSMaxX(screen.visibleFrame)) badge.origin.x = NSMinX(rect) - kGap - NSWidth(badge);
+  return badge;
+}
+
+- (void)avoid:(NSRect)rect {
+  if (_panel.visible) [_panel setFrame:Beside(_panel.frame, rect) display:NO];
+}
+
 - (void)show:(NSString *)label below:(NSRect)lineRect {
   constexpr CGFloat kSide = 30, kHold = 0.8, kFadeIn = 0.12, kFadeOut = 0.25;
   BOOL glass = UsesGlass();
@@ -563,6 +590,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     if (NSPointInRect(lineRect.origin, candidate.frame)) screen = candidate;
   }
   if (NSMinY(frame) < NSMinY(screen.visibleFrame)) frame.origin.y = NSMaxY(lineRect) + kGapToText;
+  if (PKCandidatePanel.shared.visible) frame = Beside(frame, PKCandidatePanel.shared.frame);
   [_panel setFrame:frame display:YES];
   NSUInteger generation = ++_generation;
   _panel.alphaValue = 0;

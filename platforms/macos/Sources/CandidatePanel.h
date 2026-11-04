@@ -45,6 +45,8 @@ extern const NSInteger PKGridColumns;
 @interface PKModeIndicator : NSObject
 + (instancetype)shared;
 - (void)show:(NSString *)label below:(NSRect)lineRect;
+// Moves a showing badge out of `rect`, the candidate window's frame.
+- (void)avoid:(NSRect)rect;
 @end
 
 NS_ASSUME_NONNULL_END
