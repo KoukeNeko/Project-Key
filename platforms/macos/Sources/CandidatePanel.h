@@ -1,5 +1,5 @@
 // The Direction A candidate window: an optional whole-sentence proof row
-// above a single row of numbered candidates. Metrics and colors follow
+// above a grid of numbered candidates. Metrics and colors follow
 // docs/design/candidate-window/a-full (round 02).
 #import <Cocoa/Cocoa.h>
 
@@ -16,16 +16,20 @@ BOOL PKGlassAvailable(void);
 @property(nonatomic, copy) NSString *pendingReading;
 @property(nonatomic) NSUInteger caret;  // characters of the joined segments before the cursor
 @property(nonatomic) BOOL showsProof;
-@property(nonatomic, copy, nullable) NSArray<NSString *> *candidates;  // this page only; nil hides the row
-@property(nonatomic) NSInteger selection;                             // index within the page
-// 0: one row. Otherwise the page is a grid this many columns wide; only the
-// selection's row carries the 1-7 labels.
-@property(nonatomic) NSInteger columns;
+// Visible rows of the candidate grid; nil hides the candidate area. Each row
+// holds at most PKGridColumns columns, and a long candidate spans several.
+@property(nonatomic, copy, nullable) NSArray<NSArray<NSString *> *> *rows;
+@property(nonatomic) NSInteger selectedRow;  // index into rows; only this row carries the 1-6 labels
+@property(nonatomic) NSInteger selection;    // index within the selected row
 @property(nonatomic, copy, nullable) NSString *pageLabel;               // "1/3", nil for a single page
 @end
 
+extern const NSInteger PKGridColumns;
+
 @interface PKCandidatePanel : NSObject
 + (instancetype)shared;
+// Grid columns `candidate` takes, 1 to PKGridColumns.
++ (NSInteger)columnsSpannedBy:(NSString *)candidate;
 // lineRect is the composition's first line in screen coordinates.
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect;
 - (void)hide;

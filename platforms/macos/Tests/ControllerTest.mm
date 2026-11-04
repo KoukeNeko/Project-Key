@@ -110,6 +110,19 @@ int main() {
     assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
     assert(client.marked.length == 0 && client.committed.length == before);
 
+    // With the cursor inside the phrase 今天, Space offers the syllables from
+    // the cursor on, so its second character can be replaced alone.
+    Type(controller, client, @"rup wu0 ");
+    assert([controller handleEvent:Key(@"", kVK_Home) client:client]);
+    assert([controller handleEvent:Key(@"", kVK_RightArrow) client:client]);
+    assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
+    NSString *second = PKCandidatePanel.shared.content.rows[0][1];
+    assert(second.length == 1);
+    assert([controller handleEvent:Key(@"2") client:client]);
+    assert([client.marked hasSuffix:second] && client.marked.length == 2);
+    while (client.marked.length) assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
+
+
     // Arrows move the cursor between syllables; typing and Forward Delete act there.
     Type(controller, client, @"rup wu0 ");
     [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"ProofPreview"];  // always show the proof row
@@ -129,25 +142,30 @@ int main() {
 
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
 
-    // Down expands the pages into a grid, one row per page; Up walks back up,
-    // folds the grid on its first row, and closes the candidates after that.
+    // Down expands the rows into a grid; Up walks back up, folds the grid on
+    // its first row, and closes the candidates after that.
     Type(controller, client, @"rup wu0 ");
     assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
-    assert(PKCandidatePanel.shared.content.columns == 0);
+    assert(PKCandidatePanel.shared.content.rows.count == 1);
+    for (NSArray<NSString *> *row in PKCandidatePanel.shared.content.rows) {
+      NSInteger columns = 0;
+      for (NSString *candidate in row) columns += [PKCandidatePanel columnsSpannedBy:candidate];
+      assert(columns <= PKGridColumns);
+    }
     assert([controller handleEvent:Key(@"", kVK_DownArrow) client:client]);
     PKPanelContent *grid = PKCandidatePanel.shared.content;
-    assert(grid.columns == 7 && grid.candidates.count > 7 && grid.selection == 7 && [grid.pageLabel hasPrefix:@"2/"]);
+    assert(grid.rows.count > 1 && grid.selectedRow == 1 && [grid.pageLabel hasPrefix:@"2/"]);
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
-    assert(PKCandidatePanel.shared.content.columns == 7 && PKCandidatePanel.shared.content.selection == 0);
+    assert(PKCandidatePanel.shared.content.rows.count > 1 && PKCandidatePanel.shared.content.selectedRow == 0);
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
-    assert(PKCandidatePanel.shared.content.columns == 0 && PKCandidatePanel.shared.content.candidates);
+    assert(PKCandidatePanel.shared.content.rows.count == 1);
     assert([controller handleEvent:Key(@"", kVK_UpArrow) client:client]);
-    assert(PKCandidatePanel.shared.content.candidates == nil && [client.marked isEqualToString:@"今天"]);
+    assert(PKCandidatePanel.shared.content.rows == nil && [client.marked isEqualToString:@"今天"]);
 
     // In the grid, number keys pick from the selection's row.
     assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
     assert([controller handleEvent:Key(@"", kVK_DownArrow) client:client]);
-    NSString *secondRowFirst = PKCandidatePanel.shared.content.candidates[7];
+    NSString *secondRowFirst = PKCandidatePanel.shared.content.rows[1][0];
     assert([controller handleEvent:Key(@"1") client:client]);
     assert([client.marked hasPrefix:secondRowFirst]);
     assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
@@ -158,9 +176,11 @@ int main() {
     assert(![controller handleEvent:Key(@"\r", kVK_Return) client:client]);
 
     // A shortcut commits the composition first and passes through.
+    // (Not checking for 今: the grid test above taught the user model another ㄐㄧㄣ.)
+    NSUInteger committed = client.committed.length;
     Type(controller, client, @"rup ");
     assert(![controller handleEvent:Key(@"c", kVK_ANSI_C, NSEventModifierFlagCommand) client:client]);
-    assert([client.committed hasSuffix:@"今"]);
+    assert(client.committed.length == committed + 1 && client.marked.length == 0);
 
     // Tapping Shift switches to English: keys pass through; tapping again switches back.
     [controller handleEvent:Shift(YES) client:client];

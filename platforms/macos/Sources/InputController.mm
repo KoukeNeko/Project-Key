@@ -14,7 +14,6 @@ using ProjectKey::Segment;
 
 namespace {
 
-constexpr NSInteger kPerPage = 7;      // also the columns of the expanded grid
 constexpr NSInteger kExpandedRows = 5;  // rows the expanded grid shows at once
 NSString *const kProofModeKey = @"ProofPreview";
 NSString *const kLastOnProofModeKey = @"ProofPreviewLastOn";
@@ -31,6 +30,13 @@ std::shared_ptr<McBopomofo::McBopomofoLM> SharedLanguageModel() {
     return model;
   }();
   return lm;
+}
+
+// Choices the user made, shared by every input session. Kept in memory only,
+// with McBopomofo's capacity and 1.5-hour half-life.
+std::shared_ptr<McBopomofo::UserOverrideModel> SharedUserModel() {
+  static auto model = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+  return model;
 }
 
 std::shared_ptr<const ProjectKey::Bigram> SharedBigram() {
@@ -65,14 +71,18 @@ BOOL gEnglishMode = NO;
   size_t _activeStart;  // start reading of the segment being chosen
   std::vector<std::string> _candidates;
   NSInteger _selection;
-  BOOL _expanded;          // candidates shown as a grid, one page per row
+  // Candidates packed into grid rows of PKGridColumns columns: where each row
+  // starts, and the column each candidate starts at.
+  std::vector<NSInteger> _rowStarts;
+  std::vector<NSInteger> _columns;
+  BOOL _expanded;          // several rows shown; collapsed shows only the selection's row
   NSInteger _firstRow;     // first grid row on screen
   BOOL _shiftAlone;
 }
 
 - (instancetype)initWithServer:(IMKServer *)server delegate:(id)delegate client:(id)client {
   if ((self = [super initWithServer:server delegate:delegate client:client])) {
-    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram());
+    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram(), SharedUserModel());
   }
   return self;
 }
@@ -80,7 +90,7 @@ BOOL gEnglishMode = NO;
 // Without an IMK server or client; ControllerTest drives the controller this way.
 - (instancetype)init {
   if ((self = [super init])) {
-    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram());
+    _composer = std::make_unique<Composer>(SharedLanguageModel(), SharedBigram(), SharedUserModel());
   }
   return self;
 }
@@ -276,9 +286,25 @@ BOOL gEnglishMode = NO;
   return NO;
 }
 
+- (NSInteger)rowOf:(NSInteger)index {
+  return std::upper_bound(_rowStarts.begin(), _rowStarts.end(), index) - _rowStarts.begin() - 1;
+}
+
+- (NSInteger)rowEnd:(NSInteger)row {
+  return row + 1 < (NSInteger)_rowStarts.size() ? _rowStarts[row + 1] : (NSInteger)_candidates.size();
+}
+
+// The candidate of `row` under `column`, or the row's last one when it ends earlier.
+- (NSInteger)indexInRow:(NSInteger)row column:(NSInteger)column {
+  NSInteger index = _rowStarts[row];
+  while (index + 1 < [self rowEnd:row] && _columns[index + 1] <= column) index++;
+  return index;
+}
+
 - (BOOL)handleChoosing:(NSEvent *)event flags:(NSEventModifierFlags)flags client:(id)client {
   NSInteger count = (NSInteger)_candidates.size();
-  NSInteger page = _selection / kPerPage, pages = (count + kPerPage - 1) / kPerPage;
+  NSInteger row = [self rowOf:_selection], rows = (NSInteger)_rowStarts.size();
+  NSInteger column = _columns[_selection];
   switch (event.keyCode) {
     case kVK_LeftArrow:
       _selection = MAX(0, _selection - 1);
@@ -287,36 +313,36 @@ BOOL gEnglishMode = NO;
       _selection = MIN(count - 1, _selection + 1);
       break;
     case kVK_DownArrow:
-      // Down opens the grid: every page as a row, moving down in the same column.
-      if (page + 1 < pages) {
+      // Down opens the grid and moves down in the same column.
+      if (row + 1 < rows) {
         _expanded = YES;
-        _selection = MIN(count - 1, _selection + kPerPage);
+        _selection = [self indexInRow:row + 1 column:column];
       }
       break;
     case kVK_UpArrow:
-      if (_expanded && page > 0) {
-        _selection -= kPerPage;
+      if (_expanded && row > 0) {
+        _selection = [self indexInRow:row - 1 column:column];
       } else if (_expanded) {
         _expanded = NO;  // Up from the grid's first row folds it back
-      } else if (page > 0) {
-        _selection = (page - 1) * kPerPage;
+      } else if (row > 0) {
+        _selection = _rowStarts[row - 1];
       } else {
-        _choosing = NO;  // past the first page, Up returns to the sentence
+        _choosing = NO;  // past the first row, Up returns to the sentence
       }
       break;
     case kVK_Space:
     case kVK_PageDown:
       if (_expanded) {
-        _selection = MIN(count - 1, _selection + kExpandedRows * kPerPage);
+        _selection = [self indexInRow:MIN(rows - 1, row + kExpandedRows) column:column];
       } else {
-        _selection = (page + 1) % pages * kPerPage;
+        _selection = _rowStarts[(row + 1) % rows];
       }
       break;
     case kVK_PageUp:
       if (_expanded) {
-        _selection = _selection >= kExpandedRows * kPerPage ? _selection - kExpandedRows * kPerPage : _selection % kPerPage;
+        _selection = [self indexInRow:MAX(0, row - kExpandedRows) column:column];
       } else {
-        _selection = MAX(page - 1, 0) * kPerPage;  // wrapping back lands on the rarest page
+        _selection = _rowStarts[MAX(row - 1, 0)];  // wrapping back lands on the rarest row
       }
       break;
     case kVK_Return:
@@ -341,9 +367,9 @@ BOOL gEnglishMode = NO;
     default: {
       NSString *characters = event.characters;
       unichar c = characters.length == 1 ? [characters characterAtIndex:0] : 0;
-      if (c >= '1' && c < '1' + kPerPage) {
-        NSInteger index = page * kPerPage + (c - '1');  // the selection's row carries the labels
-        if (index < count) [self pick:index client:client];
+      if (c >= '1' && c < '1' + PKGridColumns) {
+        NSInteger index = _rowStarts[row] + (c - '1');  // the selection's row carries the labels
+        if (index < [self rowEnd:row]) [self pick:index client:client];
         return YES;
       }
       // Any other typing leaves the choice as it is and keeps composing.
@@ -357,20 +383,17 @@ BOOL gEnglishMode = NO;
 
 #pragma mark - Choosing
 
-- (const Segment *)segmentStartingAt:(size_t)start {
-  for (const Segment &segment : _composer->segments()) {
-    if (segment.start == start) return &segment;
-  }
-  return nullptr;
+- (std::optional<Segment>)segmentStartingAt:(size_t)start {
+  return _composer->segmentFrom(start);
 }
 
-// The segment right after the cursor, or, with the cursor at the end, the
+// The segment (or the rest of the phrase) right after the cursor, or, with the cursor at the end, the
 // first doubtful segment so Space goes straight to the likely mistake.
 - (size_t)defaultSegment {
   size_t cursor = _composer->cursor();
   if (cursor < _composer->readingCount()) {
     for (const Segment &segment : _composer->segments()) {
-      if (cursor < segment.start + segment.length) return segment.start;
+      if (cursor < segment.start + segment.length) return std::max(cursor, segment.start);
     }
   }
   for (const Segment &segment : _composer->segments()) {
@@ -399,7 +422,7 @@ BOOL gEnglishMode = NO;
 }
 
 - (void)startChoosingAt:(size_t)start client:(id)client {
-  const Segment *segment = [self segmentStartingAt:start];
+  std::optional<Segment> segment = [self segmentStartingAt:start];
   if (!segment) return;
   std::vector<std::string> candidates = _composer->candidates(*segment);
   if (candidates.empty()) return;
@@ -408,13 +431,25 @@ BOOL gEnglishMode = NO;
   _firstRow = 0;
   _activeStart = start;
   _candidates = std::move(candidates);
+  _rowStarts.clear();
+  _columns.clear();
+  NSInteger column = PKGridColumns;
+  for (NSInteger i = 0; i < (NSInteger)_candidates.size(); i++) {
+    NSInteger span = [PKCandidatePanel columnsSpannedBy:String(_candidates[i])];
+    if (column + span > PKGridColumns) {
+      _rowStarts.push_back(i);
+      column = 0;
+    }
+    _columns.push_back(column);
+    column += span;
+  }
   auto current = std::find(_candidates.begin(), _candidates.end(), segment->text);
   _selection = current == _candidates.end() ? 0 : current - _candidates.begin();
   [self refresh:client];
 }
 
 - (void)pick:(NSInteger)index client:(id)client {
-  const Segment *segment = [self segmentStartingAt:_activeStart];
+  std::optional<Segment> segment = [self segmentStartingAt:_activeStart];
   if (segment) _composer->choose(*segment, _candidates[index]);
   std::optional<size_t> next = [self doubtfulAfter:_activeStart backwards:NO];
   if (next) {
@@ -461,7 +496,7 @@ BOOL gEnglishMode = NO;
       caret += text.length == segment.length ? cursor - segment.start : text.length;
     }
     if (segment.doubtful) [doubtful addIndex:segments.count];
-    if (_choosing && segment.start == _activeStart) {
+    if (_choosing && _activeStart >= segment.start && _activeStart < segment.start + segment.length) {
       active = (NSInteger)segments.count;
       activeRange = NSMakeRange(marked.length, text.length);
     }
@@ -498,24 +533,24 @@ BOOL gEnglishMode = NO;
   content.caret = caret - reading.length;
   content.showsProof = showsProof;
   if (_choosing) {
-    NSInteger page = _selection / kPerPage, count = (NSInteger)_candidates.size();
-    NSInteger pages = (count + kPerPage - 1) / kPerPage;
-    // Collapsed: the selection's page. Expanded: up to kExpandedRows pages as rows, scrolled to the selection.
-    NSInteger first = page, rows = 1;
+    NSInteger row = [self rowOf:_selection], rows = (NSInteger)_rowStarts.size();
+    // Collapsed: the selection's row. Expanded: up to kExpandedRows rows, scrolled to the selection.
+    NSInteger first = row, shown = 1;
     if (_expanded) {
-      _firstRow = MIN(_firstRow, page);
-      _firstRow = MAX(_firstRow, page - kExpandedRows + 1);
+      _firstRow = MAX(MIN(_firstRow, row), row - kExpandedRows + 1);
       first = _firstRow;
-      rows = kExpandedRows;
-      content.columns = kPerPage;
+      shown = MIN(kExpandedRows, rows - first);
     }
-    NSMutableArray<NSString *> *visible = [NSMutableArray array];
-    for (NSInteger i = first * kPerPage; i < MIN(count, (first + rows) * kPerPage); i++) {
-      [visible addObject:String(_candidates[i])];
+    NSMutableArray<NSArray<NSString *> *> *visible = [NSMutableArray array];
+    for (NSInteger r = first; r < first + shown; r++) {
+      NSMutableArray<NSString *> *cells = [NSMutableArray array];
+      for (NSInteger i = _rowStarts[r]; i < [self rowEnd:r]; i++) [cells addObject:String(_candidates[i])];
+      [visible addObject:cells];
     }
-    content.candidates = visible;
-    content.selection = _selection - first * kPerPage;
-    content.pageLabel = pages > 1 ? [NSString stringWithFormat:@"%ld/%ld", page + 1, pages] : nil;
+    content.rows = visible;
+    content.selectedRow = row - first;
+    content.selection = _selection - _rowStarts[row];
+    content.pageLabel = rows > 1 ? [NSString stringWithFormat:@"%ld/%ld", row + 1, rows] : nil;
   }
   NSRect lineRect = NSZeroRect;
   [client attributesForCharacterIndex:0 lineHeightRectangle:&lineRect];

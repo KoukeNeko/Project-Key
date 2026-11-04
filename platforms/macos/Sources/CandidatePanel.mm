@@ -1,6 +1,9 @@
 #import "CandidatePanel.h"
 
+#import <QuartzCore/QuartzCore.h>
+
 NSString *const PKAppearanceKey = @"Appearance";
+const NSInteger PKGridColumns = 6;
 
 BOOL PKGlassAvailable(void) {
   if (@available(macOS 26.0, *)) return YES;
@@ -29,14 +32,25 @@ NSColor *const kDoubtMark = Hex(0x3fb9a3, 0.7);
 NSColor *const kEdge = Hex(0x000000, 0.5);
 
 constexpr CGFloat kRadius = 14, kPillRadius = 8, kGapToText = 8, kAnchorInset = 16;
-// Proof row: 38px tall like the prototype's 10/20/8, but with the line and its
-// marks (2px, 3px under the line, inset 1px per side) centered vertically.
-constexpr CGFloat kProofTop = 6.5, kProofBottom = 11.5, kProofLeft = 19, kProofRight = 16, kProofLine = 20;
+// Proof row: 38px tall like the prototype's 10/20/8, with the line centered and
+// its marks (2px, 3px under the line, inset 1px per side) below it.
+constexpr CGFloat kProofTop = 6.5, kProofBottom = 11.5, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
 constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 // Candidate row: padding 6 6 6 8; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
 constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
 constexpr CGFloat kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
 constexpr CGFloat kPageLeft = 12, kPageRight = 10;
+// Motion: the selection slides, the grid grows and folds.
+constexpr NSTimeInterval kSlideDuration = 0.12, kResizeDuration = 0.16;
+
+BOOL ReducesMotion() {
+  return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+}
+
+// Ease-out cubic.
+CGFloat Ease(CGFloat t) {
+  return 1 - pow(1 - t, 3);
+}
 
 BOOL UsesGlass() {
   return PKGlassAvailable() && [NSUserDefaults.standardUserDefaults integerForKey:PKAppearanceKey] == 1;
@@ -59,6 +73,36 @@ NSFont *TextFont(CGFloat size) {
   return [NSFont fontWithName:@"PingFang TC" size:size] ?: [NSFont systemFontOfSize:size];
 }
 
+NSFont *CandidateFont() {
+  static NSFont *font = TextFont(20);
+  return font;
+}
+
+NSFont *LabelFont() {
+  static NSFont *font = [NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightMedium];
+  return font;
+}
+
+CGFloat WidthOf(NSString *string, NSFont *font) {
+  return ceil([string sizeWithAttributes:@{NSFontAttributeName : font}].width);
+}
+
+// A cell's natural width: side padding, label, gap, text, side padding.
+CGFloat CellWidth(NSString *candidate) {
+  return kCellSide + WidthOf(@"6", LabelFont()) + kLabelGap + WidthOf(candidate, CandidateFont()) + kCellSide;
+}
+
+// Every column fits a two-character word; longer words span more columns.
+CGFloat ColumnWidth() {
+  static CGFloat width = CellWidth(@"國國");
+  return width;
+}
+
+NSInteger Span(NSString *candidate) {
+  NSInteger span = (NSInteger)ceil((CellWidth(candidate) + kCellGap) / (ColumnWidth() + kCellGap));
+  return MAX(1, MIN(PKGridColumns, span));
+}
+
 NSDictionary *Attributes(NSFont *font, NSColor *color) {
   return @{NSFontAttributeName : font, NSForegroundColorAttributeName : color};
 }
@@ -75,17 +119,22 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 @property(nonatomic) BOOL proofBelow;  // window above the text: proof row last, next to the text
 @property(nonatomic) BOOL glass;  // on Liquid Glass: no fill, system label colors
 - (NSSize)fittingSize;
+// Moves the selection highlight to the content's selection, sliding there when animated.
+- (void)moveSelectionAnimated:(BOOL)animated;
 @end
 
 @implementation PKCandidateView {
   NSFont *_proofFont, *_candidateFont, *_labelFont, *_pageFont;
+  NSRect _pillFrom, _pillTo;  // the highlight slides from one to the other
+  NSTimeInterval _slideStart;
+  NSTimer *_slideTimer;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
   if ((self = [super initWithFrame:frame])) {
     _proofFont = TextFont(14);
-    _candidateFont = TextFont(20);
-    _labelFont = [NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightMedium];
+    _candidateFont = CandidateFont();
+    _labelFont = LabelFont();
     _pageFont = [NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightRegular];
   }
   return self;
@@ -99,33 +148,15 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return self.content.showsProof ? kProofTop + kProofLine + kProofBottom : 0;
 }
 
-- (NSInteger)gridRows {
-  NSInteger columns = self.content.columns;
-  return columns ? (self.content.candidates.count + columns - 1) / columns : 1;
-}
-
 - (CGFloat)rowHeight {
-  if (!self.content.candidates) return 0;
+  NSInteger rows = self.content.rows.count;
+  if (!rows) return 0;
   CGFloat cell = kCellTop + kCellLine + kCellBottom;
-  return kRowTop + self.gridRows * cell + (self.gridRows - 1) * kCellGap + kRowBottom;
-}
-
-// Grid columns share the widest cell so they line up.
-- (CGFloat)columnWidth {
-  CGFloat width = 0;
-  for (NSUInteger i = 0; i < self.content.candidates.count; i++) width = MAX(width, [self cellWidth:i]);
-  return width;
+  return kRowTop + rows * cell + (rows - 1) * kCellGap + kRowBottom;
 }
 
 - (CGFloat)widthOf:(NSString *)string font:(NSFont *)font {
-  return ceil([string sizeWithAttributes:@{NSFontAttributeName : font}].width);
-}
-
-- (CGFloat)cellWidth:(NSUInteger)index {
-  NSInteger columns = self.content.columns;
-  NSString *label = [NSString stringWithFormat:@"%lu", columns ? index % columns + 1 : index + 1];
-  return kCellSide + [self widthOf:label font:_labelFont] + kLabelGap +
-         [self widthOf:self.content.candidates[index] font:_candidateFont] + kCellSide;
+  return WidthOf(string, font);
 }
 
 - (NSColor *)textColor {
@@ -142,18 +173,71 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     NSString *sentence = [[self.content.segments componentsJoinedByString:@""] stringByAppendingString:self.content.pendingReading];
     width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + kProofRight);
   }
-  if (self.content.candidates) {
-    CGFloat row = kRowLeft + kRowRight;
-    if (self.content.columns) {
-      row += self.content.columns * (self.columnWidth + kCellGap);
-    } else {
-      for (NSUInteger i = 0; i < self.content.candidates.count; i++) row += [self cellWidth:i] + kCellGap;
+  if (self.content.rows) {
+    // As wide as the fullest visible row, so a short single row stays compact.
+    NSInteger columns = 0;
+    for (NSArray<NSString *> *row in self.content.rows) {
+      NSInteger used = 0;
+      for (NSString *candidate in row) used += Span(candidate);
+      columns = MAX(columns, used);
     }
+    CGFloat row = kRowLeft + columns * (ColumnWidth() + kCellGap) + kRowRight;
     if (self.content.pageLabel) row += kPageLeft + [self widthOf:self.content.pageLabel font:_pageFont] + kPageRight;
     width = MAX(width, row);
   }
-  CGFloat separator = self.content.showsProof && self.content.candidates ? 1 : 0;
+  CGFloat separator = self.content.showsProof && self.content.rows ? 1 : 0;
   return NSMakeSize(width, self.proofHeight + separator + self.rowHeight);
+}
+
+- (CGFloat)rowTop {
+  BOOL both = self.content.showsProof && self.content.rows;
+  return self.proofBelow ? 0 : self.proofHeight + (both ? 1 : 0);
+}
+
+- (NSRect)selectionRect {
+  NSArray<NSArray<NSString *> *> *rows = self.content.rows;
+  if (self.content.selectedRow < 0 || self.content.selectedRow >= (NSInteger)rows.count) return NSZeroRect;
+  NSArray<NSString *> *row = rows[self.content.selectedRow];
+  if (self.content.selection < 0 || self.content.selection >= (NSInteger)row.count) return NSZeroRect;
+  CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
+  NSInteger column = 0;
+  for (NSInteger i = 0; i < self.content.selection; i++) column += Span(row[i]);
+  NSInteger span = Span(row[self.content.selection]);
+  return NSMakeRect(kRowLeft + column * (ColumnWidth() + kCellGap),
+                    self.rowTop + kRowTop + self.content.selectedRow * (cellHeight + kCellGap),
+                    span * ColumnWidth() + (span - 1) * kCellGap, cellHeight);
+}
+
+- (NSRect)shownSelectionRect {
+  if (!_slideTimer) return _pillTo;
+  CGFloat t = Ease(MIN(1, (NSDate.timeIntervalSinceReferenceDate - _slideStart) / kSlideDuration));
+  return NSMakeRect(NSMinX(_pillFrom) + (NSMinX(_pillTo) - NSMinX(_pillFrom)) * t,
+                    NSMinY(_pillFrom) + (NSMinY(_pillTo) - NSMinY(_pillFrom)) * t,
+                    NSWidth(_pillFrom) + (NSWidth(_pillTo) - NSWidth(_pillFrom)) * t,
+                    NSHeight(_pillFrom) + (NSHeight(_pillTo) - NSHeight(_pillFrom)) * t);
+}
+
+- (void)moveSelectionAnimated:(BOOL)animated {
+  NSRect from = self.shownSelectionRect;
+  NSRect to = self.selectionRect;
+  [_slideTimer invalidate];
+  _slideTimer = nil;
+  _pillTo = to;
+  if (animated && !NSIsEmptyRect(from) && !NSIsEmptyRect(to) && !NSEqualRects(from, to) && !ReducesMotion()) {
+    _pillFrom = from;
+    _slideStart = NSDate.timeIntervalSinceReferenceDate;
+    __weak PKCandidateView *weakSelf = self;
+    _slideTimer = [NSTimer timerWithTimeInterval:1.0 / 120 repeats:YES block:^(NSTimer *timer) {
+      PKCandidateView *view = weakSelf;
+      if (!view || NSDate.timeIntervalSinceReferenceDate - view->_slideStart >= kSlideDuration) {
+        [timer invalidate];
+        if (view) view->_slideTimer = nil;
+      }
+      view.needsDisplay = YES;
+    }];
+    [NSRunLoop.currentRunLoop addTimer:_slideTimer forMode:NSRunLoopCommonModes];
+  }
+  self.needsDisplay = YES;
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -167,21 +251,25 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     [shape stroke];
   }
 
-  BOOL both = self.content.showsProof && self.content.candidates;
-  CGFloat proofTop = self.proofBelow ? self.rowHeight + (both ? 1 : 0) : 0;
-  CGFloat rowTop = self.proofBelow ? 0 : self.proofHeight + (both ? 1 : 0);
+  BOOL both = self.content.showsProof && self.content.rows;
+  // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
+  CGFloat proofTop = self.proofBelow ? NSHeight(bounds) - self.proofHeight : 0;
+  CGFloat rowTop = self.rowTop;
   if (both) {
     [(self.glass ? NSColor.separatorColor : kLine) setFill];
-    NSRectFill(NSMakeRect(0, self.proofBelow ? self.rowHeight : self.proofHeight, NSWidth(bounds), 1));
+    NSRectFill(NSMakeRect(0, self.proofBelow ? proofTop - 1 : self.proofHeight, NSWidth(bounds), 1));
   }
   if (self.content.showsProof) [self drawProofAt:proofTop];
-  if (self.content.candidates) [self drawCandidatesAt:rowTop width:NSWidth(bounds)];
+  if (self.content.rows) [self drawCandidatesAt:rowTop width:NSWidth(bounds)];
 }
 
 - (void)drawProofAt:(CGFloat)top {
   CGFloat x = kProofLeft;
-  CGFloat textTop = TextTop(_proofFont, top + kProofTop, kProofLine);
-  CGFloat markTop = top + kProofTop + kProofLine + kMarkGap;
+  // The line stays centered; marks sit in the space below it, so they come and
+  // go without moving the text.
+  CGFloat lineTop = top + (kProofTop + kProofBottom) / 2;
+  CGFloat textTop = TextTop(_proofFont, lineTop, kProofLine);
+  CGFloat markTop = lineTop + kProofLine + kMarkGap;
   NSDictionary *muted = Attributes(_proofFont, self.mutedColor);
   NSUInteger length = [self.content.segments componentsJoinedByString:@""].length;
   NSUInteger start = 0;
@@ -193,7 +281,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
       *at += [self widthOf:reading font:self->_proofFont];
     } else if (self.content.caret < length && self.content.activeSegment < 0) {
       [kAccentSoft setFill];
-      NSRectFill(NSMakeRect(*at, top + kProofTop + 1, 1, kProofLine - 2));
+      NSRectFill(NSMakeRect(*at, lineTop + 1, 1, kProofLine - 2));
     }
   };
   if (self.content.caret == 0) drawCursor(&x);
@@ -227,37 +315,34 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (void)drawCandidatesAt:(CGFloat)top width:(CGFloat)width {
-  NSInteger columns = self.content.columns;
-  NSInteger labeledRow = columns ? self.content.selection / columns : 0;
-  CGFloat columnWidth = columns ? self.columnWidth : 0;
   CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
-  CGFloat cellTop = top + kRowTop;
-  CGFloat x = kRowLeft;
-  for (NSUInteger i = 0; i < self.content.candidates.count; i++) {
-    NSInteger row = columns ? i / columns : 0;
-    if (columns) {
-      x = kRowLeft + (i % columns) * (columnWidth + kCellGap);
-      cellTop = top + kRowTop + row * (cellHeight + kCellGap);
-    }
+  NSRect pill = self.shownSelectionRect;
+  if (!NSIsEmptyRect(pill)) {
+    [kAccent setFill];
+    [[NSBezierPath bezierPathWithRoundedRect:pill xRadius:kPillRadius yRadius:kPillRadius] fill];
+  }
+  for (NSUInteger r = 0; r < self.content.rows.count; r++) {
+    CGFloat cellTop = top + kRowTop + r * (cellHeight + kCellGap);
     CGFloat textTop = TextTop(_candidateFont, cellTop + kCellTop, kCellLine);
     CGFloat labelTop = textTop + _candidateFont.ascender - _labelFont.ascender;  // share the baseline
-    BOOL on = (NSInteger)i == self.content.selection;
-    CGFloat cell = columns ? columnWidth : [self cellWidth:i];
-    if (on) {
-      [kAccent setFill];
-      NSRect pill = NSMakeRect(x, cellTop, cell, cellHeight);
-      [[NSBezierPath bezierPathWithRoundedRect:pill xRadius:kPillRadius yRadius:kPillRadius] fill];
+    BOOL labeled = (NSInteger)r == self.content.selectedRow;
+    NSInteger column = 0;
+    NSArray<NSString *> *row = self.content.rows[r];
+    for (NSUInteger i = 0; i < row.count; i++) {
+      NSInteger span = Span(row[i]);
+      CGFloat x = kRowLeft + column * (ColumnWidth() + kCellGap);
+      column += span;
+      BOOL on = labeled && (NSInteger)i == self.content.selection;
+      NSString *label = [NSString stringWithFormat:@"%lu", i + 1];
+      if (labeled) {
+        [label drawAtPoint:NSMakePoint(x + kCellSide, labelTop)
+            withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : self.mutedColor)];
+      }
+      CGFloat textX = x + kCellSide + [self widthOf:@"6" font:_labelFont] + kLabelGap;
+      [row[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, on ? NSColor.whiteColor : self.textColor)];
     }
-    NSString *label = [NSString stringWithFormat:@"%lu", columns ? i % columns + 1 : i + 1];
-    if (row == labeledRow) {
-      [label drawAtPoint:NSMakePoint(x + kCellSide, labelTop)
-          withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : self.mutedColor)];
-    }
-    CGFloat textX = x + kCellSide + [self widthOf:label font:_labelFont] + kLabelGap;
-    [self.content.candidates[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, on ? NSColor.whiteColor : self.textColor)];
-    if (!columns) x += cell + kCellGap;
   }
-  cellTop = top + kRowTop;  // the page label sits on the first row
+  CGFloat cellTop = top + kRowTop;  // the page label sits on the first row
   if (self.content.pageLabel) {
     CGFloat labelWidth = [self widthOf:self.content.pageLabel font:_pageFont];
     CGFloat pageTop = TextTop(_pageFont, cellTop + kCellTop, kCellLine);
@@ -308,6 +393,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     [_view removeFromSuperview];
     _panel.contentView = Container(_view, glass, kRadius);
   }
+  // Changes within one list move: the highlight slides and the window resizes.
+  BOOL animate = _panel.visible && _view.content.rows && content.rows && !ReducesMotion();
   _view.content = content;
   NSSize size = [_view fittingSize];
   NSScreen *screen = NSScreen.mainScreen;
@@ -319,10 +406,21 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   _view.proofBelow = NSMinY(frame) < NSMinY(visible);
   if (_view.proofBelow) frame.origin.y = NSMaxY(lineRect) + kGapToText;
   frame.origin.x = MAX(NSMinX(visible), MIN(NSMinX(frame), NSMaxX(visible) - size.width));
-  [_panel setFrame:frame display:NO];
+  [_view moveSelectionAnimated:animate];
+  if (animate && !NSEqualSizes(_panel.frame.size, frame.size)) {
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+      context.duration = kResizeDuration;
+      context.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+      [self->_panel.animator setFrame:frame display:YES];
+    } completionHandler:^{
+      [self->_panel invalidateShadow];
+    }];
+  } else {
+    [_panel setFrame:frame display:NO];
+    [_panel invalidateShadow];
+  }
   _view.needsDisplay = YES;
   [_panel orderFront:nil];
-  [_panel invalidateShadow];
 }
 
 - (void)hide {
@@ -337,10 +435,15 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return _view.content;
 }
 
++ (NSInteger)columnsSpannedBy:(NSString *)candidate {
+  return Span(candidate);
+}
+
 + (NSData *)pngForContent:(PKPanelContent *)content proofBelow:(BOOL)proofBelow {
   PKCandidateView *view = [[PKCandidateView alloc] initWithFrame:NSZeroRect];
   view.content = content;
   view.proofBelow = proofBelow;
+  [view moveSelectionAnimated:NO];
   NSSize size = [view fittingSize];
   view.frame = NSMakeRect(0, 0, size.width, size.height);
   NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL
