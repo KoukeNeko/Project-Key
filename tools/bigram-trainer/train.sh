@@ -2,7 +2,9 @@
 # Trains .cache/bigram.bin from one Chinese Wikipedia shard (CC BY-SA 4.0),
 # converted to Taiwan Traditional with OpenCC s2twp. OpenCC writes 佈 臺 賬
 # where everyday Taiwanese text and McBopomofo's dictionary use 布 台 帳, so
-# those are mapped back. Local prototype data:
+# those are mapped back. Gazette texts from fetch_gazette.py (Legislative Yuan,
+# Open Government Data License v1) add conversational Taiwanese Mandarin when
+# .cache/gazette exists; they are already Taiwan Traditional. Local prototype data:
 # the shipping training source is not decided yet.
 # Usage: train.sh [max characters, default 200000000] [min pair count, default 3]
 set -eu
@@ -20,8 +22,9 @@ mkdir -p "$CACHE/wiki"
 [ -x "$CACHE/venv/bin/python" ] || { python3 -m venv "$CACHE/venv"; "$CACHE/venv/bin/pip" install -q pyarrow; }
 
 c++ -std=c++20 -O2 -I../../platforms/macos/Sources train.cpp ../../platforms/macos/Sources/Bigram.cpp -o "$CACHE/train"
-"$CACHE/venv/bin/python" -I extract.py "$CACHE/wiki/0.parquet" "$LIMIT" \
-  | opencc -c s2twp.json \
-  | sed 's/佈/布/g; s/臺/台/g; s/賬/帳/g' \
+{
+  "$CACHE/venv/bin/python" -I extract.py "$CACHE/wiki/0.parquet" "$LIMIT" | opencc -c s2twp.json
+  [ -d "$CACHE/gazette" ] && find "$CACHE/gazette" -name '*.txt' -exec cat {} +
+} | sed 's/佈/布/g; s/臺/台/g; s/賬/帳/g' \
   | "$CACHE/train" "$DATA" "$MIN_COUNT" "$CACHE/bigram.bin"
 ls -l "$CACHE/bigram.bin"
