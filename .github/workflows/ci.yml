@@ -34,3 +34,11 @@ jobs:
           dotnet-version: 10.0.x
       - run: platforms/windows/build.ps1
         shell: pwsh
+
+  # Builds the Fcitx5 addon and runs the engine and controller tests.
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev
+      - run: platforms/linux/build.sh
