@@ -337,7 +337,9 @@ void CandidateWindow::paint() {
   float width = client.right / scale_, height = client.bottom / scale_;
 
   target_->BeginDraw();
-  target_->Clear(material() ? D2D1::ColorF(0, 0, 0, 0) : Color(kBackground));
+  // Acrylic shows the window behind as is, so light text on a light page vanishes: tint it dark.
+  // Mica and Mica Alt are already dark tints of the wallpaper.
+  target_->Clear(appearance_ == 1 ? Color(kBackground, kAcrylicTint) : material() ? D2D1::ColorF(0, 0, 0, 0) : Color(kBackground));
   bool both = content_->showsProof && !content_->rows.empty();
   // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
   float proofTop = proofBelow_ ? height - proofHeight() : 0;
