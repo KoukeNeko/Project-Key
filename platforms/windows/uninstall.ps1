@@ -8,7 +8,9 @@ $Tip = '0404:{A11BBC41-85CF-449F-96B0-F1C5DBDB2213}{570A6239-8C24-43D1-A2E9-C7C4
 
 if ($Elevated) {
   Get-Process ProjectKeyServer -ErrorAction SilentlyContinue | Stop-Process -Force
-  if (Test-Path "$Dest\ProjectKey.dll") { & "$env:SystemRoot\System32\regsvr32.exe" /u /s "$Dest\ProjectKey.dll" }
+  if (Test-Path "$Dest\ProjectKey.dll") {
+    Start-Process "$env:SystemRoot\System32\regsvr32.exe" -ArgumentList '/u', '/s', "`"$Dest\ProjectKey.dll`"" -Wait
+  }
   Start-Sleep -Milliseconds 300
   # Loaded DLLs cannot be deleted, only moved.
   Get-ChildItem $Dest -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
