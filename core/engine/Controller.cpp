@@ -208,11 +208,7 @@ void Controller::handleShift(bool down) {
     shiftAlone_ = true;
   } else if (shiftAlone_) {
     shiftAlone_ = false;
-    if (!env_.englishMode && convertZhuyinKeys()) return;
-    commit();
-    if (env_.englishMode && convertEnglishRun()) return;
-    forgetEnglishRun();
-    switchMode(!env_.englishMode);
+    toggleMode();
   }
 }
 
@@ -256,13 +252,16 @@ bool Controller::handleKey(const KeyEvent& original) {
     commit();  // let the shortcut act on committed text
     return false;
   }
+  bool plainTab = event.key == Key::kTab && !event.shift;
   if (env_.englishMode) {
+    if (plainTab && convertEnglishRun()) return true;
     trackEnglish(event);
     // Passed through, the app would capitalize it; insert the lowercase letter instead.
     if (capsLetter) client_.insertText(lowered);
     showEnglishHint();
     return capsLetter;
   }
+  if (plainTab && convertZhuyinKeys()) return true;
   trackZhuyin(event);
   return choosing_ ? handleChoosing(event) : handleComposing(event);
 }
@@ -315,7 +314,7 @@ void Controller::typeKeys(const std::string& keys) {
   }
 }
 
-// While English mode passes through Zhuyin, shows what a lone Shift would turn
+// While English mode passes through Zhuyin, shows what Tab would turn
 // it into. Only once a tone key is in it: plain words like "so " can happen to
 // spell a first-tone syllable.
 void Controller::showEnglishHint() {
@@ -331,7 +330,7 @@ void Controller::showEnglishHint() {
   content.doubtful = {false};
   content.caret = Utf16Length(content.segments[0]);
   content.showsProof = true;
-  content.keyHint = env_.shiftKeycap;
+  content.keyHint = env_.tabKeycap;
   content.replacedText = keys + std::string(trailingSpaces, ' ');  // the English that goes
   composer_->clear();
   showPanel(content);
@@ -392,12 +391,13 @@ bool Controller::convertZhuyinKeys() {
 }
 
 // Replaces the end of the English run that is whole Zhuyin syllables with a
-// composition of them and switches to 中. False when nothing there is Zhuyin.
+// composition of them and switches to 中. False when no tone key is there.
 bool Controller::convertEnglishRun() {
   size_t trailingSpaces = 0;
   std::string keys = env_.settings->flag(Setting::kEnglishToZhuyin) ? zhuyinAtEnd(&trailingSpaces) : "";
   englishRun_.clear();
-  if (keys.empty()) return false;
+  // Only what the preview shows: after plain words like "so ", Tab is a Tab.
+  if (keys.find_first_of("3467") == std::string::npos) return false;
   // The keys must still be right before the caret: the app may have moved it.
   std::string typed = keys + std::string(trailingSpaces, ' ');
   std::string before = client_.textBeforeCaret();
@@ -735,13 +735,13 @@ void Controller::refresh() {
   replacing_ = 0;
 
   std::optional<std::string> english = choosing_ ? std::nullopt : englishTyped();
-  if (english) {  // what a lone Shift would turn it into
+  if (english) {  // what Tab would turn it into
     PanelContent hint;
     hint.segments = {*english};
     hint.doubtful = {false};
     hint.caret = Utf16Length(*english);
     hint.showsProof = true;
-    hint.keyHint = env_.shiftKeycap;
+    hint.keyHint = env_.tabKeycap;
     hint.replacedText = markedText;
     showPanel(hint);
     return;

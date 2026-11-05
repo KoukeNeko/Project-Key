@@ -69,7 +69,7 @@ enum class Setting {
   kRememberChoices,     // the user override model
   kShiftToggle,         // a lone Shift switches 中/英
   kCapsLockToggle,      // Caps Lock switches 中/英 and letters stay lowercase
-  kEnglishToZhuyin,     // that Shift turns Zhuyin typed in 英 into a composition
+  kEnglishToZhuyin,     // that Tab turns Zhuyin typed in 英 into a composition
   kZhuyinToEnglish,     // and English typed in 中 back into English
   kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
   kCandidatePosition,   // candidates for the word: 0 after the cursor (Windows), 1 before it (macOS)
@@ -98,7 +98,7 @@ struct Environment {
   // Grid columns a candidate takes, 1 to kGridColumns.
   std::function<int(const std::string&)> columnsSpannedBy;
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
-  std::string shiftKeycap = "Shift";  // the key the conversion previews end with
+  std::string tabKeycap = "Tab";  // the key the conversion previews end with
   // macOS lets the app type a key the input method returns; TSF does not
   // deliver a key once its test phase handed it on, so there the input method types it.
   bool appTypesUnhandledKeys = false;
@@ -193,11 +193,11 @@ class Controller {
   int firstRow_ = 0;       // first grid row on screen
   bool shiftAlone_ = false;
   bool adjacentKeys_ = false, rememberChoices_ = false;  // the settings composer_ was made with
-  // What English mode let through since the last other key, so a lone Shift
+  // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
   std::string englishRun_;
-  // The keys behind the composition while it is only typed syllables, so a
-  // lone Shift can turn English typed in the wrong mode back into English.
+  // The keys behind the composition while it is only typed syllables, so
+  // Tab can turn English typed in the wrong mode back into English.
   std::string zhuyinKeys_;
   bool zhuyinEdited_ = false;  // another key changed the composition apart from zhuyinKeys_
   uint32_t replacing_ = 0;     // UTF-16 units before the caret the next composition replaces

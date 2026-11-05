@@ -38,9 +38,6 @@ public sealed partial class MainWindow : Window {
     Bind(ProofPreview, "ProofPreview", 1);
     Bind(ChoosingProof, "ChoosingProof", 1);
     Bind(CandidatePosition, "CandidatePosition", 0);
-    // The Shift conversions only happen when a lone Shift switches.
-    ShiftToggle.Toggled += (_, _) => UpdateShiftDependents();
-    UpdateShiftDependents();
 
     Root.SizeChanged += (_, _) => FitToContent();
     Root.Loaded += (_, _) => Root.XamlRoot.Changed += (_, _) => FitToContent();
@@ -62,11 +59,6 @@ public sealed partial class MainWindow : Window {
   private static void Bind(ComboBox box, string name, int fallback) {
     box.SelectedIndex = Math.Clamp(Read(name, fallback), 0, box.Items.Count - 1);
     box.SelectionChanged += (_, _) => Write(name, box.SelectedIndex);
-  }
-
-  private void UpdateShiftDependents() {
-    EnglishToZhuyinCard.IsEnabled = ShiftToggle.IsOn;
-    ZhuyinToEnglishCard.IsEnabled = ShiftToggle.IsOn;
   }
 
   // As tall as the laid-out content, at the fixed width, centered. Resizing

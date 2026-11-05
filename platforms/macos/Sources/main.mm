@@ -57,7 +57,7 @@ int main(int argc, const char *argv[]) {
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"plain.png"] atomically:YES];
       content.segments = @[ @"我好" ];
       content.caret = 2;
-      content.keyHint = @"⇧";
+      content.keyHint = @"⇥";
       content.replacedText = @"ji3cl3";
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"hint.png"] atomically:YES];
       NSView *form = [PKSettingsForm makeViewWithClearChoices:^{
