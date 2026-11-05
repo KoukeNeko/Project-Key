@@ -6,6 +6,7 @@
 tools/corpus-evaluator/setup.sh                  # 安裝 librime、libchewing，編譯轉接程式，準備 RIME 資料
 python3 tools/corpus-evaluator/evaluate.py       # 評測全部引擎，結果輸出到 stdout
 python3 tools/corpus-evaluator/evaluate.py --engine rime --out report.md
+python3 tools/corpus-evaluator/evaluate.py --engine projectkey --slip column  # 每句一個鍵打成上下列的相鄰鍵
 ```
 
 需要 macOS 與 Homebrew。下載的資料與編譯產物都放在 `.cache/`。
@@ -48,6 +49,8 @@ python3 tools/corpus-evaluator/evaluate.py --engine rime --out report.md
 | 每鍵延遲 | 處理按鍵加上取得預編輯區的時間，不含每句第一鍵（第一鍵包含延遲載入） |
 
 異體字（帳／賬、布／佈）目前算錯。
+
+`--slip row` 或 `--slip column` 把每句的一個注音鍵（不含聲調鍵）換成同一列、或上下列的相鄰注音鍵，用來評估鄰鍵修正。換哪一鍵以固定亂數種子決定，每次結果相同。
 
 ## 引擎轉接程式
 

@@ -34,13 +34,14 @@ class Composer {
   // With a user model, choices are remembered by the word before them and the
   // reading, and a remembered word wins the walk the next time.
   // Each syllable also matches the readings one adjacent key away (a slip
-  // such as ㄧㄡˇ for ㄧㄝˇ), scored adjacentKeyScore lower; -infinity turns it off.
+  // such as ㄧㄡˇ for ㄧㄝˇ, or a key in the row above or below), scored adjacentKeyScore
+  // lower; -infinity turns it off.
   explicit Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr<const Bigram> bigram = nullptr,
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
                     double adjacentKeyScore = kAdjacentKeyScore);
 
-  static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -2;
+  static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -3;
 
   enum class KeyResult { kHandled, kInvalid };
 

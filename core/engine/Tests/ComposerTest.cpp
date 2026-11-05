@@ -118,6 +118,18 @@ int main(int argc, char** argv) {
   Composer exact(lm, slipModel, nullptr, 0.3, 0.5, -INFINITY);
   type(exact, "5k4ek7u.31j4hji4");
   assert(exact.text() != "這個也不錯");
+  // The rows above and below count too: ㄧㄠˇ (ul3) has ㄠ right above ㄝ.
+  Composer above(lm, slipModel);
+  type(above, "5k4ek7ul31j4hji4");
+  assert(above.text() == "這個也不錯");
+  // A slip into a syllable the dictionary lacks (ㄍㄛ˙, ㄛ right above ㄜ) is
+  // kept and read as the syllable one key off; without adjacent keys it is dropped.
+  Composer unknown(lm, slipModel);
+  type(unknown, "5k4ei7");
+  assert(unknown.text() == "這個");
+  Composer strict(lm, slipModel, nullptr, 0.3, 0.5, -INFINITY);
+  type(strict, "5k4ei");
+  assert(strict.typeReadingKey('7') == Composer::KeyResult::kInvalid && strict.text() == "這");
   std::remove(slipPath.c_str());
 
   // The user model: after choosing 列 following 第一 once, the next walk keeps it.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Type every corpus sentence into each engine adapter and score the results.
 
-Usage: evaluate.py [--engine NAME ...] [--out report.md]
+Usage: evaluate.py [--engine NAME ...] [--out report.md] [--slip row|column]
 
 Each sentence is typed as one continuous Daqian key sequence with no candidate
 selection, so the score is what the user gets without correcting anything.
@@ -9,6 +9,7 @@ selection, so the score is what the user gets without correcting anything.
 import argparse
 import csv
 import difflib
+import random
 import statistics
 import subprocess
 import sys
@@ -45,10 +46,33 @@ def to_keys(zhuyin):
     return "".join(keys)
 
 
+# Physical rows; each row sits half a key right of the one above, so key c
+# touches c and c+1 above and c-1 and c below.
+ROWS = ["1234567890-", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./"]
+
+
+def neighbors(key, direction):
+    for r, row in enumerate(ROWS):
+        c = row.find(key)
+        if c < 0:
+            continue
+        spots = [(r, c - 1), (r, c + 1)] if direction == "row" else [(r - 1, c), (r - 1, c + 1), (r + 1, c - 1), (r + 1, c)]
+        return [ROWS[i][j] for i, j in spots if 0 <= i < len(ROWS) and 0 <= j < len(ROWS[i])]
+    return []
+
+
+def slip(keys, direction, rng):
+    """One Zhuyin key replaced by a neighbor in `direction` that is also a Zhuyin key."""
+    spots = [(i, n) for i, k in enumerate(keys) if k in KEYS and k not in "3467"
+             for n in neighbors(k, direction) if n in KEYS and n not in "3467"]
+    i, n = rng.choice(spots)
+    return keys[:i] + n + keys[i + 1:]
+
+
 def run_engine(command, rows):
     if command[0].name == "chewing":
         command[2].unlink(missing_ok=True)  # start every run from an empty user dictionary
-    keys = "".join(to_keys(row["zhuyin"]) + "\n" for row in rows)
+    keys = "".join(row.get("keys", to_keys(row["zhuyin"])) + "\n" for row in rows)
     result = subprocess.run([str(part) for part in command], input=keys, capture_output=True, text=True, check=True)
     outputs = []
     for line in result.stdout.splitlines():
@@ -84,8 +108,9 @@ def summarize(rows, outputs):
     }
 
 
-def report(rows, results):
-    lines = ["# 選字評測結果", "", f"語料：{len(rows)} 句，{sum(len(r['sentence']) for r in rows)} 字。連續輸入整句注音、不手動選字。", ""]
+def report(rows, results, slip=None):
+    typed = {"row": "每句有一個注音鍵打成同一列的相鄰鍵", "column": "每句有一個注音鍵打成上一列或下一列的相鄰鍵"}.get(slip, "連續輸入整句注音")
+    lines = ["# 選字評測結果", "", f"語料：{len(rows)} 句，{sum(len(r['sentence']) for r in rows)} 字。{typed}、不手動選字。", ""]
     lines += ["| 引擎 | 整句正確 | 字正確率 | 需修正處 | 每鍵 P50 | 每鍵 P95 | 每鍵最大 |", "|---|---|---|---|---|---|---|"]
     for name, outputs in results.items():
         s = summarize(rows, outputs)
@@ -116,14 +141,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--engine", action="append", choices=sorted(engines()))
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--slip", choices=["row", "column"], help="mistype one key per sentence as a neighbor in the same row, or the row above or below")
     args = parser.parse_args()
     with CORPUS.open() as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
+    if args.slip:
+        rng = random.Random(0)
+        for row in rows:
+            row["keys"] = slip(to_keys(row["zhuyin"]), args.slip, rng)
     unchecked = [row["sentence"] for row in rows if row["status"] == "review"]
     if unchecked:
         print(f"warning: {len(unchecked)} sentences still need zhuyin review", file=sys.stderr)
     results = {name: run_engine(engines()[name], rows) for name in args.engine or engines()}
-    text = report(rows, results)
+    text = report(rows, results, args.slip)
     if args.out:
         args.out.write_text(text)
     sys.stdout.write(text)
