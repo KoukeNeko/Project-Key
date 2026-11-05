@@ -30,11 +30,11 @@ public sealed partial class MainWindow : Window {
     Bind(NextDoubtful, "NextDoubtful");
     Bind(AdjacentKeys, "AdjacentKeys");
     Bind(RememberChoices, "RememberChoices");
-    Bind(CapsLockToggle, "CapsLockToggle");
+    Bind(CapsLockToggle, "CapsLockToggle", false);
     Bind(ShiftToggle, "ShiftToggle");
     Bind(EnglishToZhuyin, "EnglishToZhuyin");
     Bind(ZhuyinToEnglish, "ZhuyinToEnglish");
-    Bind(Appearance, "Appearance", 0);
+    Bind(Appearance, "Appearance", 1);
     Bind(ProofPreview, "ProofPreview", 1);
     Bind(ChoosingProof, "ChoosingProof", 1);
     Bind(CandidatePosition, "CandidatePosition", 0);
@@ -51,8 +51,8 @@ public sealed partial class MainWindow : Window {
     key.SetValue(name, value, RegistryValueKind.DWord);
   }
 
-  private static void Bind(ToggleSwitch toggle, string name) {
-    toggle.IsOn = Read(name, 1) != 0;
+  private static void Bind(ToggleSwitch toggle, string name, bool fallback = true) {
+    toggle.IsOn = Read(name, fallback ? 1 : 0) != 0;
     toggle.Toggled += (_, _) => Write(name, toggle.IsOn ? 1 : 0);
   }
 
