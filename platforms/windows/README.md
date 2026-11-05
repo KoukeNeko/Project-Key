@@ -68,7 +68,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 設定
 
-設定視窗的內容與 macOS 相同：鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色或 Mica）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、英文轉注音、注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
+設定視窗的內容與 macOS 相同：鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、英文轉注音、注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
 
 ## 測試
 
@@ -86,7 +86,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 與 macOS 的差異
 
-- 視窗外觀用 Windows 11 的語彙：DWM 圓角 8px 與 1px 外框、選中膠囊圓角 4px、微軟正黑體 19px；「Liquid Glass」對應為 Mica（候選視窗實際使用暫時性視窗的系統材質）。中／英標記一律是深色。
+- 視窗外觀用 Windows 11 的語彙：DWM 圓角 8px 與 1px 外框、選中膠囊圓角 4px、微軟正黑體 19px；macOS 的「Liquid Glass」在 Windows 換成三種系統材質：Acrylic（模糊背後的內容）、Mica 與 Mica Alt（取桌布的色調）。Mica 只畫在作用中的視窗上，候選視窗從不取得焦點，所以讓系統把它的框線當成作用中。中／英標記一律是深色。
 - 轉換預覽的鍵帽寫「Shift」，依照原型的 Windows 版。
 - 組字中打出不是注音也不是標點的字元時，會送出組字並由輸入法輸入該字元。macOS 把按鍵交還給 App；TSF 不會再把已經判定交給 App 的按鍵送回來，所以改由輸入法輸入。
 - 透過 IMM32 相容層運作的傳統 Win32 文字框（例如 WinForms 的 TextBox）不提供文件內容給 TSF：在這些 App 裡，英文模式不顯示轉注音預覽，單按 Shift 只切換中英。

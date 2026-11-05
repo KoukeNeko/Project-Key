@@ -31,7 +31,7 @@ class CandidateWindow {
  private:
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
   bool ensureWindow();
-  void applyAppearance(bool mica);
+  void applyAppearance(int appearance);  // Setting::kAppearance
   void paint();
   void tick();
   D2D1_SIZE_F fittingSize() const;
@@ -51,7 +51,8 @@ class CandidateWindow {
   Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
   std::optional<PanelContent> content_;
   bool proofBelow_ = false;  // window above the text: proof row last, next to the text
-  bool mica_ = false;
+  int appearance_ = 0;
+  bool material() const { return appearance_ != 0; }  // a system material shows through
   float scale_ = 1;
   // The selection highlight slides from one rect to the other; the window resizes from one frame to the other.
   D2D1_RECT_F pillFrom_{}, pillTo_{};
