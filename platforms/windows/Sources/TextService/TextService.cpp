@@ -113,6 +113,8 @@ STDMETHODIMP TextService::QueryInterface(REFIID riid, void** ppv) {
     *ppv = static_cast<ITfDisplayAttributeProvider*>(this);
   } else if (riid == IID_ITfFunction || riid == IID_ITfFnConfigure) {
     *ppv = static_cast<ITfFnConfigure*>(this);
+  } else if (riid == IID_ITfTextLayoutSink) {
+    *ppv = static_cast<ITfTextLayoutSink*>(this);
   } else {
     *ppv = nullptr;
     return E_NOINTERFACE;
@@ -199,6 +201,7 @@ STDMETHODIMP TextService::Deactivate() {
   SafeRelease(langBar_);
   SafeRelease(composition_);
   SafeRelease(compositionContext_);
+  watchLayout(nullptr);
   SafeRelease(threadMgr_);
   engine_.disconnect();
   clientId_ = TF_CLIENTID_NULL;
@@ -459,6 +462,7 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
   editSession(composition_ ? compositionContext_ : context, TF_ES_READWRITE, [this, context, reply, showWindows](TfEditCookie cookie) {
     ITfContext* target = composition_ ? compositionContext_ : context;
     target->AddRef();
+    watchLayout(target);
     for (const Protocol::Operation& o : reply.operations) {
       if (o.op == Protocol::Op::kInsertText) {
         insertText(cookie, target, Widen(o.text));
@@ -471,6 +475,42 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
     showWindows(&anchor, window);
     target->Release();
   });
+}
+
+void TextService::watchLayout(ITfContext* context) {
+  if (context == layoutContext_) return;
+  ITfSource* source = nullptr;
+  if (layoutContext_ && SUCCEEDED(layoutContext_->QueryInterface(IID_ITfSource, reinterpret_cast<void**>(&source)))) {
+    source->UnadviseSink(layoutCookie_);
+    source->Release();
+  }
+  SafeRelease(layoutContext_);
+  layoutCookie_ = TF_INVALID_COOKIE;
+  if (!context || FAILED(context->QueryInterface(IID_ITfSource, reinterpret_cast<void**>(&source)))) return;
+  if (SUCCEEDED(source->AdviseSink(IID_ITfTextLayoutSink, static_cast<ITfTextLayoutSink*>(this), &layoutCookie_))) {
+    layoutContext_ = context;
+    layoutContext_->AddRef();
+  }
+  source->Release();
+}
+
+// The document laid out again: the composition or caret may be somewhere else,
+// or (in Chromium) known only now.
+STDMETHODIMP TextService::OnLayoutChange(ITfContext* context, TfLayoutCode code, ITfContextView*) {
+  if (code == TF_LC_DESTROY || !context || (!candidates_.visible() && !badge_.visible())) return S_OK;
+  editSession(context, TF_ES_READ, [this, context](TfEditCookie cookie) {
+    HWND window = nullptr;
+    RECT anchor = anchorRect(cookie, context, &window);
+    if (anchor.bottom <= anchor.top) return;
+    HWND owner = window ? GetAncestor(window, GA_ROOT) : GetForegroundWindow();
+    if (candidates_.visible() && candidates_.content()) {
+      PanelContent content = *candidates_.content();  // show() replaces it
+      candidates_.show(content, anchor, owner, appearance_);
+    }
+    RECT frame = candidates_.frame();
+    badge_.follow(anchor, candidates_.visible() ? &frame : nullptr);
+  });
+  return S_OK;
 }
 
 void TextService::setAttribute(TfEditCookie cookie, ITfContext* context, ITfRange* range, TfGuidAtom atom) {
@@ -583,28 +623,45 @@ void TextService::setComposition(TfEditCookie cookie, ITfContext* context, const
 
 // The composition's first line in screen coordinates, or the caret's without one.
 RECT TextService::anchorRect(TfEditCookie cookie, ITfContext* context, HWND* window) {
-  RECT rect{};
+  RECT rect{}, field{};
   ITfContextView* view = nullptr;
   if (SUCCEEDED(context->GetActiveView(&view))) {
     view->GetWnd(window);
+    view->GetScreenExt(&field);
     ITfRange* range = nullptr;
+    LONG shifted = 0;
+    bool caretAfter = false;  // measured the character before the caret
     if (composition_ && SUCCEEDED(composition_->GetRange(&range))) {
       range->Collapse(cookie, TF_ANCHOR_START);
-      LONG shifted = 0;
       range->ShiftEnd(cookie, 1, &shifted, nullptr);
     } else {
       TF_SELECTION selection{};
       ULONG fetched = 0;
-      if (SUCCEEDED(context->GetSelection(cookie, TF_DEFAULT_SELECTION, 1, &selection, &fetched)) && fetched) range = selection.range;
+      if (SUCCEEDED(context->GetSelection(cookie, TF_DEFAULT_SELECTION, 1, &selection, &fetched)) && fetched) {
+        range = selection.range;
+        // Chromium answers an empty range with a zero-height rect at the
+        // screen's corner; the character before the caret has a real one.
+        range->Collapse(cookie, TF_ANCHOR_START);
+        range->ShiftStart(cookie, -1, &shifted, nullptr);
+        caretAfter = shifted == -1;
+      }
     }
     if (range) {
       BOOL clipped = FALSE;
       if (FAILED(view->GetTextExt(cookie, range, &rect, &clipped))) rect = {};
+      if (caretAfter) rect.left = rect.right;
       range->Release();
     }
     view->Release();
   }
-  if (rect.bottom > rect.top) return rect;
+  // A zero-height rect is no position: keep the last real one in the same window.
+  if (rect.bottom > rect.top) {
+    lastAnchor_ = rect;
+    lastAnchorWindow_ = window ? *window : nullptr;
+    return rect;
+  }
+  if (lastAnchor_.bottom > lastAnchor_.top && window && *window == lastAnchorWindow_) return lastAnchor_;
+  rect = {};
   // Apps without a text layout: the system caret.
   GUITHREADINFO info{sizeof(info)};
   if (GetGUIThreadInfo(GetCurrentThreadId(), &info) && info.hwndCaret) {
@@ -612,6 +669,8 @@ RECT TextService::anchorRect(TfEditCookie cookie, ITfContext* context, HWND* win
     MapWindowPoints(info.hwndCaret, nullptr, reinterpret_cast<POINT*>(&rect), 2);
     if (window && !*window) *window = info.hwndCaret;
   }
+  // Nothing knows the caret: the text field itself (in Chromium, the focused element).
+  if (rect.bottom <= rect.top && field.bottom > field.top) rect = {field.left, field.top, field.left, field.bottom};
   return rect;
 }
 

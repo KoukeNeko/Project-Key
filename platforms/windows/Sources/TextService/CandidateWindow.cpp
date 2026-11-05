@@ -533,20 +533,31 @@ void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, 
                             WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, gInstance, this);
     if (!hwnd_) return;
   }
-  float scale = DpiOf(owner) / 96.f;
+  scale_ = DpiOf(owner) / 96.f;
   label_ = label;
   float width = std::max(kBadgeSide, fonts_.widthOf(label, fonts_.badge()) + 2 * kBadgePadding);
-  size_ = {static_cast<LONG>(std::ceil(width * scale)), static_cast<LONG>(std::ceil(kBadgeSide * scale))};
-  int gap = static_cast<int>(std::lround(kGapToText * scale));
-  position_ = {anchor.left, anchor.bottom + gap};
-  if (position_.y + size_.cy > WorkArea(anchor).bottom) position_.y = anchor.top - gap - size_.cy;
-  if (avoid) position_ = Beside(position_, size_, *avoid, gap);
+  size_ = {static_cast<LONG>(std::ceil(width * scale_)), static_cast<LONG>(std::ceil(kBadgeSide * scale_))};
+  place(anchor, avoid);
   render();
   SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
   start_ = GetTickCount64();
   present(0);
   SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
   SetTimer(hwnd_, kAnimationTimer, kFrameMs * 2, nullptr);
+}
+
+// Under the anchor, above it at the screen's end, beside `avoid` when they overlap.
+void ModeBadge::place(const RECT& anchor, const RECT* avoid) {
+  int gap = static_cast<int>(std::lround(kGapToText * scale_));
+  position_ = {anchor.left, anchor.bottom + gap};
+  if (position_.y + size_.cy > WorkArea(anchor).bottom) position_.y = anchor.top - gap - size_.cy;
+  if (avoid) position_ = Beside(position_, size_, *avoid, gap);
+}
+
+void ModeBadge::follow(const RECT& anchor, const RECT* avoid) {
+  if (!visible()) return;
+  place(anchor, avoid);
+  SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE);
 }
 
 void ModeBadge::avoid(const RECT& rect) {

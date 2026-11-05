@@ -3,11 +3,34 @@
 # 中/英. Edge cannot be told to use one keyboard alone, so this makes Project
 # Key the session's keyboard for the test and switches back to US English after.
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-Add-Type -Namespace PKB -Name Native -MemberDefinition @'
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, System.Windows.Forms
+Add-Type -Namespace PKB -Name Native -UsingNamespace System.Collections.Generic, System.Text -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, System.UIntPtr extra);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hwnd);
+[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, System.UIntPtr extra);
+delegate bool EnumProc(System.IntPtr hwnd, System.IntPtr lParam);
+[DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, System.IntPtr lParam);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(System.IntPtr hwnd, StringBuilder name, int size);
+[DllImport("user32.dll")] static extern bool IsWindowVisible(System.IntPtr hwnd);
+[DllImport("user32.dll")] static extern bool GetWindowRect(System.IntPtr hwnd, out RECT rect);
+[DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(System.IntPtr hwnd, out uint pid);
+public struct RECT { public int Left, Top, Right, Bottom; }
+// "left,top,right,bottom" of every visible 中／英 badge window.
+public static List<string> VisibleBadges() {
+  var found = new List<string>();
+  EnumWindows((hwnd, _) => {
+    var name = new StringBuilder(64);
+    GetClassName(hwnd, name, 64);
+    RECT r;
+    if (name.ToString() == "ProjectKeyModeBadge" && IsWindowVisible(hwnd) && GetWindowRect(hwnd, out r)) { uint pid; GetWindowThreadProcessId(hwnd, out pid); found.Add(r.Left + "," + r.Top + "," + r.Right + "," + r.Bottom + ",pid " + pid); }
+    return true;
+  }, System.IntPtr.Zero);
+  return found;
+}
 '@
+[void][PKB.Native]::SetProcessDPIAware()
 $edge = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
 $profile = Join-Path $env:TEMP "ProjectKey-edge-$PID"
 $page = Join-Path $env:TEMP "ProjectKey-edge-$PID.html"
@@ -36,7 +59,11 @@ try {
     if ($document) { $area = $document.FindFirst('Descendants', [Windows.Automation.PropertyCondition]::new($A::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)) }
   }
   if (-not $area) { throw 'no textarea' }
-  $area.SetFocus()
+  # A real click, as a user does: Chromium learns the caret position from it.
+  $box = $area.Current.BoundingRectangle
+  [void][PKB.Native]::SetCursorPos([int]($box.Left + 40), [int]($box.Top + 20))
+  [PKB.Native]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero); [PKB.Native]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 300
   & $pwsh -NoProfile -STA -Command @'
 Add-Type @"
 using System; using System.Runtime.InteropServices;
@@ -57,6 +84,18 @@ exit [PKS.S]::Run()
   Press 0x4A; Press 0x49; Press 0x33; Press 0x0D   # ji3 Enter
   "after ji3 Enter: [$(Value)]"
   Tap-Shift
+  # The 中／英 badge: a visible window of its class, under the textarea's caret.
+  Start-Sleep -Milliseconds 150
+  $badges = [PKB.Native]::VisibleBadges()
+  "badges: $($badges -join '; ')"
+  $screen = [Windows.Forms.Screen]::PrimaryScreen.Bounds
+  $shot = [Drawing.Bitmap]::new($screen.Width, $screen.Height)
+  [Drawing.Graphics]::FromImage($shot).CopyFromScreen(0, 0, 0, 0, $shot.Size)
+  $shot.Save((Join-Path $PSScriptRoot '..\.build\shots\browser-badge.png'))
+  $areaRect = $area.Current.BoundingRectangle
+  if (-not $badges) { throw 'no 中／英 badge after Shift' }
+  $top = [int]($badges[0] -split ',')[1]
+  if ($top -lt $areaRect.Top -or $top -gt $areaRect.Bottom) { throw "the badge is not by the textarea ($($areaRect)): $($badges[0])" }
   Press 0x4F; Press 0x4B                          # ok
   Tap-Shift
   Press 0x52; Press 0x55; Press 0x50; Press 0x20; Press 0x0D   # rup Space Enter

@@ -25,7 +25,8 @@ class TextService : public ITfTextInputProcessorEx,
                     public ITfKeyEventSink,
                     public ITfCompositionSink,
                     public ITfDisplayAttributeProvider,
-                    public ITfFnConfigure {
+                    public ITfFnConfigure,
+                    public ITfTextLayoutSink {
  public:
   TextService();
 
@@ -72,6 +73,9 @@ class TextService : public ITfTextInputProcessorEx,
   STDMETHODIMP GetDisplayName(BSTR* name) override;
   STDMETHODIMP Show(HWND parent, LANGID langid, REFGUID profile) override;
 
+  // ITfTextLayoutSink: apps like Chromium report positions only once laid out.
+  STDMETHODIMP OnLayoutChange(ITfContext* context, TfLayoutCode code, ITfContextView* view) override;
+
   // From the language bar button.
   void toggleMode();
   bool englishMode() const { return englishMode_; }
@@ -116,6 +120,13 @@ class TextService : public ITfTextInputProcessorEx,
   // OnTestKeyDown already sent this key; OnKeyDown applies the reply.
   std::optional<Protocol::Reply> pending_;
   WPARAM pendingKey_ = 0;
+  // The document whose layout changes move the windows.
+  void watchLayout(ITfContext* context);
+  ITfContext* layoutContext_ = nullptr;
+  DWORD layoutCookie_ = TF_INVALID_COOKIE;
+  // The last real position the windows were placed at, and the document window it was in.
+  RECT lastAnchor_{};
+  HWND lastAnchorWindow_ = nullptr;
   // The keys the test calls handled, so OnKeyDown and OnKeyUp skip them.
   WPARAM testedDown_ = 0, testedUp_ = 0;
 };
