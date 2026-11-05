@@ -75,6 +75,9 @@
       <tk:SettingsCard Header="版本">
         <TextBlock x:Name="Version" IsTextSelectionEnabled="True" />
       </tk:SettingsCard>
+      <tk:SettingsCard x:Name="Update" Header="更新">
+        <TextBlock Text="檢查中…" />
+      </tk:SettingsCard>
       <tk:SettingsCard Header="授權">
         <TextBlock Text="MIT" />
       </tk:SettingsCard>

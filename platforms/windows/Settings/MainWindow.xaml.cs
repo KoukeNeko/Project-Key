@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Net.Http;
 using System.Security.Principal;
+using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -41,6 +45,7 @@ public sealed partial class MainWindow : Window {
     Bind(CandidatePosition, "CandidatePosition", 0);
     // The text service's version (ProjectKey.rc); build.ps1 puts this app in Settings\ beside it.
     Version.Text = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "..", "ProjectKey.dll")).ProductVersion ?? "";
+    CheckForUpdate();
 
     Root.SizeChanged += (_, _) => FitToContent();
     Root.Loaded += (_, _) => Root.XamlRoot.Changed += (_, _) => FitToContent();
@@ -79,6 +84,27 @@ public sealed partial class MainWindow : Window {
       AppWindow.Move(new PointInt32(area.WorkArea.X + (area.WorkArea.Width - AppWindow.Size.Width) / 2,
                                     area.WorkArea.Y + (area.WorkArea.Height - AppWindow.Size.Height) / 2));
     });
+  }
+
+  // The newest GitHub release, which brew and scoop install from.
+  private async void CheckForUpdate() {
+    try {
+      using var client = new HttpClient();
+      client.DefaultRequestHeaders.UserAgent.ParseAdd("ProjectKey");  // GitHub rejects requests without one
+      using JsonDocument release = JsonDocument.Parse(
+          await client.GetStringAsync("https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest"));
+      string latest = release.RootElement.GetProperty("tag_name").GetString()!.TrimStart('v');
+      // Version is the TextBlock here, hence System.Version.
+      Update.Content = System.Version.Parse(latest) > System.Version.Parse(Version.Text)
+          ? new HyperlinkButton {
+              Content = $"下載 {latest}",
+              NavigateUri = new Uri(release.RootElement.GetProperty("html_url").GetString()!),
+            }
+          : new TextBlock { Text = "已是最新版本" };
+    } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException
+                                    or KeyNotFoundException or ArgumentException or FormatException) {
+      Update.Content = new TextBlock { Text = "無法檢查" };
+    }
   }
 
   // Asks the engine server to forget the choices; it keeps them in memory only.

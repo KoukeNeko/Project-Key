@@ -15,6 +15,7 @@ struct SettingsForm: View {
   @AppStorage(PKCandidatePositionKey) private var candidatePosition = 1
   @AppStorage(PKNextDoubtfulKey) private var nextDoubtful = true
   @State private var cleared = false
+  @State private var update = UpdateState.checking
   let clearChoices: () -> Void
 
   var body: some View {
@@ -62,7 +63,15 @@ struct SettingsForm: View {
         Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
       }
       Section("關於") {
-        LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+        LabeledContent("版本", value: currentVersion)
+        LabeledContent("更新") {
+          switch update {
+          case .checking: Text("檢查中…")
+          case .current: Text("已是最新版本")
+          case .available(let version, let page): Link("下載 \(version)", destination: page)
+          case .failed: Text("無法檢查")
+          }
+        }
         LabeledContent("授權", value: "MIT")
         LabeledContent("引擎與詞庫") {
           Link("McBopomofo", destination: URL(string: "https://github.com/openvanilla/McBopomofo")!)
@@ -73,7 +82,31 @@ struct SettingsForm: View {
     .scrollDisabled(true)
     .frame(width: 440)
     .fixedSize(horizontal: false, vertical: true)
+    .task { update = await checkForUpdate() }
   }
+}
+
+private let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+
+private enum UpdateState {
+  case checking, current, available(String, URL), failed
+}
+
+// The newest GitHub release, which brew and scoop install from.
+private func checkForUpdate() async -> UpdateState {
+  struct Release: Decodable {
+    let tag_name: String
+    let html_url: URL
+  }
+  let api = URL(string: "https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest")!
+  guard let (data, response) = try? await URLSession.shared.data(from: api),
+        (response as? HTTPURLResponse)?.statusCode == 200,
+        let release = try? JSONDecoder().decode(Release.self, from: data) else {
+    return .failed
+  }
+  let latest = release.tag_name.hasPrefix("v") ? String(release.tag_name.dropFirst()) : release.tag_name
+  return latest.compare(currentVersion, options: .numeric) == .orderedDescending
+      ? .available(latest, release.html_url) : .current
 }
 
 @objc(PKSettingsForm)
