@@ -70,6 +70,17 @@
       <tk:SettingsCard Header="Tab 注音轉英文">
         <ToggleSwitch x:Name="ZhuyinToEnglish" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
+
+      <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="關於" />
+      <tk:SettingsCard Header="版本">
+        <TextBlock x:Name="Version" IsTextSelectionEnabled="True" />
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="授權">
+        <TextBlock Text="MIT" />
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="引擎與詞庫">
+        <HyperlinkButton Content="McBopomofo" NavigateUri="https://github.com/openvanilla/McBopomofo" />
+      </tk:SettingsCard>
     </StackPanel>
   </StackPanel>
 </Window>

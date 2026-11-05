@@ -61,6 +61,13 @@ struct SettingsForm: View {
         Toggle("⇥ 英文轉注音", isOn: $englishToZhuyin)
         Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
       }
+      Section("關於") {
+        LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+        LabeledContent("授權", value: "MIT")
+        LabeledContent("引擎與詞庫") {
+          Link("McBopomofo", destination: URL(string: "https://github.com/openvanilla/McBopomofo")!)
+        }
+      }
     }
     .formStyle(.grouped)
     .scrollDisabled(true)
