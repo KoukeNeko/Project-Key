@@ -520,11 +520,12 @@ UIColor *PressedColor(BOOL function) {
     [button addTarget:self action:@selector(typeReturn) forControlEvents:UIControlEventTouchUpInside];
     [buttons addObject:button];
   }
-  CGFloat x = 4;
+  // Inset so the gray box stays inside the keyboard's rounded corner.
+  CGFloat x = 10;
   for (UIButton *button in buttons) {
     [button sizeToFit];
     CGFloat w = MAX(40, CGRectGetWidth(button.bounds) + 20);
-    button.frame = CGRectMake(x, 2, w, kBarHeight - 4);
+    button.frame = CGRectMake(x, 6, w, kBarHeight - 12);
     [_bar addSubview:button];
     x += w + 4;
   }
