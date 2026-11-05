@@ -120,7 +120,7 @@ NSArray<NSArray<NSString *> *> *SymbolRows() {
   ];
 }
 
-constexpr CGFloat kBarHeight = 32, kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 2, kBottomInset = 2;
+constexpr CGFloat kBarHeight = 44, kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 2, kBottomInset = 2;
 // A row gap is this share of a row's pitch, so the rows keep their shape at any height.
 constexpr CGFloat kRowGapShare = 0.12;
 constexpr CGFloat kExpandWidth = 44, kGridRowHeight = 44;
@@ -225,7 +225,6 @@ UIColor *PressedColor(BOOL function) {
   PKKeyButton *_pageKey, *_commaKey, *_globeKey, *_spaceKey, *_erKey, *_deleteKey, *_returnKey;
   BOOL _symbols;
   NSTimer *_deleteRepeat;
-  NSLayoutConstraint *_height;
 }
 
 - (void)loadView {
@@ -319,16 +318,22 @@ UIColor *PressedColor(BOOL function) {
   [_expandKey addTarget:self action:@selector(toggleGrid) forControlEvents:UIControlEventTouchUpInside];
   [self.view addSubview:_expandKey];
 
-  [self reloadCandidates];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-  [super viewDidAppear:animated];
-  // The system ignores a height set before the keyboard first draws, and may still keep its own.
-  if (_height) return;
+  // The system takes the keyboard's height from what its content needs, not from a
+  // constraint on the view itself, so an invisible column asks for it.
   CGFloat pitch = kKeyHeight / (1 - kRowGapShare);
-  _height = [self.view.heightAnchor constraintEqualToConstant:kBarHeight + kTopInset + (5 - kRowGapShare) * pitch + kBottomInset];
-  _height.active = YES;
+  UIView *strut = [[UIView alloc] init];
+  strut.translatesAutoresizingMaskIntoConstraints = NO;
+  strut.userInteractionEnabled = NO;
+  [self.view insertSubview:strut atIndex:0];
+  NSLayoutConstraint *height = [strut.heightAnchor constraintEqualToConstant:kBarHeight + kTopInset + (5 - kRowGapShare) * pitch + kBottomInset];
+  height.priority = UILayoutPriorityRequired - 1;  // a height the system insists on still wins
+  [NSLayoutConstraint activateConstraints:@[
+    height, [strut.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+    [strut.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+    [strut.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor], [strut.widthAnchor constraintEqualToConstant:0]
+  ]];
+
+  [self reloadCandidates];
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
