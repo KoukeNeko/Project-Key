@@ -41,3 +41,26 @@ $server = Join-Path $Dest 'ProjectKeyServer.exe'
 Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'ProjectKeyServer' "`"$server`""
 Start-Process $server
 Write-Host "installed $Dest"
+
+# A loaded DLL cannot be replaced: apps keep the version they loaded until they
+# restart. Builds are deterministic, so the PE header stamp tells versions apart.
+Add-Type -Namespace ProjectKeyInstall -Name Native -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern System.IntPtr OpenProcess(uint access, bool inherit, int pid);
+[DllImport("kernel32.dll")] public static extern bool ReadProcessMemory(System.IntPtr process, System.IntPtr address, byte[] buffer, int size, out int read);
+[DllImport("kernel32.dll")] public static extern bool CloseHandle(System.IntPtr handle);
+'@
+function Get-Stamp([byte[]]$header) { [BitConverter]::ToUInt32($header, [BitConverter]::ToInt32($header, 0x3C) + 8) }
+$current = Get-Stamp ([IO.File]::ReadAllBytes("$Dest\ProjectKey.dll"))
+$stale = Get-Process | ForEach-Object {
+  $process = $_
+  $module = try { $process.Modules | Where-Object ModuleName -eq 'ProjectKey.dll' } catch { $null }
+  if (-not $module) { return }
+  $handle = [ProjectKeyInstall.Native]::OpenProcess(0x0410, $false, $process.Id)
+  $header = [byte[]]::new(4096)
+  $read = 0
+  if ([ProjectKeyInstall.Native]::ReadProcessMemory($handle, $module.BaseAddress, $header, 4096, [ref]$read) -and (Get-Stamp $header) -ne $current) {
+    $process.ProcessName
+  }
+  [void][ProjectKeyInstall.Native]::CloseHandle($handle)
+} | Sort-Object -Unique
+if ($stale) { Write-Warning "restart these apps (or sign out) to use the new version: $($stale -join ', ')" }
