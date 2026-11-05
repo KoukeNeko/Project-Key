@@ -7,11 +7,14 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Bigram.h"
 #include "Mandarin/Mandarin.h"
 #include "McBopomofoLM.h"
+#include "MemoryMappedFile.h"
+#include "ParselessPhraseDB.h"
 #include "UserOverrideModel.h"
 #include "gramambular2/reading_grid.h"
 
@@ -25,6 +28,19 @@ struct Segment {
   bool doubtful = false;
 };
 
+// McBopomofo's language model, which also finds data.txt's rows by the start of a reading.
+class Lexicon : public McBopomofo::McBopomofoLM {
+ public:
+  // Hides McBopomofoLM's own, which loads only the exact lookups.
+  void loadLanguageModel(const char* path);
+  // The "reading word score" rows whose reading starts with `prefix`.
+  std::vector<std::string_view> rowsStartingWith(const std::string& prefix) const;
+
+ private:
+  McBopomofo::MemoryMappedFile file_;
+  std::unique_ptr<McBopomofo::ParselessPhraseDB> rows_;
+};
+
 class Composer {
  public:
   // With a context model, each word is scored in the context of the two words
@@ -33,16 +49,17 @@ class Composer {
   // trigramWeight when the model has that triple.
   // With a user model, choices are remembered by the word before them and the
   // reading, and a remembered word wins the walk the next time.
-  // Each syllable also matches the readings one adjacent key away (a slip
+  // Each syllable typed with its tone also matches the readings one adjacent key away (a slip
   // such as ㄧㄡˇ for ㄧㄝˇ, or a key in the row above or below), scored adjacentKeyScore
   // lower; -infinity turns it off.
-  explicit Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr<const Bigram> bigram = nullptr,
+  explicit Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram = nullptr,
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
                     double adjacentKeyScore = kAdjacentKeyScore);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -3;
-  // Ends a grid reading's syllable that was typed without a tone; it reads as any of its tones.
+  // Ends a grid reading's syllable that was typed without a tone; it reads as any of its tones,
+  // and a lone symbol as any syllable it begins (ㄋ for 你 or 那).
   static constexpr char kAnyTone = '*';
 
   enum class KeyResult { kHandled, kInvalid };
@@ -57,8 +74,8 @@ class Composer {
   bool isSyllableKeys(const std::string& keys) const;
 
   // Adds a Daqian key; a tone key completes the syllable. Without a tone, a whole
-  // syllable is in the text as its word right away, and it ends where a key starts
-  // the next one.
+  // syllable, or a lone symbol, is in the text as its word right away, and it ends
+  // where a key starts the next one.
   KeyResult typeReadingKey(char key);
   // Completes the pending syllable with tone 1 (the space bar).
   KeyResult completeWithFirstTone();
@@ -101,7 +118,7 @@ class Composer {
   double wordScore(uint32_t first, uint32_t second, uint32_t word, double unigramScore) const;
 
   std::shared_ptr<McBopomofo::McBopomofoLM> lm_;
-  // lm_, reading syllables that end in kAnyTone as any of their tones.
+  // lm_, reading syllables that end in kAnyTone as described there.
   std::shared_ptr<Formosa::Gramambular2::LanguageModel> dictionary_;
   std::shared_ptr<const Bigram> bigram_;
   double contextWeight_;

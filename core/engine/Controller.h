@@ -89,7 +89,7 @@ class Settings {
 
 // What every session shares: the models, settings and the 中/英 switch.
 struct Environment {
-  std::shared_ptr<McBopomofo::McBopomofoLM> lm;
+  std::shared_ptr<Lexicon> lm;
   std::shared_ptr<const Bigram> bigram;
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel;  // replaced by value to clear it
   Settings* settings = nullptr;

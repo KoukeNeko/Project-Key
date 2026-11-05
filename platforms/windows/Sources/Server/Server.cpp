@@ -185,7 +185,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   std::wstring dir = ModuleDirectory(nullptr);
-  gEnvironment.lm = std::make_shared<McBopomofo::McBopomofoLM>();
+  gEnvironment.lm = std::make_shared<Lexicon>();
   gEnvironment.lm->loadLanguageModel(Narrow(dir + L"data.txt").c_str());
   if (!gEnvironment.lm->isDataModelLoaded()) {
     Log(L"cannot load " + dir + L"data.txt");

@@ -173,7 +173,7 @@ int main() {
     assert([controller handleEvent:Key(@"", kVK_LeftArrow) client:client]);
     assert(PKCandidatePanel.shared.content.caret == 1);
     Type(controller, client, @"c");
-    assert(PKCandidatePanel.shared.content.caret == 1 && PKCandidatePanel.shared.content.pendingReading.length == 1);
+    assert(PKCandidatePanel.shared.content.caret == 2 && PKCandidatePanel.shared.content.pendingReading.length == 0);
     Type(controller, client, @"l3");
     assert(PKCandidatePanel.shared.content.caret == 2);
     assert([client.marked isEqualToString:@"今好天"]);
@@ -302,12 +302,13 @@ int main() {
     assert(![controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock | NSEventModifierFlagShift) client:client]);
     PressCapsLock(controller, client, NO);
     assert([controller handleEvent:Key(@"r") client:client] && client.marked.length);  // back in 中
+    NSString *typedR = client.marked;
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     // Back in 中 with the lock on (after Shift switched), letters are still Zhuyin keys.
     PressCapsLock(controller, client, YES);
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
-    assert([controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock) client:client] && [client.marked isEqualToString:@"ㄐ"]);
+    assert([controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock) client:client] && [client.marked isEqualToString:typedR]);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     PressCapsLock(controller, client, NO);
     [controller handleEvent:Shift(YES) client:client];

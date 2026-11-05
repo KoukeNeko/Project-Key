@@ -432,7 +432,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
       return true;
     case Key::kReturn:
       if (empty) return false;
-      // The text as shown, with unfinished Zhuyin symbols (沒救ㄌ) as they are.
+      // The text as shown, with Zhuyin that is no word yet (a tone alone) as it is.
       client_.insertText(shown_);
       composer_->clear();
       commit();

@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     std::cerr << "usage: " << argv[0] << " <data.txt> [bigram.bin] [context weight] [trigram weight] [adjacent key score]\n";
     return 2;
   }
-  auto model = std::make_shared<McBopomofo::McBopomofoLM>();
+  auto model = std::make_shared<ProjectKey::Lexicon>();
   model->loadLanguageModel(argv[1]);
   if (!model->isDataModelLoaded()) {
     std::cerr << "cannot load " << argv[1] << "\n";
