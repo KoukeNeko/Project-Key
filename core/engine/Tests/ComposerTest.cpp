@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <string>
 
-#include "../Sources/Composer.h"
+#include "Composer.h"
 
 using ProjectKey::Composer;
 using ProjectKey::Segment;

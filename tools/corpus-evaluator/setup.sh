@@ -22,7 +22,7 @@ if [ ! -f "$RIME/user/build/bopomofo_tw.prism.bin" ]; then
   printf 'patch:\n  schema_list:\n    - schema: bopomofo_tw\n' > "$RIME/shared/default.custom.yaml"
   "$BREW/opt/librime/bin/rime_deployer" --build "$RIME/user" "$RIME/shared" "$RIME/user/build"
 fi
-MCB_COMMIT=257da536ddaf590aae0e74e6adb9b415988344f6  # same commit annotate.py reads readings from
+MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)  # also the commit annotate.py reads readings from
 MCB=.cache/mcbopomofo
 if [ ! -d "$MCB/.git" ]; then
   git init -q "$MCB"
@@ -38,8 +38,8 @@ c++ -std=c++20 -O2 adapters/mcbopomofo.cpp -I"$MCB/Source/Engine" \
   -o .cache/bin/mcbopomofo
 
 # Project Key's composer; evaluate.py passes it tools/bigram-trainer/.cache/bigram.bin.
-c++ -std=c++20 -O2 adapters/projectkey.cpp ../../platforms/macos/Sources/Composer.cpp ../../platforms/macos/Sources/Bigram.cpp \
-  -I../../platforms/macos/Sources -I"$MCB/Source/Engine" \
+c++ -std=c++20 -O2 adapters/projectkey.cpp ../../core/engine/Composer.cpp ../../core/engine/Bigram.cpp \
+  -I../../core/engine -I"$MCB/Source/Engine" \
   "$MCB/build/libMcBopomofoLMLib.a" "$MCB/build/Mandarin/libMandarinLib.a" "$MCB/build/gramambular2/libgramambular2_lib.a" \
   -o .cache/bin/projectkey
 

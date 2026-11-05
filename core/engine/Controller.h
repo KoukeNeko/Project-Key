@@ -1,7 +1,6 @@
-// The input method's key handling, ported from the macOS PKInputController
-// (platforms/macos/Sources/InputController.mm) without any Windows API, so it
-// runs in the engine server and in ControllerTest alike. What it does to the
-// app goes through Client; the server forwards that to the text service.
+// The input method's key handling, shared by both platforms: the macOS
+// PKInputController and the Windows engine server each feed it key events and
+// carry out what it does to the app through Client.
 #pragma once
 
 #include <cstdint>
@@ -97,6 +96,10 @@ struct Environment {
   // Grid columns a candidate takes, 1 to kGridColumns.
   std::function<int(const std::string&)> columnsSpannedBy;
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
+  std::string shiftKeycap = "Shift";  // the key the conversion previews end with
+  // macOS lets the app type a key the input method returns; TSF does not
+  // deliver a key once its test phase handed it on, so there the input method types it.
+  bool appTypesUnhandledKeys = false;
 };
 
 enum class Key {

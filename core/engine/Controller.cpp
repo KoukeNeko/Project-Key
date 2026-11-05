@@ -74,9 +74,6 @@ char SingleCharacter(const KeyEvent& event) {
   return event.characters.size() == 1 && static_cast<unsigned char>(event.characters[0]) < 128 ? event.characters[0] : 0;
 }
 
-// The keycap the conversion previews end with; the Windows prototype spells the key out.
-constexpr const char* kShiftKeycap = "Shift";
-
 }  // namespace
 
 uint32_t Utf16Length(const std::string& utf8) {
@@ -331,7 +328,7 @@ void Controller::showEnglishHint() {
   content.doubtful = {false};
   content.caret = Utf16Length(content.segments[0]);
   content.showsProof = true;
-  content.keyHint = kShiftKeycap;
+  content.keyHint = env_.shiftKeycap;
   content.replacedText = keys + std::string(trailingSpaces, ' ');  // the English that goes
   composer_->clear();
   showPanel(content);
@@ -360,10 +357,8 @@ void Controller::trackZhuyin(const KeyEvent& event) {
 std::optional<std::string> Controller::englishTyped() const {
   if (zhuyinEdited_ || !env_.settings->flag(Setting::kZhuyinToEnglish)) return std::nullopt;
   const std::string& keys = zhuyinKeys_;
-  size_t letters = 0;
   for (char c : keys) {
     if (c != ' ' && (c < 'a' || c > 'z')) return std::nullopt;
-    if (c != ' ') letters++;
   }
   size_t first = keys.find_first_not_of(' '), last = keys.find_last_not_of(' ');
   if (first == std::string::npos || last - first + 1 < 2) return std::nullopt;
@@ -481,16 +476,16 @@ bool Controller::handleComposing(const KeyEvent& event) {
     refresh();
     return true;
   }
-  // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on ', as on macOS.
+  // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on '.
   if (key == '\\' && !event.shift) key = '\'';
   if (composer_->insertPunctuation(key)) {
     refresh();
     return true;
   }
   if (empty) return false;
-  // Commit, then type the character after it: TSF does not deliver a key the
-  // test phase handed to the app, so the input method types it itself.
+  // Commit, then type the character after it.
   commit();
+  if (env_.appTypesUnhandledKeys) return false;
   client_.insertText(event.characters);
   return true;
 }
@@ -734,7 +729,7 @@ void Controller::refresh() {
     hint.doubtful = {false};
     hint.caret = Utf16Length(*english);
     hint.showsProof = true;
-    hint.keyHint = kShiftKeycap;
+    hint.keyHint = env_.shiftKeycap;
     hint.replacedText = markedText;
     showPanel(hint);
     return;

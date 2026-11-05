@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "Engine/Controller.h"
+#include "Controller.h"
 
 namespace ProjectKey::Protocol {
 

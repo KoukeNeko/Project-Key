@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-#include "Engine/Controller.h"
+#include "Controller.h"
 
 using Microsoft::WRL::ComPtr;
 

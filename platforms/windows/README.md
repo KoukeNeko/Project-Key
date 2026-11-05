@@ -14,7 +14,7 @@ TSF（Text Services Framework）注音輸入法，大千鍵盤，功能與按鍵
 
 兩者以 named pipe `\\.\pipe\ProjectKey-<使用者 SID>` 溝通，ACL 開放給 ALL APPLICATION PACKAGES 與低完整性層級，所以 Store App 與沙盒中的 App 也能使用。每個按鍵一來一回，伺服器沒有回應時（最多等 0.5 秒），按鍵照常交給 App。
 
-組字邏輯與 macOS 共用：`../macos/Sources/Composer.*`、`Bigram.*` 直接編進伺服器。macOS 的 `InputController.mm` 按鍵邏輯移植成 `Sources/Engine/Controller.*`，不依賴 Windows API，`Tests/ControllerTest.cpp` 對照 macOS 的 `ControllerTest.mm` 測同樣的情境。
+組字與按鍵邏輯與 macOS 共用：`../../core/engine` 的 `Composer`、`Bigram`、`Controller` 直接編進伺服器，不依賴 Windows API。
 
 ## 建置與安裝
 
@@ -76,7 +76,8 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 `build.ps1` 會執行：
 
 - `ComposerTest`：與 macOS 共用的組字測試。
-- `ControllerTest`：按鍵邏輯，情境與 macOS 的 `ControllerTest.mm` 相同，另外加上 Ctrl+Shift+P、失焦送出等 Windows 的路徑。
+- `ControllerTest`：與 macOS 共用的按鍵邏輯測試。
+- `ProtocolTest`：pipe 訊息的讀寫，以及被截斷的訊息會被拒絕。
 
 安裝後可以再跑：
 

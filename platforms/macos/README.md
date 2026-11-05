@@ -1,13 +1,13 @@
 # macOS 輸入法
 
-InputMethodKit 注音輸入法，大千鍵盤，候選視窗採用 [A 整句校對條](../../docs/design/candidate-window/notes.md) 第 02 輪的設計。選字引擎與詞庫目前使用 McBopomofo（MIT，固定 commit），組字邏輯在 `Sources/Composer.*`，不依賴 InputMethodKit。
+InputMethodKit 注音輸入法，大千鍵盤，候選視窗採用 [A 整句校對條](../../docs/design/candidate-window/notes.md) 第 02 輪的設計。選字引擎與詞庫目前使用 McBopomofo（MIT，固定 commit），組字與按鍵邏輯在 `../../core/engine`，與 Windows 共用，不依賴 InputMethodKit；`Sources/InputController.mm` 只負責把按鍵與畫面接到 IMK。
 
 ## 建置與安裝
 
 需要 Xcode（或 Command Line Tools）與 CMake，macOS 13 以上。
 
 ```bash
-platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑組字測試、輸出 .build/ProjectKey.app
+platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑測試、輸出 .build/ProjectKey.app
 platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註冊
 ```
 
