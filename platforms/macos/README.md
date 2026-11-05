@@ -4,7 +4,13 @@ InputMethodKit 注音輸入法，大千鍵盤，候選視窗採用 [A 整句校�
 
 ## 建置與安裝
 
-需要 Xcode（或 Command Line Tools）與 CMake，macOS 13 以上。
+發行版（Apple 晶片）：
+
+```bash
+brew install --cask koukeneko/tap/project-key
+```
+
+自行建置需要 Xcode（或 Command Line Tools）與 CMake，macOS 13 以上。
 
 ```bash
 platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑測試、輸出 .build/ProjectKey.app

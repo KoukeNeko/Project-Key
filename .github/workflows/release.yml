@@ -1,0 +1,175 @@
+name: Release
+
+# Pushing a tag vX.Y.Z, where X.Y.Z is the version in Info.plist and ProjectKey.rc,
+# builds both platforms, publishes the GitHub release, and points the Homebrew cask
+# and the Scoop manifest at its files.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mac="$(/usr/bin/env python3 -c 'import plistlib; print(plistlib.load(open("platforms/macos/Resources/Info.plist", "rb"))["CFBundleShortVersionString"])')"
+          win="$(sed -n 's/.*VALUE "ProductVersion", "\(.*\)".*/\1/p' platforms/windows/Sources/TextService/ProjectKey.rc)"
+          if [ "$mac" != "$version" ] || [ "$win" != "$version" ]; then
+            echo "::error::the tag $GITHUB_REF_NAME does not match Info.plist ($mac) and ProjectKey.rc ($win)" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: version
+    runs-on: macos-26  # NSGlassEffectView needs the macOS 26 SDK
+    steps:
+      - uses: actions/checkout@v4
+      - run: platforms/macos/build.sh
+      - run: ditto -c -k --keepParent platforms/macos/.build/ProjectKey.app "ProjectKey-${{ needs.version.outputs.version }}-macos.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: ProjectKey-*-macos.zip
+
+  windows:
+    needs: version
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: platforms/windows/build.ps1
+        shell: pwsh
+      # The Scoop package runs install.ps1 -Source from the unpacked files.
+      - shell: pwsh
+        run: |
+          Copy-Item platforms/windows/.build/out package -Recurse
+          Get-ChildItem package -Recurse -Include *.lib, *.exp | Remove-Item
+          Copy-Item platforms/windows/install.ps1, platforms/windows/uninstall.ps1 package
+          Compress-Archive package/* "ProjectKey-${{ needs.version.outputs.version }}-windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: ProjectKey-*-windows-x64.zip
+
+  release:
+    needs: [version, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: sha256sum ProjectKey-*.zip > SHA256SUMS
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes ProjectKey-*.zip SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: SHA256SUMS
+
+  packages:
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      RELEASES: https://github.com/${{ github.repository }}/releases/download
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: checksums
+      - name: Homebrew cask
+        env:
+          TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          sha="$(awk '/-macos.zip$/ { print $1 }' SHA256SUMS)"
+          git clone --depth 1 "https://x-access-token:$TOKEN@github.com/KoukeNeko/homebrew-tap.git" tap
+          cat > tap/Casks/project-key.rb <<EOF
+          cask "project-key" do
+            version "$VERSION"
+            sha256 "$sha"
+
+            url "https://github.com/KoukeNeko/Project-Key/releases/download/v#{version}/ProjectKey-#{version}-macos.zip"
+            name "Project Key"
+            desc "Zhuyin input method"
+            homepage "https://github.com/KoukeNeko/Project-Key"
+
+            livecheck do
+              url :url
+              strategy :github_latest
+            end
+
+            depends_on arch: :arm64
+            depends_on macos: :ventura
+
+            input_method "ProjectKey.app"
+
+            postflight do
+              app = "#{Dir.home}/Library/Input Methods/ProjectKey.app"
+              # Ad-hoc signed and not notarized: Gatekeeper refuses it while quarantined.
+              system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", app]
+              system_command "#{app}/Contents/MacOS/ProjectKey", args: ["--register"]
+              system_command "/usr/bin/open", args: ["-g", app]
+            end
+
+            uninstall quit: "org.projectkey.inputmethod.ProjectKey"
+
+            caveats "Add Project Key in System Settings > Keyboard > Input Sources."
+          end
+          EOF
+          cd tap
+          git add -A
+          git diff --cached --quiet && exit 0
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "project-key $VERSION"
+          git push
+      - name: Scoop manifest
+        env:
+          TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+        run: |
+          sha="$(awk '/-windows-x64.zip$/ { print $1 }' SHA256SUMS)"
+          git clone --depth 1 "https://x-access-token:$TOKEN@github.com/KoukeNeko/scoop-bucket.git" bucket
+          # A Scoop update runs the old uninstaller first; install.ps1 replaces the files
+          # in place, so only a real uninstall removes the keyboard and its files.
+          jq -n --arg version "$VERSION" --arg hash "$sha" '{
+            version: $version,
+            description: "Zhuyin input method",
+            homepage: "https://github.com/KoukeNeko/Project-Key",
+            license: "MIT",
+            notes: [
+              "Installing and removing ask Windows for administrator rights: the input method is installed into C:\\Program Files\\Project Key and registered there.",
+              "Add Project Key in Settings > Time & language > Language & region."
+            ],
+            architecture: {"64bit": {
+              url: "https://github.com/KoukeNeko/Project-Key/releases/download/v\($version)/ProjectKey-\($version)-windows-x64.zip",
+              hash: $hash
+            }},
+            installer: {script: "& \"$dir\\install.ps1\" -Source $dir"},
+            uninstaller: {script: "if ($cmd -eq \"uninstall\") { & \"$dir\\uninstall.ps1\" }"},
+            checkver: {github: "https://github.com/KoukeNeko/Project-Key"},
+            autoupdate: {
+              architecture: {"64bit": {url: "https://github.com/KoukeNeko/Project-Key/releases/download/v$version/ProjectKey-$version-windows-x64.zip"}},
+              hash: {url: "https://github.com/KoukeNeko/Project-Key/releases/download/v$version/SHA256SUMS"}
+            }
+          }' > bucket/bucket/project-key.json
+          cd bucket
+          git add -A
+          git diff --cached --quiet && exit 0
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "project-key $VERSION"
+          git push

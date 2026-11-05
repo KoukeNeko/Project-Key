@@ -1,9 +1,9 @@
-# Installs .build\out into Program Files (where apps in a sandbox can read it),
-# registers the input method, and starts the engine server now and at sign-in.
+# Installs .build\out (or -Source, an unpacked release) into Program Files
+# (where apps in a sandbox can read it), registers the input method, and starts
+# the engine server now and at sign-in.
 # Adding it as a keyboard is left to Settings > Time & language > Language & region.
-param([switch]$Elevated)
+param([string]$Source = (Join-Path $PSScriptRoot '.build\out'), [switch]$Elevated)
 $ErrorActionPreference = 'Stop'
-$Source = Join-Path $PSScriptRoot '.build\out'
 $Dest = Join-Path $env:ProgramFiles 'Project Key'
 if (-not (Test-Path "$Source\ProjectKey.dll")) { throw 'run .\build.ps1 first' }
 
@@ -33,7 +33,7 @@ if ($Elevated) {
 }
 
 $pwsh = (Get-Process -Id $PID).Path
-$admin = Start-Process $pwsh -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Elevated'
+$admin = Start-Process $pwsh -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Source', "`"$Source`"", '-Elevated'
 if ($admin.ExitCode) { throw "installing into $Dest failed: $(Get-Content (Join-Path $env:TEMP 'ProjectKey-install.log') -ErrorAction SilentlyContinue)" }
 
 # The server runs as the user, not elevated.
