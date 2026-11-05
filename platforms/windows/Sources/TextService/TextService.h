@@ -93,6 +93,8 @@ class TextService : public ITfTextInputProcessorEx,
   std::string textBeforeCaret(ITfContext* context);
   bool keyboardDisabled(ITfContext* context);
   std::optional<KeyEvent> keyEvent(WPARAM wParam, LPARAM lParam) const;
+  void keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten, bool testing);
+  void keyUp(ITfContext* context, WPARAM wParam);
   void updateLangBar();
 
   LONG refs_ = 1;
@@ -112,6 +114,8 @@ class TextService : public ITfTextInputProcessorEx,
   // OnTestKeyDown already sent this key; OnKeyDown applies the reply.
   std::optional<Protocol::Reply> pending_;
   WPARAM pendingKey_ = 0;
+  // The keys the test calls handled, so OnKeyDown and OnKeyUp skip them.
+  WPARAM testedDown_ = 0, testedUp_ = 0;
 };
 
 }  // namespace ProjectKey
