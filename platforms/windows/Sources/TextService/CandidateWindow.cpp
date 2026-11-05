@@ -371,9 +371,6 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
     float w = keyWidth();
     float right = static_cast<float>(target->GetSize().width) - kProofRight;
     D2D1_RECT_F cap = D2D1::RectF(right - w, lineTop + (kProofLine - kKeyHeight) / 2, right, lineTop + (kProofLine + kKeyHeight) / 2);
-    D2D1_RECT_F outline = D2D1::RectF(cap.left + 0.5f, cap.top + 0.5f, cap.right - 0.5f, cap.bottom - 0.5f);
-    auto stroke = Brush(target, Color(kMuted, 0.7f));
-    target->DrawRoundedRectangle(D2D1::RoundedRect(outline, kKeyRadius, kKeyRadius), stroke.Get(), 1);
     Line key = Measure(fonts_, Widen(content_->keyHint), fonts_.key());
     auto text = Brush(target, Color(kText));
     DrawLine(target, key, (cap.left + cap.right - key.width) / 2, cap.top, kKeyHeight, text.Get());
