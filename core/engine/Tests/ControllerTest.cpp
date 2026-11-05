@@ -149,6 +149,11 @@ int main(int argc, char** argv) {
   // Enter commits the sentence as shown.
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(Contains(client.committed, "的程式重") && client.marked.empty());
+
+  // Enter types Zhuyin symbols alone (ㄋㄧ) as they are.
+  Type(controller, "su");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
+  assert(HasSuffix(client.committed, "ㄋㄧ") && client.marked.empty());
   size_t before = client.committed.size();
 
   // Typed twice, the sentence has two doubtful 城市 (choices not remembered, so
