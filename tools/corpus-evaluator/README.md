@@ -74,3 +74,9 @@ python3 tools/corpus-evaluator/evaluate.py --engine projectkey --slip column  # 
 - 語料的注音取自 McBopomofo 詞庫，讀音必定在它的詞庫裡，比較時對它略為有利。
 - McBopomofo 只在聲調鍵結束音節時重算整句，其他按鍵幾乎不花時間。RIME 和新酷音每一鍵都會更新組字，所以三者的 P50 不能直接比較，比較時應看 P95 和最大值。
 - macOS 內建注音無法以程式庫呼叫，尚未納入。
+
+## 語言模型重排（原型）
+
+`rerank.py <模型> [--slip row|column] [--penalty P ...] [--top K]` 用因果語言模型重排 Project Key 的組字結果：轉接程式設定 `PK_CANDIDATES` 時另輸出每段同長度的候選，從引擎的句子出發，每輪試換一段，取「模型對整句的 log 機率 − 罰分 × 換掉的段數」最高者，最多三輪。需要 torch 與 transformers；模型可以是 Hugging Face 名稱或 `tools/lm-trainer` 訓練的目錄。
+
+以 CKIP `gpt2-base`（102M 參數，GPL-3.0）、罰分 5：整句正確 clean 216→219、row 129→146、column 161→169。
