@@ -75,19 +75,23 @@ class AdjacentKeyModel : public Formosa::Gramambular2::LanguageModel {
   const std::vector<std::string>& variantsOf(const std::string& syllable) {
     auto cached = variants_.find(syllable);
     if (cached != variants_.end()) return cached->second;
-    static const char* const kRows[] = {"1234567890-", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./"};
+    // Each row sits half a key right of the one above, so key c touches c and
+    // c+1 in the row above and c-1 and c in the row below.
+    static const std::string kRows[] = {"1234567890-", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./"};
+    constexpr int kRowCount = 4;
     const BopomofoKeyboardLayout* layout = BopomofoKeyboardLayout::StandardLayout();
     using Formosa::Mandarin::BopomofoSyllable;
     std::string keys = layout->keySequenceFromSyllable(BopomofoSyllable::FromComposedString(syllable));
     std::vector<std::string> variants;
     for (size_t i = 0; i < keys.size(); i++) {
-      for (const char* row : kRows) {
-        const char* at = std::strchr(row, keys[i]);
-        if (!at) continue;
-        for (const char* neighbor : {at - 1, at + 1}) {
-          if (neighbor < row || !*neighbor) continue;
+      for (int r = 0; r < kRowCount; r++) {
+        int c = static_cast<int>(kRows[r].find(keys[i]));
+        if (c < 0) continue;
+        const int spots[][2] = {{r, c - 1}, {r, c + 1}, {r - 1, c}, {r - 1, c + 1}, {r + 1, c - 1}, {r + 1, c}};
+        for (const auto& [row, column] : spots) {
+          if (row < 0 || row >= kRowCount || column < 0 || column >= static_cast<int>(kRows[row].size())) continue;
           std::string typed = keys;
-          typed[i] = *neighbor;
+          typed[i] = kRows[row][column];
           std::string variant = layout->syllableFromKeySequence(typed).composedString();
           if (variant != syllable && lm_->hasUnigrams(variant) &&
               std::find(variants.begin(), variants.end(), variant) == variants.end()) {
@@ -138,7 +142,9 @@ Composer::KeyResult Composer::completeWithFirstTone() {
 Composer::KeyResult Composer::insertPendingSyllable() {
   std::string syllable = reading_.composedString();
   reading_.clear();
-  if (!lm_->hasUnigrams(syllable) || !grid_.insertReading(syllable)) return KeyResult::kInvalid;
+  // The grid's model decides: with adjacent keys on, a syllable the dictionary lacks
+  // still goes in when a slip of one key explains it.
+  if (!grid_.insertReading(syllable)) return KeyResult::kInvalid;
   walk();
   return KeyResult::kHandled;
 }
