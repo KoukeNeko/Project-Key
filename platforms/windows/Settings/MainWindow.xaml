@@ -28,7 +28,9 @@
       <tk:SettingsCard Header="候選視窗">
         <ComboBox x:Name="Appearance" MinWidth="160">
           <x:String>深色</x:String>
+          <x:String>Acrylic</x:String>
           <x:String>Mica</x:String>
+          <x:String>Mica Alt</x:String>
         </ComboBox>
       </tk:SettingsCard>
       <tk:SettingsCard Header="輸入時的整句預覽">

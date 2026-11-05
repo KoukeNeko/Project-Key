@@ -72,7 +72,7 @@ enum class Setting {
   kCapsLockToggle,      // Caps Lock switches 中/英 and letters stay lowercase
   kEnglishToZhuyin,     // that Shift turns Zhuyin typed in 英 into a composition
   kZhuyinToEnglish,     // and English typed in 中 back into English
-  kAppearance,          // candidate window: 0 dark, 1 Mica
+  kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
 };
 
 class Settings {

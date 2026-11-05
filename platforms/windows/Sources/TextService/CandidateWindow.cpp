@@ -126,6 +126,9 @@ LRESULT CALLBACK CandidateWindow::WindowProc(HWND hwnd, UINT message, WPARAM wPa
       return 0;
     case WM_NCHITTEST:
       return HTTRANSPARENT;  // clicks go to the app, as on macOS
+    case WM_NCACTIVATE:
+      // Mica draws only on an active frame, and this window never takes focus: keep its frame active.
+      return DefWindowProcW(hwnd, message, TRUE, lParam);
     case WM_MOUSEACTIVATE:
       return MA_NOACTIVATE;
   }
@@ -140,23 +143,25 @@ bool CandidateWindow::ensureWindow() {
   hwnd_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, kCandidateClass, L"", WS_POPUP, 0, 0, 1, 1, nullptr,
                           nullptr, gInstance, this);
   if (!hwnd_) return false;
-  applyAppearance(false);
+  applyAppearance(0);
   return true;
 }
 
-// Windows 11 draws the rounded corners, the 1px border and the shadow; Mica
-// shows the system material behind the content.
-void CandidateWindow::applyAppearance(bool mica) {
-  mica_ = mica;
+// Windows 11 draws the rounded corners, the 1px border and the shadow; the
+// materials (Acrylic, Mica, Mica Alt) show behind transparent content.
+void CandidateWindow::applyAppearance(int appearance) {
+  static constexpr DWM_SYSTEMBACKDROP_TYPE kBackdrops[] = {DWMSBT_NONE, DWMSBT_TRANSIENTWINDOW, DWMSBT_MAINWINDOW, DWMSBT_TABBEDWINDOW};
+  appearance_ = appearance >= 0 && appearance < 4 ? appearance : 0;
+  bool material = this->material();
   DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
   DwmSetWindowAttribute(hwnd_, DWMWA_WINDOW_CORNER_PREFERENCE, &corners, sizeof(corners));
   BOOL dark = TRUE;
   DwmSetWindowAttribute(hwnd_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-  COLORREF border = mica ? DWMWA_COLOR_DEFAULT : RGB((kLine >> 16) & 0xff, (kLine >> 8) & 0xff, kLine & 0xff);
+  COLORREF border = material ? DWMWA_COLOR_DEFAULT : RGB((kLine >> 16) & 0xff, (kLine >> 8) & 0xff, kLine & 0xff);
   DwmSetWindowAttribute(hwnd_, DWMWA_BORDER_COLOR, &border, sizeof(border));
-  DWM_SYSTEMBACKDROP_TYPE backdrop = mica ? DWMSBT_TRANSIENTWINDOW : DWMSBT_NONE;
+  DWM_SYSTEMBACKDROP_TYPE backdrop = kBackdrops[appearance_];
   DwmSetWindowAttribute(hwnd_, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop, sizeof(backdrop));
-  MARGINS margins = mica ? MARGINS{-1, -1, -1, -1} : MARGINS{0, 0, 0, 0};
+  MARGINS margins = material ? MARGINS{-1, -1, -1, -1} : MARGINS{0, 0, 0, 0};
   DwmExtendFrameIntoClientArea(hwnd_, &margins);
   target_.Reset();
 }
@@ -232,8 +237,7 @@ D2D1_RECT_F CandidateWindow::shownSelectionRect() const {
 
 void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND owner, int appearance) {
   if (!ensureWindow()) return;
-  bool mica = appearance == 1;
-  if (mica != mica_) applyAppearance(mica);
+  if (appearance != appearance_) applyAppearance(appearance);
   bool wasVisible = visible();
   // Changes within one list move: the highlight slides and the window resizes.
   bool animate = wasVisible && content_ && !content_->rows.empty() && !content.rows.empty() && !ReducesMotion();
@@ -274,7 +278,10 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   } else {
     SetWindowPos(hwnd_, HWND_TOPMOST, frame.left, frame.top, width, height, SWP_NOACTIVATE);
   }
-  if (!wasVisible) ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+  if (!wasVisible) {
+    ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+    if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
+  }
   NotifyWinEvent(wasVisible ? EVENT_OBJECT_IME_CHANGE : EVENT_OBJECT_IME_SHOW, hwnd_, OBJID_CLIENT, CHILDID_SELF);
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
@@ -326,16 +333,16 @@ void CandidateWindow::paint() {
     target_->Resize(pixels);
   }
   target_->SetDpi(96 * scale_, 96 * scale_);
-  target_->SetTextAntialiasMode(mica_ ? D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE : D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+  target_->SetTextAntialiasMode(material() ? D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE : D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
   float width = client.right / scale_, height = client.bottom / scale_;
 
   target_->BeginDraw();
-  target_->Clear(mica_ ? D2D1::ColorF(0, 0, 0, 0) : Color(kBackground));
+  target_->Clear(material() ? D2D1::ColorF(0, 0, 0, 0) : Color(kBackground));
   bool both = content_->showsProof && !content_->rows.empty();
   // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
   float proofTop = proofBelow_ ? height - proofHeight() : 0;
   if (both) {
-    auto line = Brush(target_.Get(), Color(kLine, mica_ ? 0.6f : 1));
+    auto line = Brush(target_.Get(), Color(kLine, material() ? 0.6f : 1));
     float y = proofBelow_ ? proofTop - 1 : proofHeight();
     target_->FillRectangle(D2D1::RectF(0, y, width, y + 1), line.Get());
   }
