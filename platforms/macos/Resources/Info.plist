@@ -71,6 +71,8 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>TICapsLockLanguageSwitchCapable</key>
+	<true/>
 	<key>TISIconIsTemplate</key>
 	<true/>
 	<key>TISInputSourceID</key>
