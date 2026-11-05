@@ -90,6 +90,28 @@ int main(int argc, char** argv) {
   type(composer, "rup wu0 ");
   assert(composer.text() == "今天");
 
+  // Without tones, a whole syllable is its word at once, and the next syllable begins at a
+  // key that cannot extend it (ㄏ after ㄋㄧ); keys in order still build one (ㄍㄨㄛ).
+  composer.clear();
+  type(composer, "sucl");
+  assert(composer.text() == "你好" && composer.readingCount() == 2 && composer.pendingReading().empty());
+  composer.clear();
+  type(composer, "eji");
+  assert(composer.text() == "國" && composer.readingCount() == 1);
+  // The open syllable still takes a tone: Space makes it ㄏㄠ, tone 1.
+  composer.clear();
+  type(composer, "sucl ");
+  assert(composer.segments().back().reading.ends_with("ㄏㄠ"));
+  // A tone the dictionary lacks leaves the syllable as it was: ㄋㄧ has no first tone.
+  composer.clear();
+  type(composer, "su");
+  assert(composer.completeWithFirstTone() == Composer::KeyResult::kInvalid);
+  assert(composer.text() == "你" && composer.hasPendingReading());
+  // Backspace edits the open syllable; the lone symbol ㄏ is no syllable, so it waits as Zhuyin.
+  composer.clear();
+  type(composer, "sucl");
+  assert(composer.backspace() && composer.text() == "你" && composer.pendingReading() == "ㄏ");
+
   // Context: alone, ㄌㄧㄝˋ ㄕˊ walks to the phrase 獵食; a bigram model that has
   // seen 第一 列 時 picks the two single characters after 第一.
   composer.clear();

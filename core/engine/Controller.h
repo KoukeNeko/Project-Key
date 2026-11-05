@@ -137,6 +137,8 @@ class Controller {
   void reset();
 
   bool isComposing() const { return !composer_->isEmpty(); }
+  // A syllable is still being typed: Space gives it tone 1.
+  bool isTypingSyllable() const { return composer_->hasPendingReading(); }
   bool englishMode() const { return env_.englishMode; }
   // The candidate window's last content, if shown; for tests.
   const std::optional<PanelContent>& panel() const { return panel_; }

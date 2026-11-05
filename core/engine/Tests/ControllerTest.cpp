@@ -150,13 +150,28 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(Contains(client.committed, "的程式重") && client.marked.empty());
 
-  // Enter types unfinished Zhuyin symbols as they are, alone (ㄋㄧ) or after text (我ㄏ).
-  Type(controller, "su");
+  // Enter types unfinished Zhuyin symbols as they are, alone (ㄋ) or after text (我ㄏ);
+  // whole syllables typed without tones go in as their words.
+  Type(controller, "s");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
-  assert(HasSuffix(client.committed, "ㄋㄧ") && client.marked.empty());
+  assert(HasSuffix(client.committed, "ㄋ") && client.marked.empty());
   Type(controller, "ji3c");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(HasSuffix(client.committed, "我ㄏ") && client.marked.empty());
+  Type(controller, "sucl");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
+  assert(HasSuffix(client.committed, "你好") && client.marked.empty());
+
+  // Down offers candidates while a syllable without a tone is still open; its Zhuyin has no
+  // tone mark. Back from the candidates, the syllable is still open: ㄠ makes it ㄋㄧㄠ.
+  Type(controller, "su");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const std::vector<std::string>& open = controller.candidates();
+  assert(std::find(open.begin(), open.end(), "ㄋㄧ") != open.end() && std::find(open.begin(), open.end(), "你") != open.end());
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
+  Type(controller, "l");
+  assert(Utf16Length(client.marked) == 1 && client.panel.pendingReading.empty());
+  EscapeAll(controller, client);
   size_t before = client.committed.size();
 
   // Typed twice, the sentence has two doubtful 城市 (choices not remembered, so
@@ -224,16 +239,16 @@ int main(int argc, char** argv) {
   settings.set(Setting::kProofPreview, 0);  // always show the proof row
   assert(controller.handleKey(Special(ProjectKey::Key::kLeft)));
   assert(client.panel.caret == 1);
-  Type(controller, "ji");
-  assert(client.panel.caret == 1 && Utf16Length(client.panel.pendingReading) == 2);
-  Type(controller, "3");
+  Type(controller, "c");
+  assert(client.panel.caret == 1 && Utf16Length(client.panel.pendingReading) == 1);
+  Type(controller, "l3");
   assert(client.panel.caret == 2);
-  assert(client.marked == "今我天");
+  assert(client.marked == "今好天");
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(client.marked == "今我");
+  assert(client.marked == "今好");
   assert(controller.handleKey(Special(ProjectKey::Key::kHome)));
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(client.marked == "我");
+  assert(client.marked == "好");
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
   settings.remove(Setting::kProofPreview);
 
@@ -369,7 +384,7 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && !client.marked.empty());
   EscapeAll(controller, client);
   settings.remove(Setting::kZhuyinToEnglish);
-  // Real Zhuyin is left alone, even when it spells something: "su " is 妮 as well as "su".
+  // Real Zhuyin is left alone, even when it spells something: "su " is ㄋㄧ as well as "su".
   Type(controller, "su ");
   assert(!client.panelVisible || client.panel.keyHint.empty());
   EscapeAll(controller, client);
@@ -379,7 +394,7 @@ int main(int argc, char** argv) {
   for (std::string key : {"c", "l", "3"}) controller.handleKey(Press(key));  // passed through, but the app typed elsewhere
   assert(!controller.handleKey(Special(ProjectKey::Key::kTab)));
   assert(client.marked.empty() && controller.englishMode());
-  // After plain words that only spell first-tone syllables ("su " is 妮), Tab is a Tab too.
+  // After plain words that only spell syllables without a tone key ("su "), Tab is a Tab too.
   for (std::string key : {"s", "u", " "}) controller.handleKey(key == " " ? Special(ProjectKey::Key::kSpace) : Press(key)), client.committed += key;
   assert(!controller.handleKey(Special(ProjectKey::Key::kTab)));
   assert(client.marked.empty() && controller.englishMode());
