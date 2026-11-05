@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Builds the input method and runs the engine and IMK controller tests.
+  macos:
+    runs-on: macos-26  # NSGlassEffectView needs the macOS 26 SDK
+    steps:
+      - uses: actions/checkout@v4
+      - run: platforms/macos/build.sh
+
+  # Builds the app and keyboard for the iOS Simulator.
+  ios:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: platforms/ios/build.sh
+
+  # Builds the text service, server and settings app, and runs the engine and protocol tests.
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: platforms/windows/build.ps1
+        shell: pwsh
