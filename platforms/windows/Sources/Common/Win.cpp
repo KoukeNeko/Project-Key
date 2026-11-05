@@ -31,6 +31,16 @@ std::wstring ModuleDirectory(HMODULE module) {
   return dir.substr(0, dir.find_last_of(L'\\') + 1);
 }
 
+std::wstring ProcessImage(DWORD processId) {
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+  if (!process) return {};
+  wchar_t path[MAX_PATH * 2];
+  DWORD size = static_cast<DWORD>(std::size(path));
+  std::wstring result = QueryFullProcessImageNameW(process, 0, path, &size) ? std::wstring(path, size) : std::wstring();
+  CloseHandle(process);
+  return result;
+}
+
 bool LaunchSettings(const std::wstring& directory) {
   std::wstring path = directory + kSettingsExe;
   std::wstring command = L"\"" + path + L"\"";

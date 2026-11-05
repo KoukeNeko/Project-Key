@@ -35,6 +35,14 @@ inline std::wstring PipeName() {
 // The folder a module (or the executable, for nullptr) was loaded from, with a trailing backslash.
 std::wstring ModuleDirectory(HMODULE module);
 
+// The full path of a running process's executable; empty when it cannot be read.
+std::wstring ProcessImage(DWORD processId);
+
+// Whether two paths name the same file, ignoring case as Windows does.
+inline bool SamePath(const std::wstring& a, const std::wstring& b) {
+  return CompareStringOrdinal(a.c_str(), static_cast<int>(a.size()), b.c_str(), static_cast<int>(b.size()), TRUE) == CSTR_EQUAL;
+}
+
 // Where settings live: HKEY_CURRENT_USER\Software\ProjectKey.
 constexpr const wchar_t* kSettingsKey = L"Software\\ProjectKey";
 
