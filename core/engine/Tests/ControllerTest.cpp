@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
   }
   MemorySettings settings;
   Environment env;
-  env.lm = std::make_shared<McBopomofo::McBopomofoLM>();
+  env.lm = std::make_shared<Lexicon>();
   env.lm->loadLanguageModel(argv[1]);
   assert(env.lm->isDataModelLoaded());
   env.userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
@@ -150,14 +150,21 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(Contains(client.committed, "的程式重") && client.marked.empty());
 
-  // Enter types unfinished Zhuyin symbols as they are, alone (ㄋ) or after text (我ㄏ);
-  // whole syllables typed without tones go in as their words.
-  Type(controller, "s");
-  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
-  assert(HasSuffix(client.committed, "ㄋ") && client.marked.empty());
+  // Enter commits what is shown: a lone symbol (ㄏ after 我) as the word it begins, and
+  // whole syllables typed without tones as their words.
+  size_t sent = client.committed.size();
   Type(controller, "ji3c");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
-  assert(HasSuffix(client.committed, "我ㄏ") && client.marked.empty());
+  assert(client.committed.substr(sent).rfind("我", 0) == 0 && Utf16Length(client.committed.substr(sent)) == 2);
+  assert(client.marked.empty());
+  // The lone symbol itself is offered by the first row (沒救ㄌ); picking it commits it.
+  Type(controller, "x");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const std::vector<std::string>& lone = controller.candidates();
+  auto symbol = std::find(lone.begin(), lone.end(), "ㄌ");
+  assert(symbol != lone.end() && symbol - lone.begin() <= static_cast<long>(client.panel.rows[0].size()));
+  controller.choose(static_cast<int>(symbol - lone.begin()));
+  assert(HasSuffix(client.committed, "ㄌ") && client.marked.empty());
   Type(controller, "sucl");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(HasSuffix(client.committed, "你好") && client.marked.empty());
@@ -240,7 +247,7 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kLeft)));
   assert(client.panel.caret == 1);
   Type(controller, "c");
-  assert(client.panel.caret == 1 && Utf16Length(client.panel.pendingReading) == 1);
+  assert(client.panel.caret == 2 && client.panel.pendingReading.empty());
   Type(controller, "l3");
   assert(client.panel.caret == 2);
   assert(client.marked == "今好天");
@@ -417,7 +424,7 @@ int main(int argc, char** argv) {
   // Back in 中 with the lock on (after Shift switched), letters are still Zhuyin keys.
   controller.handleCapsLock();
   TapShift(controller);
-  assert(controller.handleKey(Caps("R")) && client.marked == "ㄐ");
+  assert(controller.handleKey(Caps("R")) && controller.isTypingSyllable());
   EscapeAll(controller, client);
   controller.handleCapsLock();
   TapShift(controller);  // leave it in 中

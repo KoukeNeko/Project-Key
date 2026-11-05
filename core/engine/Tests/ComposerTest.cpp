@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "usage: %s <data.txt>\n", argv[0]);
     return 2;
   }
-  auto lm = std::make_shared<McBopomofo::McBopomofoLM>();
+  auto lm = std::make_shared<ProjectKey::Lexicon>();
   lm->loadLanguageModel(argv[1]);
   assert(lm->isDataModelLoaded());
   Composer composer(lm);
@@ -70,14 +70,16 @@ int main(int argc, char** argv) {
   assert(composer.text().find("的程式") != std::string::npos);
   assert(!find(composer, "ㄔㄥˊ-ㄕˋ")->doubtful);  // a user choice is never doubtful
 
-  // A pending reading is not part of the text until its tone completes it.
-  composer.typeReadingKey('r');
-  assert(composer.hasPendingReading() && composer.pendingReading() == "ㄐ");
-  assert(composer.backspace() && !composer.hasPendingReading());
+  // A lone symbol is in the text at once as a word it begins; Backspace takes it back out.
   std::string full = composer.text();
+  composer.typeReadingKey('r');
+  assert(composer.hasPendingReading() && composer.pendingReading().empty() && composer.text() != full);
+  assert(composer.backspace() && !composer.hasPendingReading() && composer.text() == full);
   assert(composer.backspace() && composer.text() == full.substr(0, full.size() - std::string("組").size()));
 
   assert(composer.insertPunctuation('<') && composer.text().ends_with("，"));
+  // The punctuation reading _punctuation_* is no syllable typed without a tone.
+  assert(composer.insertPunctuation('*') && composer.text().ends_with("＊"));
 
   // An impossible syllable is rejected without disturbing the composition.
   std::string before = composer.text();
@@ -107,10 +109,21 @@ int main(int argc, char** argv) {
   type(composer, "su");
   assert(composer.completeWithFirstTone() == Composer::KeyResult::kInvalid);
   assert(composer.text() == "你" && composer.hasPendingReading());
-  // Backspace edits the open syllable; the lone symbol ㄏ is no syllable, so it waits as Zhuyin.
+  // Backspace edits the open syllable, down to the lone symbol ㄏ.
   composer.clear();
   type(composer, "sucl");
-  assert(composer.backspace() && composer.text() == "你" && composer.pendingReading() == "ㄏ");
+  assert(composer.backspace() && composer.readingCount() == 2 && composer.pendingReading().empty());
+  assert(composer.backspace() && composer.text() == "你" && composer.readingCount() == 1);
+
+  // First symbols alone spell a phrase (ㄨㄇ for 我們), also after a whole syllable (ㄐㄧㄣ ㄊ).
+  composer.clear();
+  type(composer, "ja");
+  assert(composer.text() == "我們" && composer.readingCount() == 2);
+  composer.clear();
+  type(composer, "rup w");
+  assert(composer.text() == "今天");
+  // Keys typed in English are Zhuyin only when they spell a syllable, which a lone letter does not.
+  assert(!composer.isSyllableKeys("x") && composer.isSyllableKeys("su"));
 
   // Context: alone, ㄌㄧㄝˋ ㄕˊ walks to the phrase 獵食; a bigram model that has
   // seen 第一 列 時 picks the two single characters after 第一.
@@ -144,14 +157,11 @@ int main(int argc, char** argv) {
   Composer above(lm, slipModel);
   type(above, "5k4ek7ul31j4hji4");
   assert(above.text() == "這個也不錯");
-  // A slip into a syllable the dictionary lacks (ㄍㄛ˙, ㄛ right above ㄜ) is
-  // kept and read as the syllable one key off; without adjacent keys it is dropped.
+  // A key that makes no syllable with a lone symbol starts the next syllable, so first
+  // symbols spell 可以 (ㄎㄧ), and a slip such as ㄍㄛ˙ for ㄍㄜ˙ reads as ㄍ and ㄛ˙.
   Composer unknown(lm, slipModel);
-  type(unknown, "5k4ei7");
-  assert(unknown.text() == "這個");
-  Composer strict(lm, slipModel, nullptr, 0.3, 0.5, -INFINITY);
-  type(strict, "5k4ei");
-  assert(strict.typeReadingKey('7') == Composer::KeyResult::kInvalid && strict.text() == "這");
+  type(unknown, "du");
+  assert(unknown.text() == "可以" && unknown.readingCount() == 2);
   std::remove(slipPath.c_str());
 
   // The user model: after choosing 列 following 第一 once, the next walk keeps it.

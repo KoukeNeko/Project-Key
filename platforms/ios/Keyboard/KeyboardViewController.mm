@@ -43,7 +43,7 @@ class DefaultsSettings : public ProjectKey::Settings {
 ProjectKey::Environment &SharedEnvironment() {
   static ProjectKey::Environment *environment = [] {
     auto *env = new ProjectKey::Environment();
-    env->lm = std::make_shared<McBopomofo::McBopomofoLM>();
+    env->lm = std::make_shared<ProjectKey::Lexicon>();
     NSString *data = [[NSBundle bundleForClass:PKKeyboardViewController.class] pathForResource:@"data" ofType:@"txt"];
     env->lm->loadLanguageModel(data.fileSystemRepresentation);
     if (!env->lm->isDataModelLoaded()) NSLog(@"Project Key: cannot load %@", data);

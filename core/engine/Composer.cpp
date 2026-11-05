@@ -36,24 +36,44 @@ std::string UserKey(const std::string& previousReading, const std::string& previ
 }
 constexpr char kSeparator = '-';  // ReadingGrid's default
 
-// The dictionary, reading a syllable that ends in Composer::kAnyTone as each tone the
-// dictionary has for it.
+// The dictionary, reading a syllable that ends in Composer::kAnyTone as any of its tones,
+// and a lone symbol that ends in it as any syllable it begins.
 class TonelessModel : public LanguageModel {
  public:
-  explicit TonelessModel(std::shared_ptr<McBopomofo::McBopomofoLM> lm) : lm_(std::move(lm)) {}
+  explicit TonelessModel(std::shared_ptr<Lexicon> lm) : lm_(std::move(lm)) {}
 
   std::vector<Unigram> getUnigrams(const std::string& reading) override {
-    if (reading.find(Composer::kAnyTone) == std::string::npos) return lm_->getUnigrams(reading);
+    size_t marker = reading.find(Composer::kAnyTone);
+    // Punctuation readings such as _punctuation_* are not syllables.
+    if (marker == std::string::npos || reading[0] == '_') return lm_->getUnigrams(reading);
     auto cached = cache_.find(reading);
     if (cached != cache_.end()) return cached->second;
+    std::vector<Typed> typed;
+    for (size_t start = 0;;) {
+      size_t end = reading.find(kSeparator, start);
+      typed.push_back(Typed::Of(reading.substr(start, end - start)));
+      if (end == std::string::npos) break;
+      start = end + 1;
+    }
     std::vector<Unigram> unigrams;
-    for (const std::string& toned : readingsOf(reading)) {
+    std::unordered_map<std::string, size_t> indexOf;  // by value
+    std::string_view previous;
+    // Every match starts with what was typed before the first kAnyTone; a reading's rows are adjacent.
+    for (std::string_view row : lm_->rowsStartingWith(reading.substr(0, marker))) {
+      std::string_view key = row.substr(0, row.find(' '));
+      if (key == previous) continue;
+      previous = key;
+      if (!Matches(typed, key)) continue;
+      std::string toned(key);
       for (Unigram& unigram : lm_->getUnigrams(toned)) {
-        auto same = std::find_if(unigrams.begin(), unigrams.end(), [&](const Unigram& u) { return u.value() == unigram.value(); });
-        if (same == unigrams.end()) {
+        // The dictionary also lists each lone symbol as itself (ㄉ for ㄉ), which is no syllable;
+        // the candidates offer the Zhuyin anyway.
+        if (unigram.value() == toned) continue;
+        auto [at, added] = indexOf.emplace(unigram.value(), unigrams.size());
+        if (added) {
           unigrams.push_back(std::move(unigram));
-        } else if (unigram.score() > same->score()) {
-          *same = std::move(unigram);
+        } else if (unigram.score() > unigrams[at->second].score()) {
+          unigrams[at->second] = std::move(unigram);
         }
       }
     }
@@ -69,53 +89,43 @@ class TonelessModel : public LanguageModel {
 
  private:
   static constexpr size_t kCacheSize = 4096;
-  // shortcut: a span with more tone combinations than this is not looked up, so a phrase of
-  // more than about four syllables typed without tones is found in parts; raise it if lookups
-  // get cheaper (a prefix search).
-  static constexpr size_t kMaxReadings = 256;
 
-  // The toned readings a reading stands for; none when there are too many.
-  std::vector<std::string> readingsOf(const std::string& reading) {
-    std::vector<std::string> readings;
-    for (size_t start = 0;;) {
-      size_t end = reading.find(kSeparator, start);
-      std::string syllable = reading.substr(start, end - start);
-      std::vector<std::string> toned = syllable.back() == Composer::kAnyTone ? tonesOf(syllable) : std::vector{syllable};
-      if (readings.empty()) {
-        readings = std::move(toned);
-      } else {
-        if (readings.size() * toned.size() > kMaxReadings) return {};
-        std::vector<std::string> longer;
-        for (const std::string& before : readings) {
-          for (const std::string& next : toned) longer.push_back(before + kSeparator + next);
-        }
-        readings = std::move(longer);
-      }
-      if (readings.empty() || end == std::string::npos) return readings;
+  // A grid reading's syllable: exact, without a tone, or a lone symbol without a tone.
+  struct Typed {
+    std::string symbols;
+    bool anyTone = false, anySyllable = false;
+
+    static Typed Of(const std::string& syllable) {
+      if (syllable.empty() || syllable.back() != Composer::kAnyTone) return {syllable};
+      std::string symbols = syllable.substr(0, syllable.size() - 1);
+      BopomofoSyllable parsed = BopomofoSyllable::FromComposedString(symbols);
+      int parts = !!parsed.consonantComponent() + !!parsed.middleVowelComponent() + !!parsed.vowelComponent();
+      return {symbols, true, parts == 1};
+    }
+
+    bool matches(std::string_view syllable) const {
+      if (!anyTone) return syllable == symbols;
+      if (syllable.substr(0, symbols.size()) != symbols) return false;
+      std::string_view rest = syllable.substr(symbols.size());
+      return anySyllable || rest.empty() || rest == "ˊ" || rest == "ˇ" || rest == "ˋ" || rest == "˙";
+    }
+  };
+
+  // Whether the dictionary reading `key` has the typed syllables, one for one.
+  static bool Matches(const std::vector<Typed>& typed, std::string_view key) {
+    size_t start = 0;
+    for (size_t i = 0; i < typed.size(); i++) {
+      size_t end = key.find(kSeparator, start);
+      bool last = i + 1 == typed.size();
+      if ((end == std::string_view::npos) != last) return false;
+      if (!typed[i].matches(key.substr(start, last ? std::string_view::npos : end - start))) return false;
       start = end + 1;
     }
+    return true;
   }
 
-  const std::vector<std::string>& tonesOf(const std::string& syllable) {
-    auto cached = tones_.find(syllable);
-    if (cached != tones_.end()) return cached->second;
-    BopomofoSyllable bare = BopomofoSyllable::FromComposedString(syllable.substr(0, syllable.size() - 1));
-    std::vector<std::string> toned;
-    for (auto tone : {BopomofoSyllable::Tone1, BopomofoSyllable::Tone2, BopomofoSyllable::Tone3, BopomofoSyllable::Tone4,
-                      BopomofoSyllable::Tone5}) {
-      std::string reading = (bare + BopomofoSyllable(tone)).composedString();
-      // The dictionary also lists each lone symbol as itself (ㄉ for ㄉ), which is no syllable.
-      auto unigrams = lm_->getUnigrams(reading);
-      if (std::any_of(unigrams.begin(), unigrams.end(), [&](const Unigram& u) { return u.value() != reading; })) {
-        toned.push_back(reading);
-      }
-    }
-    return tones_.emplace(syllable, std::move(toned)).first->second;
-  }
-
-  std::shared_ptr<McBopomofo::McBopomofoLM> lm_;
+  std::shared_ptr<Lexicon> lm_;
   std::unordered_map<std::string, std::vector<Unigram>> cache_;
-  std::unordered_map<std::string, std::vector<std::string>> tones_;
 };
 
 // The dictionary, plus for each syllable the readings typed one key off: a key
@@ -200,7 +210,21 @@ std::shared_ptr<LanguageModel> GridModel(std::shared_ptr<LanguageModel> lm, doub
 
 }  // namespace
 
-Composer::Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr<const Bigram> bigram,
+void Lexicon::loadLanguageModel(const char* path) {
+  McBopomofoLM::loadLanguageModel(path);
+  if (!path) return;
+  rows_.reset();
+  file_.close();
+  if (file_.open(path)) {
+    rows_ = std::make_unique<McBopomofo::ParselessPhraseDB>(file_.data(), file_.length(), /*validate_pragma=*/true);
+  }
+}
+
+std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefix) const {
+  return rows_ ? rows_->findRows(prefix) : std::vector<std::string_view>{};
+}
+
+Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, double adjacentKeyScore)
     : lm_(lm),
@@ -235,7 +259,7 @@ Composer::KeyResult Composer::completeWithFirstTone() {
 }
 
 // `untoned` is the reading before its tone: when the dictionary lacks that tone, a whole
-// syllable goes back as it was, still shown as its word; unfinished symbols are dropped.
+// syllable or a lone symbol goes back as it was, still shown as its word; anything else is dropped.
 Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned) {
   std::string syllable = reading_.composedString();
   reading_.clear();
@@ -315,6 +339,7 @@ bool Composer::isSyllableKeys(const std::string& keys) const {
   BopomofoSyllable syllable = layout->syllableFromKeySequence(typed);
   bool hasTone = syllable.hasToneMarker(), space = keys.back() == ' ';
   if (hasTone && space) return false;  // a tone key ends it, a space for the first tone, or neither for any tone
+  if (!hasTone && !space && typed.size() == 1) return false;  // a lone symbol only stands for a syllable
   std::string reading = syllable.composedString() + (hasTone || space ? "" : std::string(1, kAnyTone));
   return layout->keySequenceFromSyllable(syllable) == typed && dictionary_->hasUnigrams(reading);
 }
@@ -396,18 +421,20 @@ void Composer::walk() {
     for (size_t length = 1; length <= spans[start].maxLength(); length++) {
       const ReadingGrid::NodePtr& node = spans[start].nodeOf(length);
       if (!node) continue;
-      // Words the typed reading itself has; the others came from an adjacent key.
+      // Words the typed reading itself has; the others came from an adjacent key, which only
+      // varies syllables typed with a tone (a reading with fewer kAnyTone than syllables).
+      const std::string& reading = node->reading();
+      bool slips = adjacentKeyScore_ != -INFINITY &&
+                   std::count(reading.begin(), reading.end(), kAnyTone) <= std::count(reading.begin(), reading.end(), kSeparator);
       std::vector<std::string> typed;
-      if (adjacentKeyScore_ != -INFINITY) {
-        for (const auto& unigram : dictionary_->getUnigrams(node->reading())) typed.push_back(unigram.value());
+      if (slips) {
+        for (const auto& unigram : dictionary_->getUnigrams(reading)) typed.push_back(unigram.value());
       }
       auto add = [&](std::string value, double unigramScore) {
         endingAt[start + length].push_back(static_cast<int>(choices.size()));
         uint32_t id = idOf(value);
         // The penalty moves from the dictionary score to the whole word, context included.
-        double penalty = adjacentKeyScore_ != -INFINITY && std::find(typed.begin(), typed.end(), value) == typed.end()
-                             ? adjacentKeyScore_
-                             : 0;
+        double penalty = slips && std::find(typed.begin(), typed.end(), value) == typed.end() ? adjacentKeyScore_ : 0;
         choices.push_back({start, length, node, std::move(value), id, unigramScore - penalty, penalty, {}});
       };
       if (node->isOverridden() || (!bigram_ && !userModel_)) {
@@ -417,7 +444,7 @@ void Composer::walk() {
         // Up to kWordsPerNode of the typed reading's words and as many from adjacent keys.
         size_t typedCount = 0, slipCount = 0;
         for (const auto& unigram : unigrams) {
-          bool isTyped = typed.empty() || std::find(typed.begin(), typed.end(), unigram.value()) != typed.end();
+          bool isTyped = !slips || typed.empty() || std::find(typed.begin(), typed.end(), unigram.value()) != typed.end();
           size_t& count = isTyped ? typedCount : slipCount;
           if (count < kWordsPerNode) {
             count++;
