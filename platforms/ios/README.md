@@ -16,6 +16,17 @@ platforms/ios/build.sh   # 下載 McBopomofo、產生詞庫、產生 Xcode 專�
 xcrun simctl install booted platforms/ios/.build/derived/Build/Products/Release-iphonesimulator/ProjectKey.app
 ```
 
+安裝到實機：先跑過 `build.sh`，再以自己的開發團隊 ID 簽署建置（Xcode 會自動註冊 App ID 與描述檔），裝到用 USB 或同一網路連線的裝置：
+
+```bash
+cd platforms/ios
+xcodebuild -project ProjectKey.xcodeproj -scheme ProjectKey -destination 'id=<裝置 UDID>' -configuration Release \
+  -derivedDataPath .build/derived DEVELOPMENT_TEAM=<團隊 ID> -allowProvisioningUpdates -quiet build
+xcrun devicectl device install app --device <裝置 UDID> .build/derived/Build/Products/Release-iphoneos/ProjectKey.app
+```
+
+裝置 UDID 用 `xcrun devicectl list devices` 查。
+
 啟用：設定 > 一般 > 鍵盤 > 鍵盤 > 新增鍵盤 > Project Key。主程式只有啟用說明與試打欄位。
 
 ## 按鍵
