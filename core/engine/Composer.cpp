@@ -8,8 +8,10 @@
 
 namespace ProjectKey {
 
+using Formosa::Gramambular2::LanguageModel;
 using Formosa::Gramambular2::ReadingGrid;
 using Formosa::Mandarin::BopomofoKeyboardLayout;
+using Formosa::Mandarin::BopomofoSyllable;
 
 namespace {
 // Scores are log10 probabilities. When the walked phrase leads the next phrase
@@ -32,12 +34,96 @@ double Now() {
 std::string UserKey(const std::string& previousReading, const std::string& previousValue, const std::string& reading) {
   return (previousReading.empty() ? "" : "(" + previousReading + "," + previousValue + ")") + "|" + reading;
 }
+constexpr char kSeparator = '-';  // ReadingGrid's default
+
+// The dictionary, reading a syllable that ends in Composer::kAnyTone as each tone the
+// dictionary has for it.
+class TonelessModel : public LanguageModel {
+ public:
+  explicit TonelessModel(std::shared_ptr<McBopomofo::McBopomofoLM> lm) : lm_(std::move(lm)) {}
+
+  std::vector<Unigram> getUnigrams(const std::string& reading) override {
+    if (reading.find(Composer::kAnyTone) == std::string::npos) return lm_->getUnigrams(reading);
+    auto cached = cache_.find(reading);
+    if (cached != cache_.end()) return cached->second;
+    std::vector<Unigram> unigrams;
+    for (const std::string& toned : readingsOf(reading)) {
+      for (Unigram& unigram : lm_->getUnigrams(toned)) {
+        auto same = std::find_if(unigrams.begin(), unigrams.end(), [&](const Unigram& u) { return u.value() == unigram.value(); });
+        if (same == unigrams.end()) {
+          unigrams.push_back(std::move(unigram));
+        } else if (unigram.score() > same->score()) {
+          *same = std::move(unigram);
+        }
+      }
+    }
+    std::stable_sort(unigrams.begin(), unigrams.end(), [](const Unigram& a, const Unigram& b) { return a.score() > b.score(); });
+    if (cache_.size() >= kCacheSize) cache_.clear();
+    return cache_.emplace(reading, std::move(unigrams)).first->second;
+  }
+
+  bool hasUnigrams(const std::string& reading) override {
+    if (reading.find(Composer::kAnyTone) == std::string::npos) return lm_->hasUnigrams(reading);
+    return !getUnigrams(reading).empty();
+  }
+
+ private:
+  static constexpr size_t kCacheSize = 4096;
+  // shortcut: a span with more tone combinations than this is not looked up, so a phrase of
+  // more than about four syllables typed without tones is found in parts; raise it if lookups
+  // get cheaper (a prefix search).
+  static constexpr size_t kMaxReadings = 256;
+
+  // The toned readings a reading stands for; none when there are too many.
+  std::vector<std::string> readingsOf(const std::string& reading) {
+    std::vector<std::string> readings;
+    for (size_t start = 0;;) {
+      size_t end = reading.find(kSeparator, start);
+      std::string syllable = reading.substr(start, end - start);
+      std::vector<std::string> toned = syllable.back() == Composer::kAnyTone ? tonesOf(syllable) : std::vector{syllable};
+      if (readings.empty()) {
+        readings = std::move(toned);
+      } else {
+        if (readings.size() * toned.size() > kMaxReadings) return {};
+        std::vector<std::string> longer;
+        for (const std::string& before : readings) {
+          for (const std::string& next : toned) longer.push_back(before + kSeparator + next);
+        }
+        readings = std::move(longer);
+      }
+      if (readings.empty() || end == std::string::npos) return readings;
+      start = end + 1;
+    }
+  }
+
+  const std::vector<std::string>& tonesOf(const std::string& syllable) {
+    auto cached = tones_.find(syllable);
+    if (cached != tones_.end()) return cached->second;
+    BopomofoSyllable bare = BopomofoSyllable::FromComposedString(syllable.substr(0, syllable.size() - 1));
+    std::vector<std::string> toned;
+    for (auto tone : {BopomofoSyllable::Tone1, BopomofoSyllable::Tone2, BopomofoSyllable::Tone3, BopomofoSyllable::Tone4,
+                      BopomofoSyllable::Tone5}) {
+      std::string reading = (bare + BopomofoSyllable(tone)).composedString();
+      // The dictionary also lists each lone symbol as itself (ㄉ for ㄉ), which is no syllable.
+      auto unigrams = lm_->getUnigrams(reading);
+      if (std::any_of(unigrams.begin(), unigrams.end(), [&](const Unigram& u) { return u.value() != reading; })) {
+        toned.push_back(reading);
+      }
+    }
+    return tones_.emplace(syllable, std::move(toned)).first->second;
+  }
+
+  std::shared_ptr<McBopomofo::McBopomofoLM> lm_;
+  std::unordered_map<std::string, std::vector<Unigram>> cache_;
+  std::unordered_map<std::string, std::vector<std::string>> tones_;
+};
+
 // The dictionary, plus for each syllable the readings typed one key off: a key
 // swapped for its left or right neighbor on the Daqian keyboard. Those words
 // score `penalty` lower, so context has to pick them.
-class AdjacentKeyModel : public Formosa::Gramambular2::LanguageModel {
+class AdjacentKeyModel : public LanguageModel {
  public:
-  AdjacentKeyModel(std::shared_ptr<McBopomofo::McBopomofoLM> lm, double penalty) : lm_(std::move(lm)), penalty_(penalty) {}
+  AdjacentKeyModel(std::shared_ptr<LanguageModel> lm, double penalty) : lm_(std::move(lm)), penalty_(penalty) {}
 
   std::vector<Unigram> getUnigrams(const std::string& reading) override {
     std::vector<Unigram> unigrams = lm_->getUnigrams(reading);
@@ -50,6 +136,8 @@ class AdjacentKeyModel : public Formosa::Gramambular2::LanguageModel {
       start = end + 1;
     }
     for (size_t i = 0; i < syllables.size(); i++) {
+      // Without a tone a syllable already matches widely; slips on top would mostly add noise.
+      if (syllables[i].back() == Composer::kAnyTone) continue;
       for (const std::string& variant : variantsOf(syllables[i])) {
         std::vector<std::string> typed = syllables;
         typed[i] = variant;
@@ -70,8 +158,6 @@ class AdjacentKeyModel : public Formosa::Gramambular2::LanguageModel {
   bool hasUnigrams(const std::string& reading) override { return lm_->hasUnigrams(reading); }
 
  private:
-  static constexpr char kSeparator = '-';  // ReadingGrid's default
-
   const std::vector<std::string>& variantsOf(const std::string& syllable) {
     auto cached = variants_.find(syllable);
     if (cached != variants_.end()) return cached->second;
@@ -80,7 +166,6 @@ class AdjacentKeyModel : public Formosa::Gramambular2::LanguageModel {
     static const std::string kRows[] = {"1234567890-", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./"};
     constexpr int kRowCount = 4;
     const BopomofoKeyboardLayout* layout = BopomofoKeyboardLayout::StandardLayout();
-    using Formosa::Mandarin::BopomofoSyllable;
     std::string keys = layout->keySequenceFromSyllable(BopomofoSyllable::FromComposedString(syllable));
     std::vector<std::string> variants;
     for (size_t i = 0; i < keys.size(); i++) {
@@ -103,12 +188,12 @@ class AdjacentKeyModel : public Formosa::Gramambular2::LanguageModel {
     return variants_.emplace(syllable, std::move(variants)).first->second;
   }
 
-  std::shared_ptr<McBopomofo::McBopomofoLM> lm_;
+  std::shared_ptr<LanguageModel> lm_;
   double penalty_;
   std::unordered_map<std::string, std::vector<std::string>> variants_;
 };
 
-std::shared_ptr<Formosa::Gramambular2::LanguageModel> GridModel(std::shared_ptr<McBopomofo::McBopomofoLM> lm, double penalty) {
+std::shared_ptr<LanguageModel> GridModel(std::shared_ptr<LanguageModel> lm, double penalty) {
   if (penalty == -INFINITY) return lm;
   return std::make_shared<AdjacentKeyModel>(std::move(lm), penalty);
 }
@@ -119,41 +204,101 @@ Composer::Composer(std::shared_ptr<McBopomofo::McBopomofoLM> lm, std::shared_ptr
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, double adjacentKeyScore)
     : lm_(lm),
+      dictionary_(std::make_shared<TonelessModel>(lm)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
       contextWeight_(contextWeight),
       trigramWeight_(trigramWeight),
       userModel_(std::move(userModel)),
       // Without context nothing can tell a slip from what was typed.
       adjacentKeyScore_(bigram_ ? adjacentKeyScore : -INFINITY),
-      grid_(GridModel(lm, adjacentKeyScore_)),
+      grid_(GridModel(dictionary_, adjacentKeyScore_)),
       reading_(BopomofoKeyboardLayout::StandardLayout()) {}
 
 Composer::KeyResult Composer::typeReadingKey(char key) {
-  if (!reading_.combineKey(key)) return KeyResult::kInvalid;
-  if (reading_.hasToneMarker() && !reading_.hasToneMarkerOnly()) return insertPendingSyllable();
+  if (!reading_.isValidKey(key)) return KeyResult::kInvalid;
+  bool shown = readingShown_;
+  if (readingShown_ && startsSyllable(key)) endReading();
+  Formosa::Mandarin::BopomofoReadingBuffer untoned = reading_;
+  hideReading();
+  reading_.combineKey(key);
+  if (reading_.hasToneMarker() && !reading_.hasToneMarkerOnly()) return insertPendingSyllable(untoned);
+  showReading();
+  if (shown || readingShown_) walk();
   return KeyResult::kHandled;
 }
 
 Composer::KeyResult Composer::completeWithFirstTone() {
   if (reading_.isEmpty()) return KeyResult::kInvalid;
-  return insertPendingSyllable();
+  Formosa::Mandarin::BopomofoReadingBuffer untoned = reading_;
+  hideReading();
+  return insertPendingSyllable(untoned);
 }
 
-Composer::KeyResult Composer::insertPendingSyllable() {
+// `untoned` is the reading before its tone: when the dictionary lacks that tone, a whole
+// syllable goes back as it was, still shown as its word; unfinished symbols are dropped.
+Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned) {
   std::string syllable = reading_.composedString();
   reading_.clear();
   // The grid's model decides: with adjacent keys on, a syllable the dictionary lacks
   // still goes in when a slip of one key explains it.
-  if (!grid_.insertReading(syllable)) return KeyResult::kInvalid;
+  bool inserted = grid_.insertReading(syllable);
+  if (!inserted) {
+    reading_ = untoned;
+    showReading();
+    if (!readingShown_) reading_.clear();
+  }
   walk();
-  return KeyResult::kHandled;
+  return inserted ? KeyResult::kHandled : KeyResult::kInvalid;
+}
+
+// With a whole syllable open and no tone typed, whether `key` begins the next syllable:
+// it goes in the place of a symbol already there or before one (the order is
+// consonant, medial, vowel), or it makes a syllable the dictionary lacks.
+bool Composer::startsSyllable(char key) const {
+  BopomofoSyllable typed = BopomofoKeyboardLayout::StandardLayout()->syllableFromKeySequence(std::string(1, key));
+  if (typed.hasToneMarker()) return false;
+  auto lastPlace = [](const BopomofoSyllable& s) { return s.hasVowel() ? 3 : s.hasMiddleVowel() ? 2 : s.hasConsonant() ? 1 : 0; };
+  BopomofoSyllable open = reading_.syllable();
+  if (lastPlace(typed) <= lastPlace(open)) return true;
+  return !dictionary_->hasUnigrams((open + typed).composedString() + kAnyTone);
+}
+
+// Puts the open syllable in the grid, toneless, when the dictionary has it, so its word shows.
+void Composer::showReading() {
+  if (reading_.isEmpty() || reading_.hasToneMarker()) return;
+  std::string reading = reading_.composedString() + kAnyTone;
+  readingShown_ = dictionary_->hasUnigrams(reading) && grid_.insertReading(reading);
+}
+
+// Takes the open syllable out of the grid, to change it.
+void Composer::hideReading() {
+  if (readingShown_) grid_.deleteReadingBeforeCursor();
+  readingShown_ = false;
+}
+
+// Closes the open syllable; a shown one stays in the grid without a tone.
+void Composer::endReading() {
+  readingShown_ = false;
+  reading_.clear();
+}
+
+void Composer::setCursor(size_t cursor) {
+  endReading();
+  grid_.setCursor(std::min(cursor, grid_.length()));
+}
+
+void Composer::clearPendingReading() {
+  bool shown = readingShown_;
+  hideReading();
+  reading_.clear();
+  if (shown) walk();
 }
 
 bool Composer::insertPunctuation(char key) {
   for (const std::string& prefix : {"_punctuation_Standard_", "_punctuation_"}) {
     std::string reading = prefix + std::string(1, key);
     if (lm_->hasUnigrams(reading)) {
-      reading_.clear();
+      endReading();
       grid_.insertReading(reading);
       walk();
       return true;
@@ -163,20 +308,24 @@ bool Composer::insertPunctuation(char key) {
 }
 
 bool Composer::isSyllableKeys(const std::string& keys) const {
-  using Formosa::Mandarin::BopomofoSyllable;
   if (keys.empty()) return false;
   std::string typed = keys.back() == ' ' ? keys.substr(0, keys.size() - 1) : keys;
   if (typed.empty() || typed.find(' ') != std::string::npos) return false;
   const BopomofoKeyboardLayout* layout = BopomofoKeyboardLayout::StandardLayout();
   BopomofoSyllable syllable = layout->syllableFromKeySequence(typed);
-  bool hasTone = syllable.hasToneMarker();
-  if (hasTone == (keys.back() == ' ')) return false;  // a tone key ends it, or a space for the first tone
-  return layout->keySequenceFromSyllable(syllable) == typed && lm_->hasUnigrams(syllable.composedString());
+  bool hasTone = syllable.hasToneMarker(), space = keys.back() == ' ';
+  if (hasTone && space) return false;  // a tone key ends it, a space for the first tone, or neither for any tone
+  std::string reading = syllable.composedString() + (hasTone || space ? "" : std::string(1, kAnyTone));
+  return layout->keySequenceFromSyllable(syllable) == typed && dictionary_->hasUnigrams(reading);
 }
 
 bool Composer::backspace() {
   if (!reading_.isEmpty()) {
+    bool shown = readingShown_;
+    hideReading();
     reading_.backspace();
+    showReading();
+    if (shown || readingShown_) walk();
     return true;
   }
   if (grid_.length() == 0) return false;
@@ -192,7 +341,7 @@ bool Composer::deleteForward() {
 }
 
 void Composer::clear() {
-  reading_.clear();
+  endReading();
   grid_.clear();
   segments_.clear();
 }
@@ -250,7 +399,7 @@ void Composer::walk() {
       // Words the typed reading itself has; the others came from an adjacent key.
       std::vector<std::string> typed;
       if (adjacentKeyScore_ != -INFINITY) {
-        for (const auto& unigram : lm_->getUnigrams(node->reading())) typed.push_back(unigram.value());
+        for (const auto& unigram : dictionary_->getUnigrams(node->reading())) typed.push_back(unigram.value());
       }
       auto add = [&](std::string value, double unigramScore) {
         endingAt[start + length].push_back(static_cast<int>(choices.size()));
@@ -396,6 +545,7 @@ bool Composer::choose(const Segment& segment, const std::string& value) {
   for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(segment.start)) {
     if (candidate.value != value || !startsWithSegment(segment, candidate.reading)) continue;
     if (grid_.overrideCandidate(segment.start, candidate)) {
+      endReading();  // a word chosen ends the syllable being typed
       walk();
       if (userModel_) {
         std::string previousReading, previousValue;

@@ -414,8 +414,9 @@ UIColor *PressedColor(BOOL function) {
 }
 
 - (void)send:(const ProjectKey::KeyEvent &)event {
-  // The candidates are always open, so the keys act as when composing; Space alone pages them.
-  if (event.key != Key::kSpace) {
+  // The candidates are always open, so the keys act as when composing; Space alone pages them,
+  // unless a syllable is still being typed, which Space gives tone 1.
+  if (event.key != Key::kSpace || _controller->isTypingSyllable()) {
     for (int i = 0; i < 2 && [self choosing]; i++) _controller->handleKey(Press("", Key::kEscape));
   }
   if (!_controller->handleKey(event)) {

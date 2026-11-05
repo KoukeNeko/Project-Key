@@ -19,7 +19,7 @@ namespace ProjectKey {
 
 struct Segment {
   std::string text;
-  std::string reading;  // joined with the grid's separator
+  std::string reading;  // joined with the grid's separator; a syllable typed without a tone ends in kAnyTone
   size_t start = 0;     // in readings
   size_t length = 0;  // in readings
   bool doubtful = false;
@@ -42,18 +42,23 @@ class Composer {
                     double adjacentKeyScore = kAdjacentKeyScore);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -3;
+  // Ends a grid reading's syllable that was typed without a tone; it reads as any of its tones.
+  static constexpr char kAnyTone = '*';
 
   enum class KeyResult { kHandled, kInvalid };
 
   bool isEmpty() const { return grid_.length() == 0 && reading_.isEmpty(); }
+  // A syllable is open: a tone key or Space completes it.
   bool hasPendingReading() const { return !reading_.isEmpty(); }
   bool isReadingKey(char key) const { return reading_.isValidKey(key); }
   // Whether `keys` type exactly one dictionary syllable: each key sets its own
   // component (none replaces another, as in English words), ending with a tone
-  // key or, for the first tone, a space.
+  // key, a space for the first tone, or neither for any tone.
   bool isSyllableKeys(const std::string& keys) const;
 
-  // Adds a Daqian key; a tone key completes the syllable.
+  // Adds a Daqian key; a tone key completes the syllable. Without a tone, a whole
+  // syllable is in the text as its word right away, and it ends where a key starts
+  // the next one.
   KeyResult typeReadingKey(char key);
   // Completes the pending syllable with tone 1 (the space bar).
   KeyResult completeWithFirstTone();
@@ -67,12 +72,13 @@ class Composer {
   // Position between syllables, 0...readingCount(). New syllables go here.
   size_t cursor() const { return grid_.cursor(); }
   size_t readingCount() const { return grid_.length(); }
-  void setCursor(size_t cursor) { grid_.setCursor(std::min(cursor, grid_.length())); }
-  void clearPendingReading() { reading_.clear(); }
+  void setCursor(size_t cursor);
+  void clearPendingReading();
   void clear();
 
   const std::vector<Segment>& segments() const { return segments_; }
-  std::string pendingReading() const { return reading_.composedString(); }
+  // The open syllable's symbols while they are not in the text as a word.
+  std::string pendingReading() const { return readingShown_ ? "" : reading_.composedString(); }
   std::string text() const;
 
   // The segment starting at `start`, or, inside a segment, its part from
@@ -85,12 +91,18 @@ class Composer {
   bool choose(const Segment& segment, const std::string& value);
 
  private:
-  KeyResult insertPendingSyllable();
+  KeyResult insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned);
+  bool startsSyllable(char key) const;
+  void showReading();
+  void hideReading();
+  void endReading();
   bool startsWithSegment(const Segment& segment, const std::string& reading) const;
   void walk();
   double wordScore(uint32_t first, uint32_t second, uint32_t word, double unigramScore) const;
 
   std::shared_ptr<McBopomofo::McBopomofoLM> lm_;
+  // lm_, reading syllables that end in kAnyTone as any of their tones.
+  std::shared_ptr<Formosa::Gramambular2::LanguageModel> dictionary_;
   std::shared_ptr<const Bigram> bigram_;
   double contextWeight_;
   double trigramWeight_;
@@ -98,6 +110,7 @@ class Composer {
   double adjacentKeyScore_;
   Formosa::Gramambular2::ReadingGrid grid_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
+  bool readingShown_ = false;  // the open syllable is in the grid, toneless, right before the cursor
   std::vector<Segment> segments_;
 };
 

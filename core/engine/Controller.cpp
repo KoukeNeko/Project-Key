@@ -293,7 +293,7 @@ std::string Controller::zhuyinAtEnd(size_t* trailingSpaces) const {
   size_t spaces = 0;
   while (spaces < run.size() && run[run.size() - 1 - spaces] == ' ') spaces++;
   if (trailingSpaces) *trailingSpaces = spaces;
-  // Syllables end at a tone key, or at a space for the first tone; walk back
+  // Syllables end at a tone key, or at a space for the first tone (the last may have none); walk back
   // from the end while they are whole.
   std::string body = run.substr(0, run.size() - spaces);
   size_t start = body.size();
@@ -366,13 +366,13 @@ std::optional<std::string> Controller::englishTyped() const {
   }
   size_t first = keys.find_first_not_of(' '), last = keys.find_last_not_of(' ');
   if (first == std::string::npos || last - first + 1 < 2) return std::nullopt;
-  // "su " or "wu " is a first-tone syllable as well as a spelling the checker allows.
+  // "wu " (ㄊㄧ, first tone) or "su" (ㄋㄧ, no tone) is a syllable as well as a spelling the checker allows.
   bool syllables = true;
   for (size_t start = 0; start <= keys.size();) {
     size_t end = keys.find(' ', start);
     if (end == std::string::npos) end = keys.size();
     std::string word = keys.substr(start, end - start);
-    if (!word.empty() && !composer_->isSyllableKeys(word + " ")) syllables = false;
+    if (!word.empty() && !composer_->isSyllableKeys(word + " ") && !composer_->isSyllableKeys(word)) syllables = false;
     start = end + 1;
   }
   if (syllables) return std::nullopt;
@@ -428,7 +428,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
     case Key::kDown:
     case Key::kTab:
       if (empty) return false;
-      if (!composer_->hasPendingReading()) startChoosingAt(defaultSegment());
+      if (composer_->pendingReading().empty()) startChoosingAt(defaultSegment());
       return true;
     case Key::kReturn:
       if (empty) return false;
@@ -453,7 +453,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
     case Key::kEnd:
       if (empty) return false;
       // The cursor moves between whole syllables, so finish typing one first.
-      if (!composer_->hasPendingReading()) {
+      if (composer_->pendingReading().empty()) {
         size_t cursor = composer_->cursor();
         switch (event.key) {
           case Key::kLeft: cursor = cursor > 0 ? cursor - 1 : 0; break;
@@ -468,7 +468,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
       return true;
     case Key::kForwardDelete:
       if (empty) return false;
-      if (!composer_->hasPendingReading() && composer_->deleteForward()) refresh();
+      if (composer_->pendingReading().empty() && composer_->deleteForward()) refresh();
       return true;
     case Key::kUp:
     case Key::kPageUp:
@@ -653,7 +653,7 @@ void Controller::startChoosingAt(size_t start) {
   if (segment->reading.rfind("_", 0) != 0) {  // punctuation readings start with _
     std::string zhuyin;
     for (char c : segment->reading) {
-      if (c != '-') zhuyin += c;  // the grid's separator
+      if (c != '-' && c != Composer::kAnyTone) zhuyin += c;  // the grid's separator
     }
     if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
       int used = 0, firstRow = 0;

@@ -172,16 +172,16 @@ int main() {
     [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"ProofPreview"];  // always show the proof row
     assert([controller handleEvent:Key(@"", kVK_LeftArrow) client:client]);
     assert(PKCandidatePanel.shared.content.caret == 1);
-    Type(controller, client, @"ji");
-    assert(PKCandidatePanel.shared.content.caret == 1 && PKCandidatePanel.shared.content.pendingReading.length == 2);
-    Type(controller, client, @"3");
+    Type(controller, client, @"c");
+    assert(PKCandidatePanel.shared.content.caret == 1 && PKCandidatePanel.shared.content.pendingReading.length == 1);
+    Type(controller, client, @"l3");
     assert(PKCandidatePanel.shared.content.caret == 2);
-    assert([client.marked isEqualToString:@"今我天"]);
+    assert([client.marked isEqualToString:@"今好天"]);
     assert([controller handleEvent:Key(@"", kVK_ForwardDelete) client:client]);
-    assert([client.marked isEqualToString:@"今我"]);
+    assert([client.marked isEqualToString:@"今好"]);
     assert([controller handleEvent:Key(@"", kVK_Home) client:client]);
     assert([controller handleEvent:Key(@"", kVK_ForwardDelete) client:client]);
-    assert([client.marked isEqualToString:@"我"]);
+    assert([client.marked isEqualToString:@"好"]);
     assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
 
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
@@ -287,7 +287,7 @@ int main() {
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ZhuyinToEnglish"];
-    // Real Zhuyin is left alone, even when it spells something: "su " is 妮 as well as "su".
+    // Real Zhuyin is left alone, even when it spells something: "su " is ㄋㄧ as well as "su".
     Type(controller, client, @"su ");
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
