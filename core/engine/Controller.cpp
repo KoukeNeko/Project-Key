@@ -86,6 +86,7 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kChoosingProof:
       return 1;  // 有可疑字時
     case Setting::kAppearance:
+    case Setting::kCandidatePosition:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
       return 0;
@@ -107,6 +108,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kEnglishToZhuyin: return "EnglishToZhuyin";
     case Setting::kZhuyinToEnglish: return "ZhuyinToEnglish";
     case Setting::kAppearance: return "Appearance";
+    case Setting::kCandidatePosition: return "CandidatePosition";
   }
   return "";
 }
@@ -585,10 +587,18 @@ bool Controller::handleChoosing(const KeyEvent& event) {
 
 // MARK: Choosing
 
-// The segment (or the rest of the phrase) right after the cursor, or, with the cursor at the end, the
-// first doubtful segment so Space goes straight to the likely mistake.
+// Before the cursor (macOS): the word ending at or holding the syllable before the cursor, the
+// first word at the start. After it (Windows): the segment (or the rest of the phrase) right
+// after the cursor, or, with the cursor at the end, the first doubtful segment so Space goes
+// straight to the likely mistake.
 size_t Controller::defaultSegment() const {
   size_t cursor = composer_->cursor();
+  if (env_.settings->get(Setting::kCandidatePosition) == 1) {
+    for (const Segment& segment : composer_->segments()) {
+      if (cursor <= segment.start + segment.length) return segment.start;
+    }
+    return composer_->segments().back().start;
+  }
   if (cursor < composer_->readingCount()) {
     for (const Segment& segment : composer_->segments()) {
       if (cursor < segment.start + segment.length) return std::max(cursor, segment.start);

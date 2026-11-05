@@ -14,6 +14,12 @@
     </Grid>
     <StackPanel Padding="24,0,24,24" Spacing="4">
       <TextBlock Margin="0,0,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="選字" />
+      <tk:SettingsCard Header="選字位置">
+        <ComboBox x:Name="CandidatePosition" MinWidth="160">
+          <x:String>游標後（Windows）</x:String>
+          <x:String>游標前（macOS）</x:String>
+        </ComboBox>
+      </tk:SettingsCard>
       <tk:SettingsCard Header="鄰鍵修正">
         <ToggleSwitch x:Name="AdjacentKeys" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>

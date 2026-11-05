@@ -39,7 +39,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 |---|---|---|
 | 組字中 | 注音鍵、聲調鍵 3 4 6 7 | 輸入注音；聲調鍵結束音節 |
 | | Space | 結束一聲音節；沒有未完成的注音時，開啟候選 |
-| | ↓、Tab | 開啟候選：游標在句尾時從第一個可疑處開始，否則從游標後的字開始 |
+| | ↓、Tab | 開啟候選。選字位置為游標後（預設）：游標在句尾時從第一個可疑處開始，否則從游標後的字開始。選字位置為游標前：游標前的詞 |
 | | Enter | 送出整句 |
 | | ←、→、Home、End | 在字與字之間移動游標 |
 | | Backspace | 刪除一個注音符號或游標前的字 |
@@ -69,7 +69,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 設定
 
-設定視窗的內容與 macOS 相同：鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、英文轉注音、注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
+設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、英文轉注音、注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
 
 ## 測試
 

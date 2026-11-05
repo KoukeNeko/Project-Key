@@ -36,6 +36,7 @@ public sealed partial class MainWindow : Window {
     Bind(Appearance, "Appearance", 0);
     Bind(ProofPreview, "ProofPreview", 1);
     Bind(ChoosingProof, "ChoosingProof", 1);
+    Bind(CandidatePosition, "CandidatePosition", 0);
     // The Shift conversions only happen when a lone Shift switches.
     ShiftToggle.Toggled += (_, _) => UpdateShiftDependents();
     UpdateShiftDependents();

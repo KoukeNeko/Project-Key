@@ -72,6 +72,7 @@ enum class Setting {
   kEnglishToZhuyin,     // that Shift turns Zhuyin typed in 英 into a composition
   kZhuyinToEnglish,     // and English typed in 中 back into English
   kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
+  kCandidatePosition,   // candidates for the word: 0 after the cursor (Windows), 1 before it (macOS)
 };
 
 class Settings {

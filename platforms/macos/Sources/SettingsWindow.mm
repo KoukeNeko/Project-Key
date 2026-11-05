@@ -10,6 +10,7 @@ NSString *const PKShiftToggleKey = @"ShiftToggle";
 NSString *const PKCapsLockToggleKey = @"CapsLockToggle";
 NSString *const PKEnglishToZhuyinKey = @"EnglishToZhuyin";
 NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
+NSString *const PKCandidatePositionKey = @"CandidatePosition";
 
 @implementation PKSettingsWindow
 
@@ -23,6 +24,7 @@ NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
     PKZhuyinToEnglishKey : @YES,
     PKProofPreviewKey : @1,
     PKChoosingProofKey : @1,
+    PKCandidatePositionKey : @0,
   }];
 }
 

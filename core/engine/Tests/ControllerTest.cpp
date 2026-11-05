@@ -178,6 +178,16 @@ int main(int argc, char** argv) {
   assert(HasSuffix(client.marked, second) && Utf16Length(client.marked) == 2);
   EscapeAll(controller, client);
 
+  // Set to the word before the cursor (macOS), the same cursor offers the whole 今天.
+  settings.set(Setting::kCandidatePosition, 1);
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kHome)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kRight)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(Utf16Length(client.panel.rows[0][0]) == 2);
+  EscapeAll(controller, client);
+  settings.remove(Setting::kCandidatePosition);
+
   // Arrows move the cursor between syllables; typing and Forward Delete act there.
   Type(controller, "rup wu0 ");
   settings.set(Setting::kProofPreview, 0);  // always show the proof row
