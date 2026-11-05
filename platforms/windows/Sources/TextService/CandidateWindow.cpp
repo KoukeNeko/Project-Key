@@ -85,6 +85,33 @@ ComPtr<ID2D1SolidColorBrush> Brush(ID2D1RenderTarget* target, D2D1_COLOR_F color
   return brush;
 }
 
+int ClampAppearance(int appearance) {
+  return appearance >= 0 && appearance < 4 ? appearance : 0;
+}
+
+// Windows 11 draws the rounded corners, the 1px border and the shadow; the
+// materials (Acrylic, Mica, Mica Alt) show behind transparent content.
+void ApplyAppearance(HWND hwnd, int appearance) {
+  static constexpr DWM_SYSTEMBACKDROP_TYPE kBackdrops[] = {DWMSBT_NONE, DWMSBT_TRANSIENTWINDOW, DWMSBT_MAINWINDOW, DWMSBT_TABBEDWINDOW};
+  bool material = appearance != 0;
+  DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
+  DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corners, sizeof(corners));
+  BOOL dark = TRUE;
+  DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+  COLORREF border = material ? DWMWA_COLOR_DEFAULT : RGB((kLine >> 16) & 0xff, (kLine >> 8) & 0xff, kLine & 0xff);
+  DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border, sizeof(border));
+  DWM_SYSTEMBACKDROP_TYPE backdrop = kBackdrops[appearance];
+  DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop, sizeof(backdrop));
+  MARGINS margins = material ? MARGINS{-1, -1, -1, -1} : MARGINS{0, 0, 0, 0};
+  DwmExtendFrameIntoClientArea(hwnd, &margins);
+}
+
+// What a window fills its client area with: the dark background, a dark tint
+// over Acrylic, which shows the window behind as is, or nothing over Mica.
+D2D1_COLOR_F Fill(int appearance) {
+  return appearance == 0 ? Color(kBackground) : appearance == 1 ? Color(kBackground, kAcrylicTint) : D2D1::ColorF(0, 0, 0, 0);
+}
+
 void RegisterClassOnce(const wchar_t* name, WNDPROC proc, UINT style) {
   WNDCLASSEXW existing{sizeof(existing)};
   if (GetClassInfoExW(gInstance, name, &existing)) return;
@@ -147,22 +174,9 @@ bool CandidateWindow::ensureWindow() {
   return true;
 }
 
-// Windows 11 draws the rounded corners, the 1px border and the shadow; the
-// materials (Acrylic, Mica, Mica Alt) show behind transparent content.
 void CandidateWindow::applyAppearance(int appearance) {
-  static constexpr DWM_SYSTEMBACKDROP_TYPE kBackdrops[] = {DWMSBT_NONE, DWMSBT_TRANSIENTWINDOW, DWMSBT_MAINWINDOW, DWMSBT_TABBEDWINDOW};
-  appearance_ = appearance >= 0 && appearance < 4 ? appearance : 0;
-  bool material = this->material();
-  DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
-  DwmSetWindowAttribute(hwnd_, DWMWA_WINDOW_CORNER_PREFERENCE, &corners, sizeof(corners));
-  BOOL dark = TRUE;
-  DwmSetWindowAttribute(hwnd_, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-  COLORREF border = material ? DWMWA_COLOR_DEFAULT : RGB((kLine >> 16) & 0xff, (kLine >> 8) & 0xff, kLine & 0xff);
-  DwmSetWindowAttribute(hwnd_, DWMWA_BORDER_COLOR, &border, sizeof(border));
-  DWM_SYSTEMBACKDROP_TYPE backdrop = kBackdrops[appearance_];
-  DwmSetWindowAttribute(hwnd_, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop, sizeof(backdrop));
-  MARGINS margins = material ? MARGINS{-1, -1, -1, -1} : MARGINS{0, 0, 0, 0};
-  DwmExtendFrameIntoClientArea(hwnd_, &margins);
+  appearance_ = ClampAppearance(appearance);
+  ApplyAppearance(hwnd_, appearance_);
   target_.Reset();
 }
 
@@ -337,9 +351,7 @@ void CandidateWindow::paint() {
   float width = client.right / scale_, height = client.bottom / scale_;
 
   target_->BeginDraw();
-  // Acrylic shows the window behind as is, so light text on a light page vanishes: tint it dark.
-  // Mica and Mica Alt are already dark tints of the wallpaper.
-  target_->Clear(appearance_ == 1 ? Color(kBackground, kAcrylicTint) : material() ? D2D1::ColorF(0, 0, 0, 0) : Color(kBackground));
+  target_->Clear(Fill(appearance_));
   bool both = content_->showsProof && !content_->rows.empty();
   // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
   float proofTop = proofBelow_ ? height - proofHeight() : 0;
@@ -507,6 +519,17 @@ LRESULT CALLBACK ModeBadge::WindowProc(HWND hwnd, UINT message, WPARAM wParam, L
     case WM_TIMER:
       if (self && wParam == kAnimationTimer) self->tick();
       return 0;
+    case WM_PAINT: {
+      PAINTSTRUCT ps;
+      BeginPaint(hwnd, &ps);
+      if (self) self->paint();
+      EndPaint(hwnd, &ps);
+      return 0;
+    }
+    case WM_ERASEBKGND:
+      return 1;
+    case WM_NCACTIVATE:
+      return DefWindowProcW(hwnd, message, TRUE, lParam);  // Mica draws only on an active frame
     case WM_NCHITTEST:
       return HTTRANSPARENT;
     case WM_MOUSEACTIVATE:
@@ -531,26 +554,74 @@ POINT Beside(POINT position, SIZE size, const RECT& rect, int gap) {
 
 }  // namespace
 
-void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, const RECT* avoid) {
-  if (!fonts_.ok()) return;
-  if (!factory_ && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory_.GetAddressOf()))) return;
+// A layered window for the dark badge, a plain one for a material; switching
+// between the two makes a new window.
+bool ModeBadge::ensureWindow(int appearance) {
+  if (hwnd_ && (appearance != 0) != (appearance_ != 0)) {
+    target_.Reset();
+    DestroyWindow(hwnd_);
+    hwnd_ = nullptr;
+  }
   if (!hwnd_) {
     RegisterClassOnce(kBadgeClass, WindowProc, 0);
-    hwnd_ = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TRANSPARENT, kBadgeClass, L"",
-                            WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, gInstance, this);
-    if (!hwnd_) return;
+    DWORD layered = appearance == 0 ? WS_EX_LAYERED : 0;
+    hwnd_ = CreateWindowExW(layered | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TRANSPARENT, kBadgeClass, L"", WS_POPUP,
+                            0, 0, 1, 1, nullptr, nullptr, gInstance, this);
+    if (!hwnd_) return false;
+    appearance_ = -1;  // apply below
   }
+  if (appearance != appearance_ && appearance != 0) {
+    ApplyAppearance(hwnd_, appearance);
+    target_.Reset();
+  }
+  appearance_ = appearance;
+  return true;
+}
+
+void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, const RECT* avoid, int appearance) {
+  if (!fonts_.ok()) return;
+  if (!factory_ && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory_.GetAddressOf()))) return;
+  if (!ensureWindow(ClampAppearance(appearance))) return;
   scale_ = DpiOf(owner) / 96.f;
   label_ = label;
   float width = std::max(kBadgeSide, fonts_.widthOf(label, fonts_.badge()) + 2 * kBadgePadding);
   size_ = {static_cast<LONG>(std::ceil(width * scale_)), static_cast<LONG>(std::ceil(kBadgeSide * scale_))};
   place(anchor, avoid);
-  render();
   SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
   start_ = GetTickCount64();
-  present(0);
+  if (appearance_ == 0) {
+    render();
+    present(0);
+  }
   SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  if (appearance_ != 0) {
+    SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    UpdateWindow(hwnd_);
+  }
   SetTimer(hwnd_, kAnimationTimer, kFrameMs * 2, nullptr);
+}
+
+void ModeBadge::paint() {
+  if (appearance_ == 0) return;  // the layered window was drawn by render()
+  RECT client;
+  GetClientRect(hwnd_, &client);
+  D2D1_SIZE_U pixels = D2D1::SizeU(client.right, client.bottom);
+  if (!target_) {
+    D2D1_RENDER_TARGET_PROPERTIES properties = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    if (FAILED(factory_->CreateHwndRenderTarget(properties, D2D1::HwndRenderTargetProperties(hwnd_, pixels), &target_))) return;
+  } else {
+    target_->Resize(pixels);
+  }
+  target_->SetDpi(96 * scale_, 96 * scale_);
+  target_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+  target_->BeginDraw();
+  target_->Clear(Fill(appearance_));
+  Line line = Measure(fonts_, label_, fonts_.badge());
+  auto text = Brush(target_.Get(), Color(kText));
+  DrawLine(target_.Get(), line, (client.right / scale_ - line.width) / 2, 0, kBadgeSide, text.Get());
+  if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
 
 // Under the anchor, above it at the screen's end, beside `avoid` when they overlap.
@@ -595,7 +666,9 @@ void ModeBadge::tick() {
     hide();
     return;
   }
-  present(static_cast<BYTE>(std::lround(alpha * 255)));
+  // shortcut: a window with a material cannot be layered, so it appears and
+  // disappears without fading; fade it through DirectComposition if that matters.
+  if (appearance_ == 0) present(static_cast<BYTE>(std::lround(alpha * 255)));
 }
 
 void ModeBadge::render() {

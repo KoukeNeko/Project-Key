@@ -64,7 +64,8 @@ class CandidateWindow {
 class ModeBadge {
  public:
   ~ModeBadge();
-  void show(const std::wstring& label, const RECT& anchor, HWND owner, const RECT* avoid);
+  // appearance is the candidate window's (Setting::kAppearance), so the two match.
+  void show(const std::wstring& label, const RECT& anchor, HWND owner, const RECT* avoid, int appearance);
   // Moves a showing badge out of `rect`, the candidate window's frame.
   void avoid(const RECT& rect);
   // Moves a showing badge to a new anchor without restarting its fade.
@@ -74,12 +75,18 @@ class ModeBadge {
 
  private:
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+  bool ensureWindow(int appearance);
   void place(const RECT& anchor, const RECT* avoid);
   void render();
   void present(BYTE alpha);
+  void paint();
   void tick();
 
+  // Dark: a layered window that fades. With a material: a plain window, as
+  // layered windows take no system backdrop.
   HWND hwnd_ = nullptr;
+  int appearance_ = 0;
+  Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
   Layout::Fonts fonts_;
   Microsoft::WRL::ComPtr<ID2D1Factory> factory_;
   HDC dc_ = nullptr;
