@@ -20,6 +20,13 @@ void type(Composer& composer, const std::string& keys) {
   }
 }
 
+// A scratch file path; also builds on Windows, which has TEMP instead of TMPDIR.
+std::string tempPath(const char* name) {
+  const char* dir = std::getenv("TMPDIR");
+  if (!dir) dir = std::getenv("TEMP");
+  return std::string(dir ? dir : "/tmp") + "/" + name;
+}
+
 const Segment* find(const Composer& composer, const std::string& reading) {
   for (const Segment& segment : composer.segments()) {
     if (segment.reading == reading) return &segment;
@@ -88,7 +95,7 @@ int main(int argc, char** argv) {
   composer.clear();
   type(composer, "2u4u xu,4g6");
   assert(composer.text() == "第一獵食");
-  std::string path = std::string(std::getenv("TMPDIR") ?: "/tmp") + "/ComposerTest-bigram.bin";
+  std::string path = tempPath("ComposerTest-bigram.bin");
   // Ids: 0 第一, 1 列, 2 時; keys are previous << 32 | next, sorted.
   assert(ProjectKey::Bigram::save(path, {"第一", "列", "時"}, {{0ull << 32 | 1, -0.5f}, {1ull << 32 | 2, -0.5f}}));
   auto bigram = std::make_shared<ProjectKey::Bigram>();
@@ -100,7 +107,7 @@ int main(int argc, char** argv) {
 
   // Adjacent keys: ㄧㄡˇ (u.3) is one key off ㄧㄝˇ (u,3); with context that
   // knows 這個 也 不 (McBopomofo has no phrase 不錯), the slip comes out as 也.
-  std::string slipPath = std::string(std::getenv("TMPDIR") ?: "/tmp") + "/ComposerTest-slip.bin";
+  std::string slipPath = tempPath("ComposerTest-slip.bin");
   // Ids: 0 這個, 1 也, 2 不.
   assert(ProjectKey::Bigram::save(slipPath, {"這個", "也", "不"}, {{0ull << 32 | 1, -0.1f}, {1ull << 32 | 2, -0.1f}}));
   auto slipModel = std::make_shared<ProjectKey::Bigram>();
