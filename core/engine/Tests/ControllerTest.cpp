@@ -150,12 +150,12 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(Contains(client.committed, "的程式重") && client.marked.empty());
 
-  // Enter commits what is shown: a lone symbol (ㄏ after 我) as the word it begins, and
-  // whole syllables typed without tones as their words.
+  // Enter commits what is shown, except the syllable still open without a tone, which
+  // goes as its Zhuyin: a lone symbol (ㄏ after 我) as itself.
   size_t sent = client.committed.size();
   Type(controller, "ji3c");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
-  assert(client.committed.substr(sent).rfind("我", 0) == 0 && Utf16Length(client.committed.substr(sent)) == 2);
+  assert(client.committed.substr(sent) == "我ㄏ");
   assert(client.marked.empty());
   // The lone symbol itself is offered by the first row (沒救ㄌ); picking it commits it.
   Type(controller, "x");
@@ -165,9 +165,10 @@ int main(int argc, char** argv) {
   assert(symbol != lone.end() && symbol - lone.begin() <= static_cast<long>(client.panel.rows[0].size()));
   controller.choose(static_cast<int>(symbol - lone.begin()));
   assert(HasSuffix(client.committed, "ㄌ") && client.marked.empty());
+  // Whole syllables without tones: the ones a later key closed as their words, the open one as Zhuyin.
   Type(controller, "sucl");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
-  assert(HasSuffix(client.committed, "你好") && client.marked.empty());
+  assert(HasSuffix(client.committed, "你ㄏㄠ") && client.marked.empty());
 
   // Down offers candidates while a syllable without a tone is still open; its Zhuyin has no
   // tone mark. Back from the candidates, the syllable is still open: ㄠ makes it ㄋㄧㄠ.

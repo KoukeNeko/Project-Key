@@ -306,6 +306,12 @@ void Composer::endReading() {
   reading_.clear();
 }
 
+void Composer::showSymbols() {
+  if (!readingShown_) return;
+  hideReading();  // the symbols stay open, so pendingReading() has them
+  walk();
+}
+
 void Composer::setCursor(size_t cursor) {
   endReading();
   grid_.setCursor(std::min(cursor, grid_.length()));
