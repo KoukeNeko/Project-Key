@@ -432,7 +432,10 @@ bool Controller::handleComposing(const KeyEvent& event) {
       return true;
     case Key::kReturn:
       if (empty) return false;
-      // The text as shown, with Zhuyin that is no word yet (a tone alone) as it is.
+      // The text as shown, except that a syllable still open without a tone goes as its
+      // Zhuyin, which is a candidate of its own; Zhuyin that is no word yet goes as it is.
+      composer_->showSymbols();
+      refresh();
       client_.insertText(shown_);
       composer_->clear();
       commit();

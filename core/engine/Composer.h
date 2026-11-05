@@ -91,6 +91,8 @@ class Composer {
   size_t readingCount() const { return grid_.length(); }
   void setCursor(size_t cursor);
   void clearPendingReading();
+  // Shows the open syllable as its symbols rather than as a word, as Enter sends it.
+  void showSymbols();
   void clear();
 
   const std::vector<Segment>& segments() const { return segments_; }
