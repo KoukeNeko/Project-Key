@@ -1,0 +1,64 @@
+<Window
+    x:Class="ProjectKey.Settings.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:tk="using:CommunityToolkit.WinUI.Controls"
+    Title="Project Key 設定">
+  <!-- docs/design/settings/windows.md: the groups and cards of the macOS form as Settings-app cards. -->
+  <Window.SystemBackdrop>
+    <MicaBackdrop />
+  </Window.SystemBackdrop>
+  <StackPanel x:Name="Root" VerticalAlignment="Top">
+    <Grid x:Name="TitleBar" Height="48">
+      <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Text="Project Key 設定" />
+    </Grid>
+    <StackPanel Padding="24,0,24,24" Spacing="4">
+      <TextBlock Margin="0,0,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="選字" />
+      <tk:SettingsCard Header="鄰鍵修正">
+        <ToggleSwitch x:Name="AdjacentKeys" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="記住選過的字">
+        <ToggleSwitch x:Name="RememberChoices" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="選字紀錄">
+        <Button x:Name="ClearChoices" Click="OnClearChoices" Content="清除" />
+      </tk:SettingsCard>
+
+      <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="外觀" />
+      <tk:SettingsCard Header="候選視窗">
+        <ComboBox x:Name="Appearance" MinWidth="160">
+          <x:String>深色</x:String>
+          <x:String>Mica</x:String>
+        </ComboBox>
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="輸入時的整句預覽">
+        <ComboBox x:Name="ProofPreview" MinWidth="160">
+          <x:String>永遠</x:String>
+          <x:String>有可疑字時</x:String>
+          <x:String>關閉</x:String>
+        </ComboBox>
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="選字時的整句預覽">
+        <ComboBox x:Name="ChoosingProof" MinWidth="160">
+          <x:String>永遠</x:String>
+          <x:String>有可疑字時</x:String>
+          <x:String>關閉</x:String>
+        </ComboBox>
+      </tk:SettingsCard>
+
+      <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="按鍵" />
+      <tk:SettingsCard Header="⇪ 切換中英">
+        <ToggleSwitch x:Name="CapsLockToggle" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="單按 ⇧ 切換中英">
+        <ToggleSwitch x:Name="ShiftToggle" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
+      <tk:SettingsCard x:Name="EnglishToZhuyinCard" Header="英文轉注音">
+        <ToggleSwitch x:Name="EnglishToZhuyin" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
+      <tk:SettingsCard x:Name="ZhuyinToEnglishCard" Header="注音轉英文">
+        <ToggleSwitch x:Name="ZhuyinToEnglish" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
+    </StackPanel>
+  </StackPanel>
+</Window>
