@@ -20,6 +20,9 @@
           <x:String>游標前（macOS）</x:String>
         </ComboBox>
       </tk:SettingsCard>
+      <tk:SettingsCard Header="選完跳到下一個可疑處">
+        <ToggleSwitch x:Name="NextDoubtful" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
       <tk:SettingsCard Header="鄰鍵修正">
         <ToggleSwitch x:Name="AdjacentKeys" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>

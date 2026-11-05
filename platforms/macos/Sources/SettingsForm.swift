@@ -13,6 +13,7 @@ struct SettingsForm: View {
   @AppStorage(PKProofPreviewKey) private var proofPreview = 1
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
   @AppStorage(PKCandidatePositionKey) private var candidatePosition = 0
+  @AppStorage(PKNextDoubtfulKey) private var nextDoubtful = true
   @State private var cleared = false
   let clearChoices: () -> Void
 
@@ -23,6 +24,7 @@ struct SettingsForm: View {
           Text("游標後（Windows）").tag(0)
           Text("游標前（macOS）").tag(1)
         }
+        Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
         Toggle("鄰鍵修正", isOn: $adjacentKeys)
         Toggle("記住選過的字", isOn: $rememberChoices)
         LabeledContent("選字紀錄") {

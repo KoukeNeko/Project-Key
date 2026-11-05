@@ -16,6 +16,7 @@ FOUNDATION_EXPORT NSString *const PKCapsLockToggleKey;   // Caps Lock switches �
 FOUNDATION_EXPORT NSString *const PKEnglishToZhuyinKey;  // that Shift turns Zhuyin typed in 英 into a composition
 FOUNDATION_EXPORT NSString *const PKZhuyinToEnglishKey;  // and English typed in 中 back into English
 FOUNDATION_EXPORT NSString *const PKCandidatePositionKey;  // candidates for the word: 0 after the cursor, 1 before it
+FOUNDATION_EXPORT NSString *const PKNextDoubtfulKey;       // picking a candidate moves on to the next doubtful word
 
 @interface PKSettingsWindow : NSObject
 + (void)registerDefaults;

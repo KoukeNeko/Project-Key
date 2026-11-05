@@ -151,6 +151,21 @@ int main(int argc, char** argv) {
   assert(Contains(client.committed, "的程式重") && client.marked.empty());
   size_t before = client.committed.size();
 
+  // Typed twice, the sentence has two doubtful 城市 (choices not remembered, so
+  // fixing the first leaves the second): picking moves on to the second, or with
+  // NextDoubtful off, ends choosing.
+  settings.set(Setting::kRememberChoices, 0);
+  for (int nextDoubtful : {1, 0}) {
+    settings.set(Setting::kNextDoubtful, nextDoubtful);
+    Type(controller, "ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3");
+    assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+    assert(controller.handleKey(Press("2")));
+    assert(client.panel.rows.empty() == !nextDoubtful);
+    EscapeAll(controller, client);
+  }
+  settings.remove(Setting::kNextDoubtful);
+  settings.remove(Setting::kRememberChoices);
+
   // Punctuation without Shift: ' and \ both give 、, [ and ] the corner brackets.
   Type(controller, "'\\[]");
   assert(client.marked == "、、「」");
