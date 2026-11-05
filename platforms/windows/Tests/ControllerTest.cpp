@@ -1,0 +1,339 @@
+// Drives the Controller with key events against a fake client, covering what a
+// user does: type a sentence, fix a doubtful word, commit. The Windows port of
+// platforms/macos/Tests/ControllerTest.mm.
+// Usage: ControllerTest <path to data.txt>
+#undef NDEBUG
+#include <cassert>
+#include <cstdio>
+#include <map>
+#include <set>
+
+#include "Engine/Controller.h"
+
+using namespace ProjectKey;
+
+namespace {
+
+class MemorySettings : public Settings {
+ public:
+  std::optional<int> stored(Setting setting) const override {
+    auto it = values_.find(setting);
+    return it == values_.end() ? std::nullopt : std::optional<int>(it->second);
+  }
+  void set(Setting setting, int value) override { values_[setting] = value; }
+  void remove(Setting setting) { values_.erase(setting); }
+
+ private:
+  std::map<Setting, int> values_;
+};
+
+class FakeClient : public Client {
+ public:
+  std::string committed, marked;
+  bool panelVisible = false;
+  PanelContent panel;
+  std::string indicator;
+
+  void insertText(const std::string& text) override {
+    committed += text;
+    marked.clear();
+  }
+  void setComposition(const Composition& composition) override {
+    // The marked text takes the place of what it replaces (ASCII in these tests).
+    if (composition.replaceBefore) committed.erase(committed.size() - composition.replaceBefore);
+    marked = composition.text;
+  }
+  void showPanel(const PanelContent& content) override {
+    panel = content;
+    panelVisible = true;
+  }
+  void hidePanel() override { panelVisible = false; }
+  void showIndicator(const std::string& label) override { indicator = label; }
+  void beep() override {}
+  std::string textBeforeCaret() override { return committed; }
+};
+
+bool HasSuffix(const std::string& s, const std::string& suffix) {
+  return s.size() >= suffix.size() && s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+bool Contains(const std::string& s, const std::string& part) {
+  return s.find(part) != std::string::npos;
+}
+
+std::string Joined(const std::vector<std::string>& parts) {
+  std::string out;
+  for (const std::string& part : parts) out += part;
+  return out;
+}
+
+KeyEvent Press(std::string characters, ProjectKey::Key key = ProjectKey::Key::kCharacter) {
+  KeyEvent event;
+  event.key = key;
+  event.characters = std::move(characters);
+  return event;
+}
+
+KeyEvent Special(ProjectKey::Key key) {
+  return Press(key == ProjectKey::Key::kSpace ? " " : "", key);
+}
+
+KeyEvent Shifted(std::string characters) {
+  KeyEvent event = Press(std::move(characters));
+  event.shift = true;
+  return event;
+}
+
+KeyEvent Caps(std::string characters, bool shift = false) {
+  KeyEvent event = Press(std::move(characters));
+  event.capsLock = true;
+  event.shift = shift;
+  return event;
+}
+
+void Type(Controller& controller, const std::string& keys) {
+  for (char c : keys) {
+    bool handled = controller.handleKey(c == ' ' ? Special(ProjectKey::Key::kSpace) : Press(std::string(1, c)));
+    assert(handled);
+  }
+}
+
+void TapShift(Controller& controller) {
+  controller.handleShift(true);
+  controller.handleShift(false);
+}
+
+void EscapeAll(Controller& controller, FakeClient& client) {
+  while (!client.marked.empty()) controller.handleKey(Special(ProjectKey::Key::kEscape));
+}
+
+// About as wide as the candidate font: CJK takes a full em, ASCII half.
+int Span(const std::string& candidate) {
+  double width = 0;
+  for (size_t i = 0; i < candidate.size(); i++) {
+    unsigned char c = static_cast<unsigned char>(candidate[i]);
+    if (c < 0x80) width += 0.5;
+    else if ((c & 0xc0) != 0x80) width += 1;
+  }
+  return std::max(1, std::min(kGridColumns, static_cast<int>((width + 1.5) / 2.4) + 1));
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  if (argc != 2) {
+    std::fprintf(stderr, "usage: %s <data.txt>\n", argv[0]);
+    return 2;
+  }
+  MemorySettings settings;
+  Environment env;
+  env.lm = std::make_shared<McBopomofo::McBopomofoLM>();
+  env.lm->loadLanguageModel(argv[1]);
+  assert(env.lm->isDataModelLoaded());
+  env.userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+  env.settings = &settings;
+  env.isEnglish = [](const std::string& text) { return text == "hello" || text == "hello world"; };
+  env.columnsSpannedBy = Span;
+  FakeClient client;
+  Controller controller(env, client);
+
+  // 我們把舊的程式重構成模組: the engine guesses 城市 and nothing is committed yet.
+  Type(controller, "ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3");
+  assert(client.committed.empty());
+  assert(Contains(client.marked, "城市"));
+
+  // Space opens candidates on the doubtful 城市; 2 picks the second one, 程式.
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(controller.handleKey(Press("2")));
+  assert(Contains(client.marked, "的程式"));
+
+  // Enter commits the sentence as shown.
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
+  assert(Contains(client.committed, "的程式重") && client.marked.empty());
+  size_t before = client.committed.size();
+
+  // Tone 1 via space, shifted punctuation, Backspace, Esc.
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Shifted("<")));
+  assert(client.marked == "今天，");
+  assert(controller.handleKey(Special(ProjectKey::Key::kBackspace)));
+  assert(client.marked == "今天");
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
+  assert(client.marked.empty() && client.committed.size() == before);
+
+  // With the cursor inside the phrase 今天, Space offers the syllables from
+  // the cursor on, so its second character can be replaced alone.
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kHome)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kRight)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  std::string second = client.panel.rows[0][1];
+  assert(Utf16Length(second) == 1);
+  assert(controller.handleKey(Press("2")));
+  assert(HasSuffix(client.marked, second) && Utf16Length(client.marked) == 2);
+  EscapeAll(controller, client);
+
+  // Arrows move the cursor between syllables; typing and Forward Delete act there.
+  Type(controller, "rup wu0 ");
+  settings.set(Setting::kProofPreview, 0);  // always show the proof row
+  assert(controller.handleKey(Special(ProjectKey::Key::kLeft)));
+  assert(client.panel.caret == 1);
+  Type(controller, "ji");
+  assert(client.panel.caret == 1 && Utf16Length(client.panel.pendingReading) == 2);
+  Type(controller, "3");
+  assert(client.panel.caret == 2);
+  assert(client.marked == "今我天");
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
+  assert(client.marked == "今我");
+  assert(controller.handleKey(Special(ProjectKey::Key::kHome)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
+  assert(client.marked == "我");
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
+  settings.remove(Setting::kProofPreview);
+
+  // ⌃⇧P turns the proof row off and back on.
+  Type(controller, "rup wu0 ");
+  settings.set(Setting::kProofPreview, 0);
+  KeyEvent toggle = Press("\x10");
+  toggle.control = toggle.shift = toggle.isP = true;
+  assert(controller.handleKey(toggle) && settings.get(Setting::kProofPreview) == 2 && !client.panelVisible);
+  assert(controller.handleKey(toggle) && settings.get(Setting::kProofPreview) == 0 && client.panelVisible);
+  settings.remove(Setting::kProofPreview);
+  settings.remove(Setting::kProofPreviewLastOn);
+  EscapeAll(controller, client);
+
+  // Down expands the rows into a grid; Up walks back up, folds the grid on
+  // its first row, and closes the candidates after that.
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(client.panel.rows.size() == 1);
+  for (const auto& row : client.panel.rows) {
+    int columns = 0;
+    for (const std::string& candidate : row) columns += Span(candidate);
+    assert(columns <= kGridColumns);
+  }
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(client.panel.rows.size() > 1 && client.panel.selectedRow == 1 && client.panel.pageLabel.rfind("2/", 0) == 0);
+  assert(controller.handleKey(Special(ProjectKey::Key::kUp)));
+  assert(client.panel.rows.size() > 1 && client.panel.selectedRow == 0);
+  assert(controller.handleKey(Special(ProjectKey::Key::kUp)));
+  assert(client.panel.rows.size() == 1);
+  assert(controller.handleKey(Special(ProjectKey::Key::kUp)));
+  assert((!client.panelVisible || client.panel.rows.empty()) && client.marked == "今天");
+
+  // In the grid, number keys pick from the selection's row.
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  std::string secondRowFirst = client.panel.rows[1][0];
+  assert(controller.handleKey(Press("1")));
+  assert(client.marked.rfind(secondRowFirst, 0) == 0);
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
+  assert(client.marked.empty() && client.committed.size() == before);
+
+  // With nothing composed, editing keys belong to the app.
+  assert(!controller.handleKey(Special(ProjectKey::Key::kBackspace)));
+  assert(!controller.handleKey(Special(ProjectKey::Key::kReturn)));
+
+  // A shortcut commits the composition first and passes through.
+  // (Not checking for 今: the grid test above taught the user model another ㄐㄧㄣ.)
+  size_t committed = Utf16Length(client.committed);
+  Type(controller, "rup ");
+  KeyEvent copy = Press("c");
+  copy.control = true;
+  assert(!controller.handleKey(copy));
+  assert(Utf16Length(client.committed) == committed + 1 && client.marked.empty());
+
+  // A character that is neither a reading key nor punctuation commits the
+  // composition and follows it.
+  Type(controller, "rup ");
+  assert(controller.handleKey(Shifted("A")));
+  assert(HasSuffix(client.committed, "A") && Utf16Length(client.committed) == committed + 3 && client.marked.empty());
+
+  // Tapping Shift switches to English: keys pass through; tapping again switches back.
+  TapShift(controller);
+  assert(controller.englishMode() && client.indicator == "A");
+  assert(!controller.handleKey(Press("r")));
+  TapShift(controller);
+  assert(!controller.englishMode() && client.indicator == "ㄅ");
+  assert(controller.handleKey(Press("r")));
+  EscapeAll(controller, client);
+
+  // Shift with another key in between is a capital, not a switch.
+  controller.handleShift(true);
+  controller.handleKey(Shifted("<"));
+  controller.handleShift(false);
+  assert(!controller.englishMode());
+  EscapeAll(controller, client);
+
+  // Zhuyin typed in English mode: a lone Shift turns the whole syllables at
+  // the end (ji3cl3, 我好) into a composition and leaves the English alone.
+  TapShift(controller);
+  for (std::string key : {"h", "e", "l", "l", "o", " ", "j", "i", "3", "c", "l", "3"}) {
+    assert(!controller.handleKey(key == " " ? Special(ProjectKey::Key::kSpace) : Press(key)));
+    client.committed += key;  // what the app does with a key passed through
+    // No preview for plain English; with a tone key in it, the preview shows the result and Shift.
+    if (key == "o") assert(!client.panelVisible);
+  }
+  assert(client.panelVisible && client.panel.keyHint == "Shift");
+  assert(Joined(client.panel.segments) == "我好" && client.panel.replacedText == "ji3cl3");
+  TapShift(controller);
+  assert(HasSuffix(client.committed, "hello ") && client.marked == "我好");
+  assert(!client.panelVisible || client.panel.keyHint.empty());
+  assert(controller.handleKey(Press("r")));  // back in 中
+
+  // The reverse: English typed in 中 shows what a lone Shift turns it into,
+  // and the Shift puts the English in place of the composition and switches to 英.
+  EscapeAll(controller, client);
+  Type(controller, "hello");
+  assert(client.panelVisible && client.panel.keyHint == "Shift");
+  assert(client.panel.segments[0] == "hello" && client.panel.replacedText == client.marked);
+  TapShift(controller);
+  assert(HasSuffix(client.committed, "hello") && client.marked.empty());
+  assert(!controller.handleKey(Press("r")));  // now in 英
+  TapShift(controller);
+  // Turned off in settings: no preview, and Shift only switches modes.
+  settings.set(Setting::kZhuyinToEnglish, 0);
+  Type(controller, "hello");
+  assert(!client.panelVisible || client.panel.keyHint.empty());
+  EscapeAll(controller, client);
+  settings.remove(Setting::kZhuyinToEnglish);
+  // Real Zhuyin is left alone, even when it spells something: "su " is 妮 as well as "su".
+  Type(controller, "su ");
+  assert(!client.panelVisible || client.panel.keyHint.empty());
+  EscapeAll(controller, client);
+
+  // The English must still be right before the caret: if the app moved it, Shift only switches.
+  TapShift(controller);
+  for (std::string key : {"j", "i", "3"}) controller.handleKey(Press(key));  // passed through, but the app typed elsewhere
+  TapShift(controller);
+  assert(client.marked.empty() && !controller.englishMode());
+
+  // Caps Lock switches 中/英 on each press; the lock it leaves on does not capitalize.
+  controller.handleCapsLock();
+  size_t beforeCaps = client.committed.size();
+  assert(controller.handleKey(Caps("R")));
+  assert(HasSuffix(client.committed, "r") && client.committed.size() == beforeCaps + 1);
+  assert(!controller.handleKey(Caps("R", true)));
+  controller.handleCapsLock();
+  assert(controller.handleKey(Press("r")) && !client.marked.empty());  // back in 中
+  EscapeAll(controller, client);
+  // Back in 中 with the lock on (after Shift switched), letters are still Zhuyin keys.
+  controller.handleCapsLock();
+  TapShift(controller);
+  assert(controller.handleKey(Caps("R")) && client.marked == "ㄐ");
+  EscapeAll(controller, client);
+  controller.handleCapsLock();
+  TapShift(controller);  // leave it in 中
+  assert(!controller.englishMode());
+
+  // Losing focus commits; the app ending the composition drops it.
+  Type(controller, "rup ");
+  controller.deactivate();
+  assert(client.marked.empty() && !controller.isComposing());
+  Type(controller, "rup ");
+  controller.reset();
+  assert(!controller.isComposing());
+
+  std::printf("ControllerTest passed\n");
+  return 0;
+}
