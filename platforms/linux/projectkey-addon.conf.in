@@ -1,0 +1,9 @@
+[Addon]
+Name=Project Key
+Comment=Zhuyin input method
+Category=InputMethod
+Version=@PROJECT_VERSION@
+Library=projectkey
+Type=SharedLibrary
+OnDemand=True
+Configurable=True
