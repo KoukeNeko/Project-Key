@@ -59,7 +59,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | | Tab、Shift+Tab | 跳到下一個／上一個可疑處 |
 | | Esc | 展開時收合，否則回到組字 |
 | | Backspace | 回到組字 |
-| 任何時候 | Caps Lock | 切換中／英；大寫鎖定亮著時字母仍打小寫，大寫用 Shift |
+| 任何時候 | Caps Lock | 在設定開啟 Caps Lock 切換中英時（預設關），切換中／英；大寫鎖定亮著時字母仍打小寫，大寫用 Shift |
 | | 單按 Shift | 切換中／英，游標下方短暫顯示「ㄅ」或「A」 |
 | | Ctrl、Alt、Win 組合鍵 | 先送出組字，再交給 App |
 | 英文模式 | Tab | 剛才打的大千鍵若是含聲調鍵的完整注音（如 ji3cl3），改成組字中的「我好」並切回中文；打到聲調鍵時會預覽轉換結果與 Tab 鍵帽。沒有預覽時 Tab 照常輸入 |
@@ -69,7 +69,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 設定
 
-設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、Tab 的英文轉注音與注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
+設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic（預設）、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock（預設關）與單按 Shift 切換中英、Tab 的英文轉注音與注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
 
 ## 測試
 

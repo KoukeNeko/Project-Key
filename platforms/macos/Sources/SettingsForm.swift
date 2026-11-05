@@ -6,13 +6,13 @@ struct SettingsForm: View {
   @AppStorage(PKAdjacentKeysKey) private var adjacentKeys = true
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
-  @AppStorage(PKCapsLockToggleKey) private var capsLockToggle = true
+  @AppStorage(PKCapsLockToggleKey) private var capsLockToggle = false
   @AppStorage(PKEnglishToZhuyinKey) private var englishToZhuyin = true
   @AppStorage(PKZhuyinToEnglishKey) private var zhuyinToEnglish = true
-  @AppStorage(PKAppearanceKey) private var appearance = 0
+  @AppStorage(PKAppearanceKey) private var appearance = 1
   @AppStorage(PKProofPreviewKey) private var proofPreview = 1
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
-  @AppStorage(PKCandidatePositionKey) private var candidatePosition = 0
+  @AppStorage(PKCandidatePositionKey) private var candidatePosition = 1
   @AppStorage(PKNextDoubtfulKey) private var nextDoubtful = true
   @State private var cleared = false
   let clearChoices: () -> Void

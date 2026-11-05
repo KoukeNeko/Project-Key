@@ -119,6 +119,8 @@ int main() {
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
+    // These steps choose after the cursor; macOS defaults to before it.
+    [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"CandidatePosition"];
     FakeClient *client = [[FakeClient alloc] init];
     PKInputController *controller = [[PKInputController alloc] init];
 
@@ -290,7 +292,9 @@ int main() {
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
 
-    // Each Caps Lock press switches 中/英; the lock it leaves on does not capitalize.
+    // With its setting on (off by default), each Caps Lock press switches 中/英; the lock it
+    // leaves on does not capitalize.
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"CapsLockToggle"];
     PressCapsLock(controller, client, YES);
     NSUInteger beforeCaps = client.committed.length;
     assert([controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock) client:client]);
@@ -308,7 +312,9 @@ int main() {
     PressCapsLock(controller, client, NO);
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];  // leave it in 中
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"CapsLockToggle"];
 
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"CandidatePosition"];
     std::printf("IMKControllerTest passed\n");
   }
   return 0;

@@ -20,12 +20,13 @@ NSString *const PKNextDoubtfulKey = @"NextDoubtful";
     PKAdjacentKeysKey : @YES,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,
-    PKCapsLockToggleKey : @YES,
+    PKCapsLockToggleKey : @NO,
     PKEnglishToZhuyinKey : @YES,
     PKZhuyinToEnglishKey : @YES,
+    PKAppearanceKey : @(PKGlassAvailable() ? 1 : 0),
     PKProofPreviewKey : @1,
     PKChoosingProofKey : @1,
-    PKCandidatePositionKey : @0,
+    PKCandidatePositionKey : @1,  // before the cursor, as the system Zhuyin input does
     PKNextDoubtfulKey : @YES,
   }];
 }

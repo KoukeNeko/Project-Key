@@ -86,6 +86,8 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kChoosingProof:
       return 1;  // 有可疑字時
     case Setting::kAppearance:
+      return 1;  // Acrylic; macOS registers its own default
+    case Setting::kCapsLockToggle:
     case Setting::kCandidatePosition:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:

@@ -385,7 +385,12 @@ int main(int argc, char** argv) {
   assert(client.marked.empty() && controller.englishMode());
   TapShift(controller);
 
-  // Caps Lock switches 中/英 on each press; the lock it leaves on does not capitalize.
+  // Off by default, Caps Lock leaves 中/英 alone.
+  controller.handleCapsLock();
+  assert(!controller.englishMode());
+  // With its setting on, Caps Lock switches 中/英 on each press; the lock it leaves on does
+  // not capitalize.
+  settings.set(Setting::kCapsLockToggle, 1);
   controller.handleCapsLock();
   size_t beforeCaps = client.committed.size();
   assert(controller.handleKey(Caps("R")));
@@ -402,6 +407,7 @@ int main(int argc, char** argv) {
   controller.handleCapsLock();
   TapShift(controller);  // leave it in 中
   assert(!controller.englishMode());
+  settings.remove(Setting::kCapsLockToggle);
 
   // Losing focus commits; the app ending the composition drops it.
   Type(controller, "rup ");
