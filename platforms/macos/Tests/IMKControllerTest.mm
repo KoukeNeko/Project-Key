@@ -207,9 +207,9 @@ int main() {
     // In the grid, number keys pick from the selection's row.
     assert([controller handleEvent:Key(@" ", kVK_Space) client:client]);
     assert([controller handleEvent:Key(@"", kVK_DownArrow) client:client]);
-    NSString *secondRowFirst = PKCandidatePanel.shared.content.rows[1][0];
-    assert([controller handleEvent:Key(@"1") client:client]);
-    assert([client.marked hasPrefix:secondRowFirst]);
+    NSArray<NSString *> *secondRow = PKCandidatePanel.shared.content.rows[1];  // its first is the Zhuyin, which commits
+    assert([controller handleEvent:Key([NSString stringWithFormat:@"%lu", (unsigned long)secondRow.count]) client:client]);
+    assert([client.marked hasPrefix:secondRow.lastObject]);
     assert([controller handleEvent:Key(@"\x1b", kVK_Escape) client:client]);
     assert(client.marked.length == 0 && client.committed.length == before);
 

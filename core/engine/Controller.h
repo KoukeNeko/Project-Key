@@ -188,6 +188,7 @@ class Controller {
   bool choosing_ = false;
   size_t activeStart_ = 0;  // start reading of the segment being chosen
   std::vector<std::string> candidates_;
+  int readingIndex_ = -1;  // where the syllables' Zhuyin sits in candidates_; -1 for none
   int selection_ = 0;
   // Candidates packed into grid rows of kGridColumns columns: where each row
   // starts, and the column each candidate starts at.
