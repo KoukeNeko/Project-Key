@@ -295,36 +295,41 @@ int main(int argc, char** argv) {
   assert(!controller.englishMode());
   EscapeAll(controller, client);
 
-  // Zhuyin typed in English mode: a lone Shift turns the whole syllables at
+  // Zhuyin typed in English mode: Tab turns the whole syllables at
   // the end (ji3cl3, 我好) into a composition and leaves the English alone.
   TapShift(controller);
   for (std::string key : {"h", "e", "l", "l", "o", " ", "j", "i", "3", "c", "l", "3"}) {
     assert(!controller.handleKey(key == " " ? Special(ProjectKey::Key::kSpace) : Press(key)));
     client.committed += key;  // what the app does with a key passed through
-    // No preview for plain English; with a tone key in it, the preview shows the result and Shift.
+    // No preview for plain English; with a tone key in it, the preview shows the result and Tab.
     if (key == "o") assert(!client.panelVisible);
   }
-  assert(client.panelVisible && client.panel.keyHint == "Shift");
+  assert(client.panelVisible && client.panel.keyHint == "Tab");
   assert(Joined(client.panel.segments) == "我好" && client.panel.replacedText == "ji3cl3");
-  TapShift(controller);
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)));
   assert(HasSuffix(client.committed, "hello ") && client.marked == "我好");
   assert(!client.panelVisible || client.panel.keyHint.empty());
   assert(controller.handleKey(Press("r")));  // back in 中
 
-  // The reverse: English typed in 中 shows what a lone Shift turns it into,
-  // and the Shift puts the English in place of the composition and switches to 英.
+  // The reverse: English typed in 中 shows what Tab turns it into,
+  // and Tab puts the English in place of the composition and switches to 英.
   EscapeAll(controller, client);
   Type(controller, "hello");
-  assert(client.panelVisible && client.panel.keyHint == "Shift");
+  assert(client.panelVisible && client.panel.keyHint == "Tab");
   assert(client.panel.segments[0] == "hello" && client.panel.replacedText == client.marked);
-  TapShift(controller);
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)));
   assert(HasSuffix(client.committed, "hello") && client.marked.empty());
   assert(!controller.handleKey(Press("r")));  // now in 英
+  // A lone Shift only switches: the English stays.
+  for (std::string key : {"j", "i", "3"}) controller.handleKey(Press(key)), client.committed += key;
   TapShift(controller);
-  // Turned off in settings: no preview, and Shift only switches modes.
+  assert(HasSuffix(client.committed, "ji3") && client.marked.empty() && !controller.englishMode());
+  EscapeAll(controller, client);
+  // Turned off in settings: no preview, and Tab opens candidates as usual.
   settings.set(Setting::kZhuyinToEnglish, 0);
   Type(controller, "hello");
   assert(!client.panelVisible || client.panel.keyHint.empty());
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && !client.marked.empty());
   EscapeAll(controller, client);
   settings.remove(Setting::kZhuyinToEnglish);
   // Real Zhuyin is left alone, even when it spells something: "su " is 妮 as well as "su".
@@ -332,11 +337,16 @@ int main(int argc, char** argv) {
   assert(!client.panelVisible || client.panel.keyHint.empty());
   EscapeAll(controller, client);
 
-  // The English must still be right before the caret: if the app moved it, Shift only switches.
+  // The English must still be right before the caret: if the app moved it, Tab is a Tab.
   TapShift(controller);
-  for (std::string key : {"j", "i", "3"}) controller.handleKey(Press(key));  // passed through, but the app typed elsewhere
+  for (std::string key : {"c", "l", "3"}) controller.handleKey(Press(key));  // passed through, but the app typed elsewhere
+  assert(!controller.handleKey(Special(ProjectKey::Key::kTab)));
+  assert(client.marked.empty() && controller.englishMode());
+  // After plain words that only spell first-tone syllables ("su " is 妮), Tab is a Tab too.
+  for (std::string key : {"s", "u", " "}) controller.handleKey(key == " " ? Special(ProjectKey::Key::kSpace) : Press(key)), client.committed += key;
+  assert(!controller.handleKey(Special(ProjectKey::Key::kTab)));
+  assert(client.marked.empty() && controller.englishMode());
   TapShift(controller);
-  assert(client.marked.empty() && !controller.englishMode());
 
   // Caps Lock switches 中/英 on each press; the lock it leaves on does not capitalize.
   controller.handleCapsLock();

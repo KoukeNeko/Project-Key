@@ -62,14 +62,14 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | 任何時候 | Caps Lock | 切換中／英；大寫鎖定亮著時字母仍打小寫，大寫用 Shift |
 | | 單按 Shift | 切換中／英，游標下方短暫顯示「ㄅ」或「A」 |
 | | Ctrl、Alt、Win 組合鍵 | 先送出組字，再交給 App |
-| 英文模式 | 單按 Shift | 剛才打的大千鍵若是完整注音（如 ji3cl3），改成組字中的「我好」並切回中文；打到聲調鍵時會預覽轉換結果與 Shift 鍵帽 |
-| 組字中 | 單按 Shift | 組字的按鍵若拼成英文單字（如 hello，且不是注音音節），改回英文並切到英文模式。拼字檢查用 Windows 內建的英文拼字檢查 |
+| 英文模式 | Tab | 剛才打的大千鍵若是含聲調鍵的完整注音（如 ji3cl3），改成組字中的「我好」並切回中文；打到聲調鍵時會預覽轉換結果與 Tab 鍵帽。沒有預覽時 Tab 照常輸入 |
+| 組字中 | Tab | 組字的按鍵若拼成英文單字（如 hello，且不是注音音節），改回英文並切到英文模式，此時游標下方會預覽英文與 Tab 鍵帽。拼字檢查用 Windows 內建的英文拼字檢查 |
 
 工作列通知區域會顯示目前的模式（ㄅ／A）：左鍵切換中英，右鍵開啟「設定…」。Windows「設定」裡 Project Key 的「選項」也會開啟設定視窗。設定視窗由引擎伺服器啟動：從沙盒中的 App 直接啟動的程式也會被關進沙盒。
 
 ## 設定
 
-設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、英文轉注音、注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
+設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、Tab 的英文轉注音與注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
 
 ## 測試
 
@@ -89,9 +89,9 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 ## 與 macOS 的差異
 
 - 視窗外觀用 Windows 11 的語彙：DWM 圓角 8px 與 1px 外框、選中膠囊圓角 4px、微軟正黑體 19px；macOS 的「Liquid Glass」在 Windows 換成三種系統材質：Acrylic（模糊背後的內容）、Mica 與 Mica Alt（取桌布的色調）。Mica 只畫在作用中的視窗上，候選視窗從不取得焦點，所以讓系統把它的框線當成作用中。中／英標記一律是深色。
-- 轉換預覽的鍵帽寫「Shift」，依照原型的 Windows 版。
+- 轉換預覽的鍵帽寫「Tab」。
 - 組字中打出不是注音也不是標點的字元時，會送出組字並由輸入法輸入該字元。macOS 把按鍵交還給 App；TSF 不會再把已經判定交給 App 的按鍵送回來，所以改由輸入法輸入。
-- 透過 IMM32 相容層運作的傳統 Win32 文字框（例如 WinForms 的 TextBox）不提供文件內容給 TSF：在這些 App 裡，英文模式不顯示轉注音預覽，單按 Shift 只切換中英。
+- 透過 IMM32 相容層運作的傳統 Win32 文字框（例如 WinForms 的 TextBox）不提供文件內容給 TSF：在這些 App 裡，英文模式不顯示轉注音預覽，Tab 照常輸入。
 
 ## 尚未實作
 

@@ -73,7 +73,7 @@ ProjectKey::Environment &SharedEnvironment() {
     env->columnsSpannedBy = [](const std::string &candidate) {
       return static_cast<int>([PKCandidatePanel columnsSpannedBy:String(candidate)]);
     };
-    env->shiftKeycap = "⇧";
+    env->tabKeycap = "⇥";
     env->appTypesUnhandledKeys = true;
     return env;
   }();

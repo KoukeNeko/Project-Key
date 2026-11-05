@@ -231,39 +231,37 @@ int main() {
     assert([controller handleEvent:Key(@"r") client:client]);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
 
-    // Zhuyin typed in English mode: a lone Shift turns the whole syllables at
+    // Zhuyin typed in English mode: Tab turns the whole syllables at
     // the end (ji3cl3, 我好) into a composition and leaves the English alone.
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
     for (NSString *key in @[ @"h", @"e", @"l", @"l", @"o", @" ", @"j", @"i", @"3", @"c", @"l", @"3" ]) {
       assert(![controller handleEvent:Key(key) client:client]);
       [client.committed appendString:key];  // what the app does with a key passed through
-      // No preview for plain English; with a tone key in it, the preview shows the result and ⇧.
+      // No preview for plain English; with a tone key in it, the preview shows the result and ⇥.
       if ([key isEqualToString:@"o"]) assert(!PKCandidatePanel.shared.visible);
     }
     PKPanelContent *hint = PKCandidatePanel.shared.content;
-    assert(PKCandidatePanel.shared.visible && [hint.keyHint isEqualToString:@"⇧"]);
+    assert(PKCandidatePanel.shared.visible && [hint.keyHint isEqualToString:@"⇥"]);
     assert([[hint.segments componentsJoinedByString:@""] isEqualToString:@"我好"] && [hint.replacedText isEqualToString:@"ji3cl3"]);
-    [controller handleEvent:Shift(YES) client:client];
-    [controller handleEvent:Shift(NO) client:client];
+    assert([controller handleEvent:Key(@"\t", kVK_Tab) client:client]);
     assert([client.committed hasSuffix:@"hello "] && [client.marked isEqualToString:@"我好"]);
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     assert([controller handleEvent:Key(@"r") client:client]);  // back in 中
 
-    // The reverse: English typed in 中 shows what a lone Shift turns it into,
-    // and the Shift puts the English in place of the composition and switches to 英.
+    // The reverse: English typed in 中 shows what Tab turns it into,
+    // and Tab puts the English in place of the composition and switches to 英.
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     Type(controller, client, @"hello");
     PKPanelContent *english = PKCandidatePanel.shared.content;
-    assert(PKCandidatePanel.shared.visible && [english.keyHint isEqualToString:@"⇧"]);
+    assert(PKCandidatePanel.shared.visible && [english.keyHint isEqualToString:@"⇥"]);
     assert([english.segments.firstObject isEqualToString:@"hello"] && [english.replacedText isEqualToString:client.marked]);
-    [controller handleEvent:Shift(YES) client:client];
-    [controller handleEvent:Shift(NO) client:client];
+    assert([controller handleEvent:Key(@"\t", kVK_Tab) client:client]);
     assert([client.committed hasSuffix:@"hello"] && client.marked.length == 0);
     assert(![controller handleEvent:Key(@"r") client:client]);  // now in 英
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
-    // Turned off in settings: no preview, and Shift only switches modes.
+    // Turned off in settings: no preview.
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"ZhuyinToEnglish"];
     Type(controller, client, @"hello");
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
