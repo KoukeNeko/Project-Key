@@ -41,4 +41,7 @@ constexpr const wchar_t* kSettingsKey = L"Software\\ProjectKey";
 constexpr const wchar_t* kServerExe = L"ProjectKeyServer.exe";
 constexpr const wchar_t* kSettingsExe = L"Settings\\ProjectKeySettings.exe";
 
+// Starts the settings window installed in `directory` (with a trailing backslash).
+bool LaunchSettings(const std::wstring& directory);
+
 }  // namespace ProjectKey

@@ -75,7 +75,9 @@ class TextService : public ITfTextInputProcessorEx,
   // From the language bar button.
   void toggleMode();
   bool englishMode() const { return englishMode_; }
-  static void ShowSettings();
+  // Asks the server to open the settings window: an app in a sandbox could
+  // only start it inside the sandbox.
+  void showSettings();
 
  private:
   ~TextService();

@@ -31,4 +31,15 @@ std::wstring ModuleDirectory(HMODULE module) {
   return dir.substr(0, dir.find_last_of(L'\\') + 1);
 }
 
+bool LaunchSettings(const std::wstring& directory) {
+  std::wstring path = directory + kSettingsExe;
+  std::wstring command = L"\"" + path + L"\"";
+  STARTUPINFOW startup{sizeof(startup)};
+  PROCESS_INFORMATION process{};
+  if (!CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) return false;
+  CloseHandle(process.hThread);
+  CloseHandle(process.hProcess);
+  return true;
+}
+
 }  // namespace ProjectKey

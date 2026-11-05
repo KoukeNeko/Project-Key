@@ -126,6 +126,7 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kReset: controller->reset(); break;
         case Protocol::Request::kClearChoices: *gEnvironment.userModel = NewUserModel(); break;
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
+        case Protocol::Request::kShowSettings: LaunchSettings(ModuleDirectory(nullptr)); break;
         case Protocol::Request::kState: break;
       }
       recorder.reply.englishMode = gEnvironment.englishMode;
