@@ -156,13 +156,14 @@ if (-not (Test-Path $dotnet)) { throw 'the .NET SDK is required for the settings
 # build, not publish: publish leaves out the compiled XAML (.xbf) and resources.pri an unpackaged app loads.
 Invoke-Native $dotnet build "$PSScriptRoot\Settings\ProjectKeySettings.csproj" -c Release -nologo -v q -o "$Out\Settings"
 
-# The dictionary, McBopomofo's license, and the context ranking model from
-# tools/bigram-trainer if it was trained; the server falls back to unigrams without it.
-Copy-Item $Data $Out
+# The dictionary, McBopomofo's license, and from tools/bigram-trainer if it was
+# trained, the dictionary with the words McBopomofo lacks (replacing McBopomofo's)
+# and the context ranking model; the server falls back to unigrams without it.
+$Trained = "$PSScriptRoot\..\..\tools\bigram-trainer\.cache"
+if (Test-Path "$Trained\data.txt") { Copy-Item "$Trained\data.txt" $Out } else { Copy-Item $Data $Out }
 Copy-Item "$Mcb\LICENSE.txt" "$Out\McBopomofo-LICENSE.txt"
 Copy-Item "$PSScriptRoot\..\..\LICENSE" "$Out\LICENSE.txt"
-$Bigram = "$PSScriptRoot\..\..\tools\bigram-trainer\.cache\bigram.bin"
-if (Test-Path $Bigram) { Copy-Item $Bigram $Out } else { Write-Host "no $Bigram`: building without context ranking" }
+if (Test-Path "$Trained\bigram.bin") { Copy-Item "$Trained\bigram.bin" $Out } else { Write-Host "no $Trained\bigram.bin`: building without context ranking" }
 
 # Smart App Control blocks unsigned programs it has not seen; say so instead of failing the build.
 foreach ($test in $tests) {

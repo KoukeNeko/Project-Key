@@ -67,7 +67,7 @@ python3 tools/corpus-evaluator/evaluate.py --engine projectkey --slip column  # 
 | `rime` | librime + `bopomofo_tw` 方案（terra_pinyin 詞庫） |
 | `chewing` | libchewing（Homebrew 版本內建詞庫），關閉自動學習 |
 | `mcbopomofo` | McBopomofo 引擎與 `data.txt`，與 `annotate.py` 使用同一個 commit |
-| `projectkey` | 輸入法的組字器（`core/engine/Composer.cpp`）加上 `tools/bigram-trainer/.cache/bigram.bin` |
+| `projectkey` | 輸入法的組字器（`core/engine/Composer.cpp`）加上 `tools/bigram-trainer/.cache/bigram.bin`；有同目錄的補詞 `data.txt` 時用它取代 McBopomofo 的詞庫 |
 
 注意事項：
 

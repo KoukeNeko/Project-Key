@@ -18,7 +18,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 CACHE = HERE / ".cache"
-BIGRAM = ROOT / "tools/bigram-trainer/.cache/bigram.bin"  # from tools/bigram-trainer/train.sh
+TRAINED = ROOT / "tools/bigram-trainer/.cache"  # from tools/bigram-trainer/train.sh
+BIGRAM = TRAINED / "bigram.bin"
 CORPUS = ROOT / "tests/corpus/corpus.tsv"
 
 # Daqian layout, as in RIME's bopomofo.schema.yaml; tone 1 is the space bar.
@@ -33,7 +34,8 @@ def engines():
         "rime": [CACHE / "bin/rime", CACHE / "rime", "bopomofo_tw"],
         "chewing": [CACHE / "bin/chewing", "/opt/homebrew/opt/libchewing/share/libchewing", CACHE / "chewing-user.dat"],
         "mcbopomofo": [CACHE / "bin/mcbopomofo", CACHE / "mcbopomofo/Source/Data/data.txt"],
-        "projectkey": [CACHE / "bin/projectkey", CACHE / "mcbopomofo/Source/Data/data.txt", BIGRAM],
+        # The dictionary the model was trained with, McBopomofo's plus the words it lacks.
+        "projectkey": [CACHE / "bin/projectkey", TRAINED / "data.txt" if (TRAINED / "data.txt").exists() else CACHE / "mcbopomofo/Source/Data/data.txt", BIGRAM],
     }
 
 

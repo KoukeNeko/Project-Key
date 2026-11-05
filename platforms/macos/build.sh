@@ -52,8 +52,10 @@ cp Resources/Info.plist "$APP/Contents/"
 cp Resources/icon.tiff "$MCB/Source/Data/data.txt" "$APP/Contents/Resources/"
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp "$MCB/LICENSE.txt" "$APP/Contents/Resources/McBopomofo-LICENSE.txt"
-# Context ranking model from tools/bigram-trainer; the app falls back to unigrams without it.
-BIGRAM=../../tools/bigram-trainer/.cache/bigram.bin
-if [ -f "$BIGRAM" ]; then cp "$BIGRAM" "$APP/Contents/Resources/"; else echo "no $BIGRAM: building without context ranking"; fi
+# From tools/bigram-trainer: the dictionary with the words McBopomofo lacks, replacing
+# McBopomofo's, and the context ranking model; the app falls back to unigrams without it.
+TRAINED=../../tools/bigram-trainer/.cache
+if [ -f "$TRAINED/data.txt" ]; then cp "$TRAINED/data.txt" "$APP/Contents/Resources/"; fi
+if [ -f "$TRAINED/bigram.bin" ]; then cp "$TRAINED/bigram.bin" "$APP/Contents/Resources/"; else echo "no $TRAINED/bigram.bin: building without context ranking"; fi
 codesign --force --sign - "$APP"
 echo "built $APP"

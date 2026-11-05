@@ -1,5 +1,8 @@
 #!/bin/sh
-# Trains .cache/bigram.bin from one Chinese Wikipedia shard (CC BY-SA 4.0),
+# Builds .cache/data.txt, McBopomofo's dictionary with the words it lacks added
+# from libchewing-data (LGPL-2.1-or-later) and from the training text
+# (supplement.py, mine.cpp), and trains .cache/bigram.bin on it from one
+# Chinese Wikipedia shard (CC BY-SA 4.0),
 # converted to Taiwan Traditional with OpenCC s2twp. OpenCC writes 佈 臺 賬
 # where everyday Taiwanese text and McBopomofo's dictionary use 布 台 帳, so
 # those are mapped back. Gazette texts from fetch_gazette.py (Legislative Yuan,
@@ -13,18 +16,32 @@ LIMIT=${1:-200000000}
 MIN_COUNT=${2:-3}
 CACHE=.cache
 SHARD_URL=https://huggingface.co/api/datasets/wikimedia/wikipedia/parquet/20231101.zh/train/0.parquet
+CHEWING_URL=https://raw.githubusercontent.com/chewing/libchewing-data/c44e81aef24b06f1509f19e1be54c99812d0c43f/dict/chewing/tsi.csv
+TEXT=$CACHE/text-$LIMIT.txt  # delete it after fetching gazette texts
 DATA=../../platforms/macos/.build/mcbopomofo/Source/Data/data.txt  # built by platforms/macos/build.sh
 
 [ -f "$DATA" ] || { echo "run platforms/macos/build.sh first" >&2; exit 1; }
 command -v opencc >/dev/null || brew install opencc
 mkdir -p "$CACHE/wiki"
 [ -f "$CACHE/wiki/0.parquet" ] || curl -fsSL -o "$CACHE/wiki/0.parquet" "$SHARD_URL"
+[ -f "$CACHE/tsi.csv" ] || curl -fsSL -o "$CACHE/tsi.csv" "$CHEWING_URL"
 [ -x "$CACHE/venv/bin/python" ] || { python3 -m venv "$CACHE/venv"; "$CACHE/venv/bin/pip" install -q pyarrow; }
 
 c++ -std=c++20 -O2 -I../../core/engine train.cpp ../../core/engine/Bigram.cpp -o "$CACHE/train"
-{
-  "$CACHE/venv/bin/python" -I extract.py "$CACHE/wiki/0.parquet" "$LIMIT" | opencc -c s2twp.json
-  [ -d "$CACHE/gazette" ] && find "$CACHE/gazette" -name '*.txt' -exec cat {} +
-} | sed 's/佈/布/g; s/臺/台/g; s/賬/帳/g' \
-  | "$CACHE/train" "$DATA" "$MIN_COUNT" "$CACHE/bigram.bin"
-ls -l "$CACHE/bigram.bin"
+c++ -std=c++20 -O2 -I../../core/engine mine.cpp -o "$CACHE/mine"
+if [ ! -f "$TEXT" ]; then
+  {
+    "$CACHE/venv/bin/python" -I extract.py "$CACHE/wiki/0.parquet" "$LIMIT" | opencc -c s2twp.json
+    [ -d "$CACHE/gazette" ] && find "$CACHE/gazette" -name '*.txt' -exec cat {} +
+  } | sed 's/佈/布/g; s/臺/台/g; s/賬/帳/g' > "$TEXT.part"
+  mv "$TEXT.part" "$TEXT"
+fi
+
+python3 -I supplement.py chewing "$DATA" "$CACHE/tsi.csv" > "$CACHE/chewing.txt"
+python3 -I supplement.py merge "$DATA" "$CACHE/chewing.txt" > "$CACHE/data-chewing.txt"
+"$CACHE/mine" "$CACHE/data-chewing.txt" 20 < "$TEXT" > "$CACHE/candidates.tsv"
+python3 -I supplement.py mined "$CACHE/data-chewing.txt" "$CACHE/candidates.tsv" > "$CACHE/mined.txt"
+python3 -I supplement.py merge "$CACHE/data-chewing.txt" "$CACHE/mined.txt" > "$CACHE/data.txt"
+wc -l "$CACHE/chewing.txt" "$CACHE/mined.txt"
+"$CACHE/train" "$CACHE/data.txt" "$MIN_COUNT" "$CACHE/bigram.bin" < "$TEXT"
+ls -l "$CACHE/data.txt" "$CACHE/bigram.bin"
