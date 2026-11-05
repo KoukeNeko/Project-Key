@@ -41,6 +41,7 @@ public sealed partial class MainWindow : Window {
     UpdateShiftDependents();
 
     Root.SizeChanged += (_, _) => FitToContent();
+    Root.Loaded += (_, _) => Root.XamlRoot.Changed += (_, _) => FitToContent();
   }
 
   private static int Read(string name, int fallback) =>
@@ -66,18 +67,21 @@ public sealed partial class MainWindow : Window {
     ZhuyinToEnglishCard.IsEnabled = ShiftToggle.IsOn;
   }
 
-  // As tall as the laid-out content, at the fixed width; centered the first time.
-  private bool centered_;
-
+  // As tall as the laid-out content, at the fixed width, centered. Resizing
+  // inside a layout event is overridden by that layout, so it waits for it to end.
   private void FitToContent() {
-    double scale = Root.XamlRoot.RasterizationScale;
-    var size = new SizeInt32((int)Math.Ceiling(Width * scale), (int)Math.Ceiling(Root.ActualHeight * scale));
-    if (AppWindow.ClientSize.Width != size.Width || AppWindow.ClientSize.Height != size.Height) AppWindow.ResizeClient(size);
-    if (centered_) return;
-    centered_ = true;
-    DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
-    AppWindow.Move(new PointInt32(area.WorkArea.X + (area.WorkArea.Width - AppWindow.Size.Width) / 2,
-                                  area.WorkArea.Y + (area.WorkArea.Height - AppWindow.Size.Height) / 2));
+    DispatcherQueue.TryEnqueue(() => {
+      double scale = Root.XamlRoot.RasterizationScale;
+      // The XAML area is the content plus what is left over below it. The
+      // outer size is set: ResizeClient lands 30px taller with the title bar extended.
+      int spare = (int)Math.Round((Root.XamlRoot.Size.Height - Root.ActualHeight) * scale);
+      int widthChange = (int)Math.Ceiling(Width * scale) - AppWindow.ClientSize.Width;
+      if (spare == 0 && widthChange == 0) return;
+      AppWindow.Resize(new SizeInt32(AppWindow.Size.Width + widthChange, AppWindow.Size.Height - spare));
+      DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+      AppWindow.Move(new PointInt32(area.WorkArea.X + (area.WorkArea.Width - AppWindow.Size.Width) / 2,
+                                    area.WorkArea.Y + (area.WorkArea.Height - AppWindow.Size.Height) / 2));
+    });
   }
 
   // Asks the engine server to forget the choices; it keeps them in memory only.
