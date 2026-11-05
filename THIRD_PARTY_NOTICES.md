@@ -48,7 +48,7 @@ SOFTWARE.
 
 ## 執行時下載，不隨 repo 散布
 
-`tools/corpus-evaluator/setup.sh`、`annotate.py` 和 `tools/bigram-trainer/train.sh` 會把下列元件下載到各自的 `.cache/`（已列入 `.gitignore`），只用於本機評測。由維基百科與立法院公報統計出的 `bigram.bin` 若存在，`platforms/macos/build.sh` 會把它放進本機建置的 App；它能否隨產品散布尚未確認。
+`tools/corpus-evaluator/setup.sh`、`annotate.py` 和 `tools/bigram-trainer/train.sh` 會把下列元件下載到各自的 `.cache/`（已列入 `.gitignore`），只用於本機評測。由維基百科與立法院公報統計出的 `bigram.bin`，以及補進新酷音詞庫與語料新詞的 `data.txt` 若存在，`platforms/macos/build.sh` 與 `platforms/windows/build.ps1` 會把它們放進本機建置的程式；它們能否隨產品散布尚未確認。
 
 | 元件 | 授權 | 用途 |
 |---|---|---|
@@ -56,6 +56,7 @@ SOFTWARE.
 | rime-prelude、rime-essay、rime-bopomofo、rime-terra-pinyin | LGPL-3.0 | RIME 注音方案與詞庫 |
 | [OpenCC](https://github.com/BYVoid/OpenCC) 資料（隨 Homebrew librime 安裝） | Apache-2.0 | RIME 臺灣字形轉換 |
 | [libchewing](https://github.com/chewing/libchewing) | LGPL-2.1 | 評測引擎 |
+| [libchewing-data](https://github.com/chewing/libchewing-data) 的 `tsi.csv`（固定 commit） | LGPL-2.1-or-later | `tools/bigram-trainer` 補進詞庫的詞 |
 | [McBopomofo](https://github.com/openvanilla/McBopomofo) 引擎與詞庫 | MIT | 評測引擎、注音標註來源 |
 | [中文維基百科](https://zh.wikipedia.org)（Hugging Face `wikimedia/wikipedia` 20231101.zh 第一個分片） | CC BY-SA 4.0 | `tools/bigram-trainer` 的訓練文字 |
 | [pyarrow](https://arrow.apache.org) | Apache-2.0 | 讀取維基百科分片 |

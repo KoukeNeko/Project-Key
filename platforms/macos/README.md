@@ -55,7 +55,7 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 
 ## 上下文排序
 
-有 `tools/bigram-trainer/.cache/bigram.bin` 時，`build.sh` 會把它放進 App，組字器依前兩個詞選字（bigram 與 trigram）；沒有時與 McBopomofo 的選字結果相同。評測結果見 `tools/corpus-evaluator/results/2026-11-05-bigram.md`。
+有 `tools/bigram-trainer/.cache/bigram.bin` 時，`build.sh` 會把它放進 App，組字器依前兩個詞選字（bigram 與 trigram）；沒有時與 McBopomofo 的選字結果相同。同一個目錄有 `data.txt` 時，以它取代 McBopomofo 的詞庫：補上新酷音詞庫與訓練文字中 McBopomofo 沒有的詞（例如「簽核」「氣象署」）。評測結果見 `tools/corpus-evaluator/results/2026-11-05-bigram.md`。
 
 選過的字會依「前一個詞＋讀音」記下來，之後同樣的前文會優先選它（沿用 McBopomofo 的 UserOverrideModel，只存在記憶體，半衰期 1.5 小時，輸入法程式重新啟動後清空）。
 

@@ -1,48 +1,19 @@
 // Trains word bigrams and trigrams for the macOS input method.
 // Usage: train <McBopomofo data.txt> <min pair count> <output> < text
-// Segments each run of Han characters into dictionary words by maximizing the
-// sum of McBopomofo unigram scores, the same scores the input method walks
-// with, then counts adjacent word pairs and triples inside each run, including
-// the run boundary (Bigram::kBoundary) at its start and end.
+// Cuts each run of Han characters into dictionary words (segment.h), then
+// counts adjacent word pairs and triples inside each run, including the run
+// boundary (Bigram::kBoundary) at its start and end.
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
 #include <iostream>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "Bigram.h"
-
-namespace {
-
-constexpr size_t kMaxWordLength = 8;  // ReadingGrid::kMaximumSpanLength
-constexpr double kUnknownCharScore = -13;
-
-bool IsHan(char32_t c) {
-  return (c >= 0x3400 && c <= 0x9fff) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0x20000 && c <= 0x2ffff);
-}
-
-// Splits UTF-8 into code points, keeping each one's bytes.
-void Decode(const std::string& text, std::vector<char32_t>& points, std::vector<std::string>& bytes) {
-  points.clear();
-  bytes.clear();
-  for (size_t i = 0; i < text.size();) {
-    unsigned char lead = text[i];
-    size_t length = lead < 0x80 ? 1 : lead < 0xe0 ? 2 : lead < 0xf0 ? 3 : 4;
-    if (i + length > text.size()) break;
-    char32_t point = length == 1 ? lead : lead & (0xff >> (length + 1));
-    for (size_t k = 1; k < length; k++) point = point << 6 | (text[i + k] & 0x3f);
-    points.push_back(point);
-    bytes.push_back(text.substr(i, length));
-    i += length;
-  }
-}
-
-}  // namespace
+#include "segment.h"
 
 int main(int argc, char** argv) {
   if (argc != 4) {
@@ -51,21 +22,8 @@ int main(int argc, char** argv) {
   }
   const uint32_t minCount = static_cast<uint32_t>(std::stoul(argv[2]));
 
-  std::unordered_map<std::string, double> lexicon;
-  {
-    std::ifstream data(argv[1]);
-    std::string line;
-    while (std::getline(data, line)) {
-      if (line.empty() || line[0] == '#' || line[0] == '_') continue;
-      std::istringstream fields(line);
-      std::string reading, word;
-      double score;
-      if (!(fields >> reading >> word >> score)) continue;
-      auto [it, inserted] = lexicon.emplace(word, score);
-      if (!inserted) it->second = std::max(it->second, score);
-    }
-  }
-  if (lexicon.empty()) {
+  Segment::Lexicon lexicon;
+  if (!Segment::LoadLexicon(argv[1], lexicon)) {
     std::cerr << "cannot read " << argv[1] << "\n";
     return 1;
   }
@@ -87,56 +45,24 @@ int main(int argc, char** argv) {
     return it->second;
   };
 
-  std::vector<char32_t> points;
-  std::vector<std::string> bytes;
   std::string line;
   uint64_t tokens = 0, runs = 0;
+  std::vector<uint32_t> segmented;
   while (std::getline(std::cin, line)) {
-    Decode(line, points, bytes);
-    for (size_t begin = 0; begin < points.size();) {
-      if (!IsHan(points[begin])) {
-        begin++;
-        continue;
-      }
-      size_t end = begin;
-      while (end < points.size() && IsHan(points[end])) end++;
-      // Viterbi over the run [begin, end).
-      size_t n = end - begin;
-      std::vector<double> best(n + 1, -INFINITY);
-      std::vector<size_t> from(n + 1, 0);
-      best[0] = 0;
-      for (size_t i = 0; i < n; i++) {
-        if (best[i] == -INFINITY) continue;
-        std::string word;
-        for (size_t length = 1; length <= kMaxWordLength && i + length <= n; length++) {
-          word += bytes[begin + i + length - 1];
-          auto it = lexicon.find(word);
-          double score = it != lexicon.end() ? it->second : length == 1 ? kUnknownCharScore : -INFINITY;
-          if (score == -INFINITY) continue;
-          if (best[i] + score > best[i + length]) {
-            best[i + length] = best[i] + score;
-            from[i + length] = i;
-          }
-        }
-      }
-      // Reversed word ids with the run boundary at both ends.
-      std::vector<uint32_t> segmented{idOf(ProjectKey::Bigram::kBoundary)};
-      for (size_t at = n; at > 0; at = from[at]) {
-        std::string word;
-        for (size_t k = from[at]; k < at; k++) word += bytes[begin + k];
-        segmented.push_back(idOf(word));
-      }
+    Segment::ForEachRun(line, lexicon, [&](const std::vector<std::string>& run) {
+      // Word ids with the run boundary at both ends.
+      segmented.assign({idOf(ProjectKey::Bigram::kBoundary)});
+      for (const std::string& word : run) segmented.push_back(idOf(word));
       segmented.push_back(idOf(ProjectKey::Bigram::kBoundary));
-      for (size_t k = segmented.size(); k-- > 1;) {
-        uint32_t previous = segmented[k], next = segmented[k - 1];  // segmented is reversed
+      for (size_t k = 1; k < segmented.size(); k++) {
+        uint32_t previous = segmented[k - 1], next = segmented[k];
         pairCounts[static_cast<uint64_t>(previous) << 32 | next]++;
         previousCounts[previous]++;
-        if (k + 1 < segmented.size()) tripleCounts[ProjectKey::Bigram::TripleKey(segmented[k + 1], previous, next)]++;
+        if (k >= 2) tripleCounts[ProjectKey::Bigram::TripleKey(segmented[k - 2], previous, next)]++;
       }
       tokens += segmented.size() - 2;
       runs++;
-      begin = end;
-    }
+    });
   }
 
   // Keep pairs seen at least minCount times; renumber the words they use.
