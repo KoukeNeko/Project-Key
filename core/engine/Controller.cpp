@@ -430,6 +430,11 @@ bool Controller::handleComposing(const KeyEvent& event) {
       return true;
     case Key::kReturn:
       if (empty) return false;
+      // Zhuyin symbols alone (ㄏ, ㄋㄧ) are typed as they are.
+      if (composer_->text().empty()) {
+        client_.insertText(composer_->pendingReading());
+        composer_->clear();
+      }
       commit();
       return true;
     case Key::kBackspace:
