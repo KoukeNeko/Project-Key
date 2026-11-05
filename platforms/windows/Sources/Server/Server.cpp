@@ -88,6 +88,10 @@ bool IsEnglish(const std::string& text) {
   return errors->Next(&error) == S_FALSE;  // no misspelled word
 }
 
+// Requests are a key and at most a little text before the caret; anything
+// bigger is not from the text service, and reading it all could exhaust memory.
+constexpr size_t kMaxRequestBytes = 65536;
+
 bool ReadMessage(HANDLE pipe, std::string& message) {
   message.clear();
   char buffer[4096];
@@ -96,8 +100,15 @@ bool ReadMessage(HANDLE pipe, std::string& message) {
     BOOL ok = ReadFile(pipe, buffer, sizeof(buffer), &read, nullptr);
     message.append(buffer, read);
     if (ok) return true;
-    if (GetLastError() != ERROR_MORE_DATA) return false;
+    if (GetLastError() != ERROR_MORE_DATA || message.size() > kMaxRequestBytes) return false;
   }
+}
+
+// Whether the other end of the pipe is the installed settings window. Apps in a
+// sandbox can connect too, but cannot pose as it.
+bool FromSettings(HANDLE pipe) {
+  ULONG client = 0;
+  return GetNamedPipeClientProcessId(pipe, &client) && SamePath(ProcessImage(client), ModuleDirectory(nullptr) + kSettingsExe);
 }
 
 void Serve(HANDLE pipe) {
@@ -124,7 +135,9 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kOtherModifier: controller->handleOtherModifier(); break;
         case Protocol::Request::kDeactivate: controller->deactivate(); break;
         case Protocol::Request::kReset: controller->reset(); break;
-        case Protocol::Request::kClearChoices: *gEnvironment.userModel = NewUserModel(); break;
+        case Protocol::Request::kClearChoices:
+          if (FromSettings(pipe)) *gEnvironment.userModel = NewUserModel();
+          break;
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
         case Protocol::Request::kShowSettings: LaunchSettings(ModuleDirectory(nullptr)); break;
         case Protocol::Request::kState: break;
