@@ -361,7 +361,11 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
   }
   std::optional<KeyEvent> key = keyEvent(wParam, lParam);
   if (!key) return;
-  std::optional<Protocol::Reply> reply = engine_.send({Protocol::Request::kKeyDown, *key});
+  Protocol::Message message{Protocol::Request::kKeyDown, *key};
+  // In 英, Tab may turn the Zhuyin just typed into a composition; the engine checks it is still there.
+  // Apps reached through the IMM32 compatibility layer expose no text, so there Tab stays a Tab.
+  if (englishMode_ && wParam == VK_TAB) message.context = textBeforeCaret(context);
+  std::optional<Protocol::Reply> reply = engine_.send(message);
   if (!reply) return;
   *eaten = reply->handled;
   if (reply->handled && testing) {
@@ -382,11 +386,7 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
 
 void TextService::keyUp(ITfContext* context, WPARAM wParam) {
   if (wParam != VK_SHIFT || !context || keyboardDisabled(context)) return;
-  Protocol::Message message{Protocol::Request::kShift, {}, false};
-  // In 英, a lone Shift may turn the Zhuyin just typed into a composition; the engine checks it is still there.
-  // Apps reached through the IMM32 compatibility layer expose no text, so there it only switches.
-  if (englishMode_) message.context = textBeforeCaret(context);
-  request(context, message);
+  request(context, {Protocol::Request::kShift, {}, false});
 }
 
 void TextService::toggleMode() {

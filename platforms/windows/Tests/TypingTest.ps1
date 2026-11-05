@@ -128,15 +128,17 @@ try {
   "after Shift: [$(Text)]"
   if ((Text) -notmatch 'ok今') { throw "expected English then 今, got [$(Text)]" }
 
-  # Zhuyin typed in English mode: the preview shows the conversion and the Shift
-  # keycap; a lone Shift turns it into a composition.
+  # Zhuyin typed in English mode: the preview shows the conversion and the Tab
+  # keycap; Tab turns it into a composition and switches to 中.
   Tap-Shift
   Type-Keys ' ji3'
   Shot 'hint'
-  Tap-Shift
   if ($Kind -eq 'winforms') {
-    # A Win32 edit control shows TSF no text, so the English stays and Shift only switches to 中.
+    # A Win32 edit control shows TSF no text, so there is nothing to convert: switch with Shift.
+    Tap-Shift
     Type-Keys 'rup '
+  } else {
+    Press 0x09
   }
   Press 0x0D
   Start-Sleep -Milliseconds 300
@@ -144,13 +146,16 @@ try {
   $expected = if ($Kind -eq 'winforms') { ' ji3今' } else { ' 我' }
   if (-not (Text).EndsWith($expected)) { throw "expected the text to end with [$expected], got [$(Text)]" }
 
-  # Caps Lock switches to English, and the letters it would capitalize stay lowercase.
+  # Caps Lock: with the 切換中英 setting it switches to English and letters stay
+  # lowercase; off (Windows' default) it locks capitals, which pass to the app.
+  $capsSwitches = (Get-ItemProperty 'HKCU:\Software\ProjectKey' -ErrorAction SilentlyContinue).CapsLockToggle -eq 1
   Press 0x14
   Type-Keys 'ab'
   Press 0x14
   Start-Sleep -Milliseconds 300
   "after Caps Lock: [$(Text)]"
-  if (-not (Text).EndsWith('ab')) { throw "expected lowercase ab, got [$(Text)]" }
+  $expected = if ($capsSwitches) { 'ab' } else { 'AB' }
+  if (-not (Text).EndsWith($expected)) { throw "expected $expected, got [$(Text)]" }
 
   # Punctuation keys without Shift, as on macOS.
   Type-Keys "'\[]"

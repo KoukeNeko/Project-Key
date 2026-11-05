@@ -177,7 +177,7 @@ struct Message {
   Request type = Request::kState;
   KeyEvent key;         // kKeyDown
   bool down = false;    // kShift
-  std::string context;  // kShift: text before the caret, for turning English typed in 英 into Zhuyin
+  std::string context;  // kKeyDown of Tab in 英: text before the caret, for turning English typed there into Zhuyin
 };
 
 inline std::string WriteMessage(const Message& m) {
