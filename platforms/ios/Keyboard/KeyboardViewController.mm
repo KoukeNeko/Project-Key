@@ -233,6 +233,9 @@ UIColor *PressedColor(BOOL function) {
 
 - (void)loadView {
   self.inputView = [[PKKeyboardView alloc] initWithFrame:CGRectZero inputViewStyle:UIInputViewStyleKeyboard];
+  // The system passes touches on fully transparent pixels to the app behind, so a
+  // swipe that starts between candidates never arrived.
+  self.inputView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.001];
   self.view = self.inputView;
 }
 
