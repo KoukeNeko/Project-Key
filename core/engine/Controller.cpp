@@ -663,6 +663,10 @@ void Controller::startChoosingAt(size_t start) {
   refresh();
 }
 
+void Controller::choose(int index) {
+  if (choosing_ && index >= 0 && index < static_cast<int>(candidates_.size())) pick(index);
+}
+
 void Controller::pick(int index) {
   std::optional<Segment> segment = composer_->segmentFrom(activeStart_);
   if (segment) composer_->choose(*segment, candidates_[index]);
