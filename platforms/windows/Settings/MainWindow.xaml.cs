@@ -27,6 +27,7 @@ public sealed partial class MainWindow : Window {
       presenter.IsMaximizable = false;
     }
 
+    Bind(NextDoubtful, "NextDoubtful");
     Bind(AdjacentKeys, "AdjacentKeys");
     Bind(RememberChoices, "RememberChoices");
     Bind(CapsLockToggle, "CapsLockToggle");

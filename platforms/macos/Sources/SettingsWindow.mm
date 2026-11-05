@@ -11,6 +11,7 @@ NSString *const PKCapsLockToggleKey = @"CapsLockToggle";
 NSString *const PKEnglishToZhuyinKey = @"EnglishToZhuyin";
 NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
 NSString *const PKCandidatePositionKey = @"CandidatePosition";
+NSString *const PKNextDoubtfulKey = @"NextDoubtful";
 
 @implementation PKSettingsWindow
 
@@ -25,6 +26,7 @@ NSString *const PKCandidatePositionKey = @"CandidatePosition";
     PKProofPreviewKey : @1,
     PKChoosingProofKey : @1,
     PKCandidatePositionKey : @0,
+    PKNextDoubtfulKey : @YES,
   }];
 }
 

@@ -73,6 +73,7 @@ enum class Setting {
   kZhuyinToEnglish,     // and English typed in 中 back into English
   kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
   kCandidatePosition,   // candidates for the word: 0 after the cursor (Windows), 1 before it (macOS)
+  kNextDoubtful,        // picking a candidate moves on to the next doubtful word
 };
 
 class Settings {

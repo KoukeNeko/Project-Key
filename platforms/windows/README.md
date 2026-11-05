@@ -49,7 +49,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | | 標點鍵 | `\` 或 `'` 輸入「、」，`[` `]` 輸入 `「` `」` |
 | | 其他字元（如 Shift+字母） | 送出整句，接著輸入該字元 |
 | | Ctrl+Shift+P | 開關整句預覽 |
-| 選字中 | 1–6 | 選取所在那一列的字，選完跳到下一個可疑處 |
+| 選字中 | 1–6 | 選取所在那一列的字，選完跳到下一個可疑處（可在設定關閉，關閉時選完即結束選字） |
 | | ←、→ | 移動選取 |
 | | ↓ | 展開成多列候選，移到下一列的同一欄。每列 6 欄，長詞佔多欄 |
 | | Space、Page Down | 下一列；展開時往下捲 5 列 |
@@ -69,7 +69,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 設定
 
-設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、英文轉注音、注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
+設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、鄰鍵修正、記住選過的字（可清除紀錄）、候選視窗外觀（深色、Acrylic、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock 與單按 Shift 切換中英、英文轉注音、注音轉英文。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
 
 ## 測試
 

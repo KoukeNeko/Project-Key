@@ -109,6 +109,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kZhuyinToEnglish: return "ZhuyinToEnglish";
     case Setting::kAppearance: return "Appearance";
     case Setting::kCandidatePosition: return "CandidatePosition";
+    case Setting::kNextDoubtful: return "NextDoubtful";
   }
   return "";
 }
@@ -659,7 +660,8 @@ void Controller::startChoosingAt(size_t start) {
 void Controller::pick(int index) {
   std::optional<Segment> segment = composer_->segmentFrom(activeStart_);
   if (segment) composer_->choose(*segment, candidates_[index]);
-  std::optional<size_t> next = doubtfulAfter(activeStart_, false);
+  std::optional<size_t> next;
+  if (env_.settings->flag(Setting::kNextDoubtful)) next = doubtfulAfter(activeStart_, false);
   if (next) {
     startChoosingAt(*next);
   } else {
