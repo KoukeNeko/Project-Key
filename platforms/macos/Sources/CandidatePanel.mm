@@ -39,7 +39,7 @@ constexpr CGFloat kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine =
 constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 // Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
 NSString *const kReplacedArrow = @" → ";
-constexpr CGFloat kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6;
+constexpr CGFloat kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
 // Candidate row: padding 6 6 6 8; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
 constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
 constexpr CGFloat kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
@@ -283,6 +283,30 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 - (void)drawKeyHintAt:(CGFloat)lineTop {
   CGFloat width = [self keyWidth];
   NSRect cap = NSMakeRect(NSWidth(self.bounds) - kProofRight - width, lineTop + (kProofLine - kKeyHeight) / 2, width, kKeyHeight);
+  // A key: a face with a hairline edge, raised on a darker lip that shows below it.
+  NSBezierPath *face = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(cap, 0.25, 0.25) xRadius:kKeyRadius yRadius:kKeyRadius];
+  [NSGraphicsContext saveGraphicsState];
+  NSBezierPath *outside = [NSBezierPath bezierPathWithRect:self.bounds];
+  [outside appendBezierPath:face];
+  outside.windingRule = NSWindingRuleEvenOdd;
+  [outside addClip];
+  [[NSColor.blackColor colorWithAlphaComponent:0.35] setFill];
+  [[NSBezierPath bezierPathWithRoundedRect:NSOffsetRect(cap, 0, kKeyLip) xRadius:kKeyRadius yRadius:kKeyRadius] fill];
+  [NSGraphicsContext restoreGraphicsState];
+  [[self.mutedColor colorWithAlphaComponent:0.16] setFill];
+  [face fill];
+  face.lineWidth = 0.5;
+  [[self.mutedColor colorWithAlphaComponent:0.35] setStroke];
+  [face stroke];
+  if ([self.content.keyHint isEqualToString:@"⇥"]) {  // the system's own Tab symbol
+    NSImageSymbolConfiguration *style = [[NSImageSymbolConfiguration configurationWithPointSize:_labelFont.pointSize weight:NSFontWeightMedium]
+        configurationByApplyingConfiguration:[NSImageSymbolConfiguration configurationWithPaletteColors:@[ self.mutedColor ]]];
+    NSImage *symbol = [[NSImage imageWithSystemSymbolName:@"arrow.right.to.line" accessibilityDescription:@"Tab"] imageWithSymbolConfiguration:style];
+    NSSize size = symbol.size;
+    NSRect frame = NSMakeRect(NSMidX(cap) - size.width / 2, NSMidY(cap) - size.height / 2, size.width, size.height);
+    [symbol drawInRect:frame fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1 respectFlipped:YES hints:nil];
+    return;
+  }
   NSDictionary *attributes = Attributes(_labelFont, self.mutedColor);
   // Centered on its ink, not its line box: a symbol such as ⇥ sits high in the line.
   NSRect ink = [self.content.keyHint boundingRectWithSize:NSZeroSize options:NSStringDrawingUsesDeviceMetrics attributes:attributes];

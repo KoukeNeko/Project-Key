@@ -371,6 +371,14 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
     float w = keyWidth();
     float right = static_cast<float>(target->GetSize().width) - kProofRight;
     D2D1_RECT_F cap = D2D1::RectF(right - w, lineTop + (kProofLine - kKeyHeight) / 2, right, lineTop + (kProofLine + kKeyHeight) / 2);
+    // A key: a face with a hairline edge, raised on a darker lip along its bottom.
+    D2D1_ROUNDED_RECT face = D2D1::RoundedRect(D2D1::RectF(cap.left + 0.25f, cap.top + 0.25f, cap.right - 0.25f, cap.bottom - 0.25f), kKeyRadius, kKeyRadius);
+    auto lip = Brush(target, D2D1::ColorF(0, 0, 0, 0.35f));
+    target->DrawLine(D2D1::Point2F(cap.left + kKeyRadius, cap.bottom + kKeyLip / 2), D2D1::Point2F(cap.right - kKeyRadius, cap.bottom + kKeyLip / 2), lip.Get(), kKeyLip);
+    auto faceFill = Brush(target, Color(kMuted, 0.16f));
+    target->FillRoundedRectangle(face, faceFill.Get());
+    auto edge = Brush(target, Color(kMuted, 0.35f));
+    target->DrawRoundedRectangle(face, edge.Get(), 0.5f);
     Line key = Measure(fonts_, Widen(content_->keyHint), fonts_.key());
     auto text = Brush(target, Color(kText));
     DrawLine(target, key, (cap.left + cap.right - key.width) / 2, cap.top, kKeyHeight, text.Get());
