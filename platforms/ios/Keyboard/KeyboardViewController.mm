@@ -120,9 +120,13 @@ NSArray<NSArray<NSString *> *> *SymbolRows() {
   ];
 }
 
-constexpr CGFloat kBarHeight = 44, kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 2, kBottomInset = 2;
+constexpr CGFloat kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 2, kBottomInset = 2;
 // A row gap is this share of a row's pitch, so the rows keep their shape at any height.
 constexpr CGFloat kRowGapShare = 0.12;
+// The candidate bar takes one row of keys: a key's height and the gap below it.
+constexpr CGFloat kBarHeight = kKeyHeight / (1 - kRowGapShare);
+// A candidate's box: shorter than a key, midway between the keyboard's top and the keys.
+constexpr CGFloat kChipHeight = 34, kChipTop = (kBarHeight + kTopInset - kChipHeight) / 2;
 constexpr CGFloat kExpandWidth = 44, kGridRowHeight = 44;
 constexpr int kGridColumns = 6;
 
@@ -315,6 +319,9 @@ UIColor *PressedColor(BOOL function) {
   [self.view addSubview:_grid];
   _expandKey = [UIButton buttonWithType:UIButtonTypeSystem];
   _expandKey.tintColor = UIColor.labelColor;
+  UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(0, kChipTop + 6, 0.5, kChipHeight - 12)];  // between the row and ⌄
+  divider.backgroundColor = UIColor.separatorColor;
+  [_expandKey addSubview:divider];
   [_expandKey addTarget:self action:@selector(toggleGrid) forControlEvents:UIControlEventTouchUpInside];
   [self.view addSubview:_expandKey];
 
@@ -354,7 +361,7 @@ UIColor *PressedColor(BOOL function) {
   CGFloat pitch = (CGRectGetHeight(self.view.bounds) - kBarHeight - kTopInset - kBottomInset) / (5 - kRowGapShare);
   CGFloat rowGap = round(pitch * kRowGapShare), keyHeight = pitch - rowGap;
   _bar.frame = CGRectMake(0, 0, width - kExpandWidth, kBarHeight);
-  _expandKey.frame = CGRectMake(width - kExpandWidth, 0, kExpandWidth, kBarHeight);
+  _expandKey.frame = CGRectMake(width - kExpandWidth, 0, kExpandWidth, 2 * kChipTop + kChipHeight);
   _grid.frame = self.view.bounds;
   if (_expanded) [self reloadCandidates];
   CGFloat y = kBarHeight + kTopInset;
@@ -498,8 +505,8 @@ UIColor *PressedColor(BOOL function) {
 
 #pragma mark - Candidates
 
-// While choosing: the candidate row the Controller shows, tapped to pick, and
-// ⌄ to spread all the candidates over the keys. While composing: the
+// While choosing: every candidate in one row that scrolls sideways, tapped
+// to pick, and ⌄ to spread them over the keys. While composing: the
 // sentence, tapped to commit.
 - (void)reloadCandidates {
   if (!_bar) return;
@@ -507,10 +514,14 @@ UIColor *PressedColor(BOOL function) {
   NSMutableArray<UIButton *> *buttons = [NSMutableArray array];
   const auto &panel = _controller->panel();
   BOOL choosing = [self choosing];
+  UIButton *selected = nil;
   if (choosing) {
-    const auto &row = panel->rows[panel->selectedRow];
-    for (size_t i = 0; i < row.size(); i++) {
-      UIButton *button = [self candidate:String(row[i]) selected:static_cast<int>(i) == panel->selection];
+    // Candidates are distinct, so the one the Controller selects is found by its text.
+    const std::string &current = panel->rows[panel->selectedRow][panel->selection];
+    const auto &candidates = _controller->candidates();
+    for (size_t i = 0; i < candidates.size(); i++) {
+      UIButton *button = [self candidate:String(candidates[i]) selected:candidates[i] == current];
+      if (candidates[i] == current) selected = button;
       button.tag = static_cast<NSInteger>(i);
       [button addTarget:self action:@selector(pickCandidate:) forControlEvents:UIControlEventTouchUpInside];
       [buttons addObject:button];
@@ -525,11 +536,13 @@ UIColor *PressedColor(BOOL function) {
   for (UIButton *button in buttons) {
     [button sizeToFit];
     CGFloat w = MAX(40, CGRectGetWidth(button.bounds) + 20);
-    button.frame = CGRectMake(x, 6, w, kBarHeight - 12);
+    button.frame = CGRectMake(x, kChipTop, w, kChipHeight);
     [_bar addSubview:button];
     x += w + 4;
   }
-  _bar.contentSize = CGSizeMake(x, kBarHeight);
+  _bar.contentSize = CGSizeMake(x + 6, kBarHeight);
+  _bar.contentOffset = CGPointZero;
+  if (selected) [_bar scrollRectToVisible:selected.frame animated:NO];  // Space moved it past the edge
 
   BOOL more = choosing && !panel->pageLabel.empty();
   if (!more) _expanded = NO;
@@ -561,7 +574,7 @@ UIColor *PressedColor(BOOL function) {
     }
     button.frame = CGRectMake(column * cell, row * kGridRowHeight, span * cell, kGridRowHeight);
     button.tag = static_cast<NSInteger>(i);
-    [button addTarget:self action:@selector(pickFromGrid:) forControlEvents:UIControlEventTouchUpInside];
+    [button addTarget:self action:@selector(pickCandidate:) forControlEvents:UIControlEventTouchUpInside];
     [_grid addSubview:button];
     column += span;
   }
@@ -589,14 +602,6 @@ UIColor *PressedColor(BOOL function) {
 }
 
 - (void)pickCandidate:(UIButton *)button {
-  [self click];
-  char digit = static_cast<char>('1' + button.tag);
-  _controller->handleKey(Press(std::string(1, digit)));
-  [self showCandidates];
-  [self reloadCandidates];
-}
-
-- (void)pickFromGrid:(UIButton *)button {
   [self click];
   _expanded = NO;
   _controller->choose(static_cast<int>(button.tag));
