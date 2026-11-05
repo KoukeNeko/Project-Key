@@ -40,6 +40,7 @@ constexpr const wchar_t* kReplacedArrow = L" → ";
 constexpr uint32_t kBackground = 0x23282c, kLine = 0x343b40, kText = 0xe8ecee, kMuted = 0x8e9aa3;
 constexpr uint32_t kAccent = 0x14806f, kAccentSoft = 0x3fb9a3;
 constexpr float kDoubtMarkAlpha = 0.7f;
+constexpr float kAcrylicTint = 0.6f;  // the dark background's opacity over Acrylic
 
 // Text formats and measurement. Not thread-safe; each thread makes its own.
 class Fonts {
