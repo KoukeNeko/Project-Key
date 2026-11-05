@@ -64,7 +64,7 @@ python3 tools/corpus-evaluator/evaluate.py --engine rime --out report.md
 | `rime` | librime + `bopomofo_tw` 方案（terra_pinyin 詞庫） |
 | `chewing` | libchewing（Homebrew 版本內建詞庫），關閉自動學習 |
 | `mcbopomofo` | McBopomofo 引擎與 `data.txt`，與 `annotate.py` 使用同一個 commit |
-| `projectkey` | macOS 輸入法的組字器（`platforms/macos/Sources/Composer.cpp`）加上 `tools/bigram-trainer/.cache/bigram.bin` |
+| `projectkey` | 輸入法的組字器（`core/engine/Composer.cpp`）加上 `tools/bigram-trainer/.cache/bigram.bin` |
 
 注意事項：
 

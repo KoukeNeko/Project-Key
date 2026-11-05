@@ -1,6 +1,5 @@
 // Drives the Controller with key events against a fake client, covering what a
-// user does: type a sentence, fix a doubtful word, commit. The Windows port of
-// platforms/macos/Tests/ControllerTest.mm.
+// user does: type a sentence, fix a doubtful word, commit.
 // Usage: ControllerTest <path to data.txt>
 #undef NDEBUG
 #include <cassert>
@@ -8,7 +7,7 @@
 #include <map>
 #include <set>
 
-#include "Engine/Controller.h"
+#include "Controller.h"
 
 using namespace ProjectKey;
 

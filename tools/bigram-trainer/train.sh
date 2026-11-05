@@ -21,7 +21,7 @@ mkdir -p "$CACHE/wiki"
 [ -f "$CACHE/wiki/0.parquet" ] || curl -fsSL -o "$CACHE/wiki/0.parquet" "$SHARD_URL"
 [ -x "$CACHE/venv/bin/python" ] || { python3 -m venv "$CACHE/venv"; "$CACHE/venv/bin/pip" install -q pyarrow; }
 
-c++ -std=c++20 -O2 -I../../platforms/macos/Sources train.cpp ../../platforms/macos/Sources/Bigram.cpp -o "$CACHE/train"
+c++ -std=c++20 -O2 -I../../core/engine train.cpp ../../core/engine/Bigram.cpp -o "$CACHE/train"
 {
   "$CACHE/venv/bin/python" -I extract.py "$CACHE/wiki/0.parquet" "$LIMIT" | opencc -c s2twp.json
   [ -d "$CACHE/gazette" ] && find "$CACHE/gazette" -name '*.txt' -exec cat {} +

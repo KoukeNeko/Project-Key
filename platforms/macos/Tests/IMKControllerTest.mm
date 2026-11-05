@@ -1,5 +1,6 @@
-// Drives PKInputController with real key events against a fake text client,
-// covering what a user does: type a sentence, fix a doubtful word, commit.
+// Drives PKInputController, the IMK side of the shared Controller, with real
+// key events against a fake text client, covering what a user does: type a
+// sentence, fix a doubtful word, commit.
 // Expects data.txt next to the executable (NSBundle.mainBundle's resources).
 #import <Carbon/Carbon.h>
 #import <InputMethodKit/InputMethodKit.h>
@@ -41,6 +42,9 @@
   if (range.location != NSNotFound) [_committed deleteCharactersInRange:range];  // the marked text takes its place
   _marked = [string isKindOfClass:NSAttributedString.class] ? [string string] : string;
 }
+- (NSAttributedString *)attributedSubstringFromRange:(NSRange)range {
+  return [[NSAttributedString alloc] initWithString:[_committed substringWithRange:range]];
+}
 - (NSDictionary *)attributesForCharacterIndex:(NSUInteger)index lineHeightRectangle:(NSRect *)rect {
   *rect = NSMakeRect(200, 600, 0, 20);
   return @{};
@@ -65,11 +69,11 @@ NSEvent *Key(NSString *characters, unsigned short keyCode = 0, NSEventModifierFl
                            keyCode:keyCode];
 }
 
-NSEvent *CapsLock(BOOL on) {
+NSEvent *CapsLock(BOOL on, NSTimeInterval timestamp) {
   return [NSEvent keyEventWithType:NSEventTypeFlagsChanged
                           location:NSZeroPoint
                      modifierFlags:on ? NSEventModifierFlagCapsLock : 0
-                         timestamp:0
+                         timestamp:timestamp
                       windowNumber:0
                            context:nil
                         characters:@""
@@ -89,6 +93,14 @@ NSEvent *Shift(BOOL down) {
        charactersIgnoringModifiers:@""
                          isARepeat:NO
                            keyCode:kVK_Shift];
+}
+
+// Caps Lock pressed, leaving the lock `on`; the system reports the change twice.
+void PressCapsLock(PKInputController *controller, FakeClient *client, BOOL on) {
+  static NSTimeInterval now = 100;
+  now += 10;
+  [controller handleEvent:CapsLock(on, now) client:client];
+  [controller handleEvent:CapsLock(on, now + 0.002) client:client];
 }
 
 void Type(PKInputController *controller, FakeClient *client, NSString *keys) {
@@ -262,26 +274,26 @@ int main() {
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
 
-    // Caps Lock switches 中/英 on each press; the lock it leaves on does not capitalize.
-    [controller handleEvent:CapsLock(YES) client:client];
+    // Each Caps Lock press switches 中/英; the lock it leaves on does not capitalize.
+    PressCapsLock(controller, client, YES);
     NSUInteger beforeCaps = client.committed.length;
     assert([controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock) client:client]);
     assert([client.committed hasSuffix:@"r"] && client.committed.length == beforeCaps + 1);
     assert(![controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock | NSEventModifierFlagShift) client:client]);
-    [controller handleEvent:CapsLock(NO) client:client];
+    PressCapsLock(controller, client, NO);
     assert([controller handleEvent:Key(@"r") client:client] && client.marked.length);  // back in 中
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     // Back in 中 with the lock on (after Shift switched), letters are still Zhuyin keys.
-    [controller handleEvent:CapsLock(YES) client:client];
+    PressCapsLock(controller, client, YES);
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
     assert([controller handleEvent:Key(@"R", 0, NSEventModifierFlagCapsLock) client:client] && [client.marked isEqualToString:@"ㄐ"]);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
-    [controller handleEvent:CapsLock(NO) client:client];
+    PressCapsLock(controller, client, NO);
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];  // leave it in 中
 
-    std::printf("ControllerTest passed\n");
+    std::printf("IMKControllerTest passed\n");
   }
   return 0;
 }

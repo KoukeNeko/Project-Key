@@ -5,11 +5,11 @@
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 $Build = Join-Path $PSScriptRoot '.build'
-$McbCommit = '257da536ddaf590aae0e74e6adb9b415988344f6'
+$McbCommit = (Get-Content "$PSScriptRoot\..\..\MCBOPOMOFO_COMMIT").Trim()
 $Mcb = Join-Path $Build 'mcbopomofo'
 $Obj = Join-Path $Build 'obj'
 $Out = Join-Path $Build 'out'
-$Mac = Join-Path $PSScriptRoot '..\macos\Sources'  # Composer and Bigram are shared with macOS
+$Core = Join-Path $PSScriptRoot '..\..\core\engine'  # the engine shared with macOS
 New-Item -ItemType Directory -Force $Build, $Obj, $Out | Out-Null
 
 # MSVC environment from vcvars64.bat.
@@ -68,7 +68,7 @@ foreach ($file in 'AssociatedPhrasesV2.cpp', 'ParselessLM.cpp') {
 }
 $CxxFlags = @('/nologo', '/Brepro', '/std:c++20', '/utf-8', '/EHsc', '/O2', '/MT', '/Zi', '/permissive-',
   '/D_CRT_SECURE_NO_WARNINGS', '/DUNICODE', '/D_UNICODE', '/DNOMINMAX', '/DWIN32_LEAN_AND_MEAN',
-  "/I$PSScriptRoot\compat", "/I$Engine", "/I$Mac", "/I$PSScriptRoot\Sources")
+  "/I$PSScriptRoot\compat", "/I$Engine", "/I$Core", "/I$PSScriptRoot\Sources")
 
 # Same sources, same bytes: Smart App Control judges each new binary, so unchanged ones keep their verdict.
 $LinkFlags = @('/nologo', '/DEBUG', '/INCREMENTAL:NO', '/Brepro')
@@ -87,13 +87,14 @@ $engineSources = @('AssociatedPhrasesV2', 'ByteBlockBackedDictionary', 'McBopomo
   ForEach-Object { "$Engine\$_.cpp" }
 $engineSources += "$Engine\gramambular2\reading_grid.cpp", "$Engine\Mandarin\Mandarin.cpp"
 $engineObjects = @(Compile 'mcbopomofo' $engineSources @('/W0'))
-$engineObjects += Compile 'engine' @("$Mac\Composer.cpp", "$Mac\Bigram.cpp", "$PSScriptRoot\Sources\Engine\Controller.cpp")
+$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\Controller.cpp")
 Invoke-Native lib.exe /nologo "/OUT:$Obj\engine.lib" @engineObjects
 
-# Tests: the composer test shared with macOS, and the controller test.
+# Tests: the engine tests shared with macOS, and the pipe protocol.
 $tests = @(
-  @{ Name = 'ComposerTest'; Source = "$Mac\..\Tests\ComposerTest.cpp" },
-  @{ Name = 'ControllerTest'; Source = "$PSScriptRoot\Tests\ControllerTest.cpp" })
+  @{ Name = 'ComposerTest'; Source = "$Core\Tests\ComposerTest.cpp" },
+  @{ Name = 'ControllerTest'; Source = "$Core\Tests\ControllerTest.cpp" },
+  @{ Name = 'ProtocolTest'; Source = "$PSScriptRoot\Tests\ProtocolTest.cpp" })
 foreach ($test in $tests) {
   $objects = @(Compile $test.Name.ToLower() @($test.Source))
   Invoke-Native link.exe @LinkFlags "/OUT:$Obj\$($test.Name).exe" @objects "$Obj\engine.lib"

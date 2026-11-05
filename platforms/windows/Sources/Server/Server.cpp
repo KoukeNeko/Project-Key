@@ -15,7 +15,7 @@
 #include "Common/Layout.h"
 #include "Common/Protocol.h"
 #include "Common/Win.h"
-#include "Engine/Controller.h"
+#include "Controller.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace ProjectKey;

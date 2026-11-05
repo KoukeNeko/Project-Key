@@ -16,7 +16,6 @@ import sys
 import urllib.request
 from pathlib import Path
 
-MCB_COMMIT = "257da536ddaf590aae0e74e6adb9b415988344f6"
 HETEROPHONY = ["heterophony1.list", "heterophony2.list", "heterophony3.list"]
 MCB_FILES = ["BPMFMappings.txt", "BPMFBase.txt", "phrase.occ", *HETEROPHONY]
 MAX_WORD = 8
@@ -26,6 +25,7 @@ TYPED_FORM = {
 }
 
 ROOT = Path(__file__).resolve().parents[2]
+MCB_COMMIT = (ROOT / "MCBOPOMOFO_COMMIT").read_text().strip()
 CACHE = Path(__file__).resolve().parent / ".cache" / MCB_COMMIT
 SENTENCES = ROOT / "tests/corpus/sentences.tsv"
 CORPUS = ROOT / "tests/corpus/corpus.tsv"

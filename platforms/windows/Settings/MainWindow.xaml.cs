@@ -12,7 +12,7 @@ using Windows.Graphics;
 namespace ProjectKey.Settings;
 
 // Edits the settings the engine server reads: DWORDs under
-// HKCU\Software\ProjectKey, named and defaulted as in Engine/Controller.cpp.
+// HKCU\Software\ProjectKey, named and defaulted as in core/engine/Controller.cpp.
 // Changes are written at once, as on macOS; there is no Apply button.
 public sealed partial class MainWindow : Window {
   private const string Key = @"Software\ProjectKey";

@@ -1,14 +1,16 @@
 #!/bin/sh
-# Builds .build/ProjectKey.app and runs the composer test. Needs Xcode command
+# Builds .build/ProjectKey.app and runs the engine and controller tests. Needs Xcode command
 # line tools and CMake. The McBopomofo engine and dictionary (MIT) are fetched
 # at a pinned commit into .build/.
 set -eu
 cd "$(dirname "$0")"
 BUILD=.build
-MCB_COMMIT=257da536ddaf590aae0e74e6adb9b415988344f6
+MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)
+CORE=../../core/engine  # the engine shared with Windows
+ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/Controller.cpp"
 MCB=$BUILD/mcbopomofo
 APP=$BUILD/ProjectKey.app
-CXXFLAGS="-std=c++20 -O2 -Wall -mmacosx-version-min=13.0 -I$MCB/Source/Engine -I$BUILD"
+CXXFLAGS="-std=c++20 -O2 -Wall -mmacosx-version-min=13.0 -I$MCB/Source/Engine -I$CORE -I$BUILD"
 LIBS="$MCB/build/libMcBopomofoLMLib.a $MCB/build/Mandarin/libMandarinLib.a $MCB/build/gramambular2/libgramambular2_lib.a"
 
 if [ ! -d "$MCB/.git" ]; then
@@ -28,20 +30,22 @@ xcrun swiftc -c -O -parse-as-library -module-name ProjectKey -target "$(uname -m
 SWIFT_LINK="$BUILD/SettingsForm.o -L$(xcrun --show-sdk-path)/usr/lib/swift -L$(dirname "$(xcrun -f swiftc)")/../lib/swift/macosx -Wl,-rpath,/usr/lib/swift"
 
 # shellcheck disable=SC2086
-c++ $CXXFLAGS Sources/Composer.cpp Sources/Bigram.cpp Tests/ComposerTest.cpp $LIBS -o $BUILD/ComposerTest
-$BUILD/ComposerTest "$MCB/Source/Data/data.txt"
-# ControllerTest finds data.txt next to itself, as the app finds it in Resources.
+for test in ComposerTest ControllerTest; do
+  c++ $CXXFLAGS $ENGINE "$CORE/Tests/$test.cpp" $LIBS -o "$BUILD/$test"
+  "$BUILD/$test" "$MCB/Source/Data/data.txt"
+done
+# The IMK ControllerTest finds data.txt next to itself, as the app finds it in Resources.
 ln -sf "$PWD/$MCB/Source/Data/data.txt" $BUILD/data.txt
 # shellcheck disable=SC2086
-c++ $CXXFLAGS -fobjc-arc Sources/Composer.cpp Sources/Bigram.cpp Sources/CandidatePanel.mm Sources/SettingsWindow.mm Sources/InputController.mm Tests/ControllerTest.mm $LIBS $SWIFT_LINK \
-  -framework Cocoa -framework QuartzCore -framework InputMethodKit -framework Carbon -o $BUILD/ControllerTest
-if ! out=$($BUILD/ControllerTest 2>&1); then echo "$out" >&2; exit 1; fi
+c++ $CXXFLAGS -fobjc-arc $ENGINE Sources/CandidatePanel.mm Sources/SettingsWindow.mm Sources/InputController.mm Tests/IMKControllerTest.mm $LIBS $SWIFT_LINK \
+  -framework Cocoa -framework QuartzCore -framework InputMethodKit -framework Carbon -o $BUILD/IMKControllerTest
+if ! out=$($BUILD/IMKControllerTest 2>&1); then echo "$out" >&2; exit 1; fi
 echo "$out" | grep -v 'Keyboard Layouts\|TISFileInterrogator' || true  # system noise from loading input sources
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # shellcheck disable=SC2086
-c++ $CXXFLAGS -fobjc-arc Sources/*.cpp Sources/*.mm $LIBS $SWIFT_LINK \
+c++ $CXXFLAGS -fobjc-arc $ENGINE Sources/*.mm $LIBS $SWIFT_LINK \
   -framework Cocoa -framework QuartzCore -framework InputMethodKit -framework Carbon \
   -o "$APP/Contents/MacOS/ProjectKey"
 cp Resources/Info.plist "$APP/Contents/"
