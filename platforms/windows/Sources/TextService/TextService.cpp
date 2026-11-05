@@ -452,7 +452,7 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
     }
     if (indicator && anchor) {
       RECT frame = candidates_.frame();
-      badge_.show(Widen(indicator->text), *anchor, owner, candidates_.visible() ? &frame : nullptr);
+      badge_.show(Widen(indicator->text), *anchor, owner, candidates_.visible() ? &frame : nullptr, appearance_);
     }
   };
   if (!needsDocument || !context) {
