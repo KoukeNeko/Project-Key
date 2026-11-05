@@ -16,6 +16,7 @@
 @interface FakeClient : NSObject
 @property(nonatomic, strong) NSMutableString *committed;
 @property(nonatomic, copy) NSString *marked;
+@property(nonatomic, copy) NSString *bundle;
 @end
 
 @implementation FakeClient
@@ -23,6 +24,7 @@
   if ((self = [super init])) {
     _committed = [NSMutableString string];
     _marked = @"";
+    _bundle = @"org.projectkey.test";
   }
   return self;
 }
@@ -50,7 +52,7 @@
   return @{};
 }
 - (NSString *)bundleIdentifier {
-  return @"org.projectkey.test";
+  return _bundle;
 }
 @end
 
@@ -248,6 +250,22 @@ int main() {
     assert([client.committed hasSuffix:@"hello "] && [client.marked isEqualToString:@"我好"]);
     assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
     assert([controller handleEvent:Key(@"r") client:client]);  // back in 中
+    while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
+
+    // A terminal cannot take back what it sent to the shell: no preview, and Tab stays a Tab.
+    client.bundle = @"com.googlecode.iterm2";
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    for (NSString *key in @[ @"j", @"i", @"3" ]) {
+      assert(![controller handleEvent:Key(key) client:client]);
+      [client.committed appendString:key];
+    }
+    assert(!PKCandidatePanel.shared.visible);
+    assert(![controller handleEvent:Key(@"\t", kVK_Tab) client:client]);
+    assert([client.committed hasSuffix:@"ji3"] && client.marked.length == 0);
+    [controller handleEvent:Shift(YES) client:client];
+    [controller handleEvent:Shift(NO) client:client];
+    client.bundle = @"org.projectkey.test";
 
     // The reverse: English typed in 中 shows what Tab turns it into,
     // and Tab puts the English in place of the composition and switches to 英.

@@ -92,7 +92,7 @@ class ClientAdapter : public ProjectKey::Client {
 
   void setComposition(const ProjectKey::Composition &composition) override {
     NSString *text = String(composition.text);
-    // The marked text takes the place of English a lone Shift converted; apps
+    // The marked text takes the place of English Tab converted; apps
     // honor a replacement range there more widely than an empty insertText.
     NSRange replacing = NSMakeRange(NSNotFound, 0);
     if (composition.replaceBefore) {
@@ -116,6 +116,11 @@ class ClientAdapter : public ProjectKey::Client {
   }
 
   void showPanel(const ProjectKey::PanelContent &panel) override {
+    // The English-to-Zhuyin offer, where it could not be carried out.
+    if (!panel.keyHint.empty() && SharedEnvironment().englishMode && !replacesBeforeCaret()) {
+      hidePanel();
+      return;
+    }
     PKPanelContent *content = [[PKPanelContent alloc] init];
     NSMutableArray<NSString *> *segments = [NSMutableArray array];
     NSMutableIndexSet *doubtful = [NSMutableIndexSet indexSet];
@@ -152,7 +157,19 @@ class ClientAdapter : public ProjectKey::Client {
 
   void beep() override { NSBeep(); }
 
+  // Terminals show the shell's line but cannot take back what they already sent
+  // to it, so English there cannot give way to a composition.
+  // shortcut: a fixed list of terminals; add others as they turn up.
+  bool replacesBeforeCaret() {
+    static NSSet<NSString *> *terminals = [NSSet setWithArray:@[
+      @"com.apple.Terminal", @"com.googlecode.iterm2", @"com.mitchellh.ghostty", @"net.kovidgoyal.kitty",
+      @"org.alacritty", @"com.github.wez.wezterm", @"dev.warp.Warp-Stable"
+    ]];
+    return ![terminals containsObject:[client bundleIdentifier]];
+  }
+
   std::string textBeforeCaret() override {
+    if (!replacesBeforeCaret()) return "";
     NSRange selection = [client selectedRange];
     if (selection.location == NSNotFound) return "";
     NSUInteger start = selection.location > 64 ? selection.location - 64 : 0;
