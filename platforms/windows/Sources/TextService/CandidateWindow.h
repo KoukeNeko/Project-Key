@@ -67,10 +67,14 @@ class ModeBadge {
   void show(const std::wstring& label, const RECT& anchor, HWND owner, const RECT* avoid);
   // Moves a showing badge out of `rect`, the candidate window's frame.
   void avoid(const RECT& rect);
+  // Moves a showing badge to a new anchor without restarting its fade.
+  void follow(const RECT& anchor, const RECT* avoid);
   void hide();
+  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_); }
 
  private:
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+  void place(const RECT& anchor, const RECT* avoid);
   void render();
   void present(BYTE alpha);
   void tick();
@@ -82,6 +86,7 @@ class ModeBadge {
   HBITMAP bitmap_ = nullptr;
   HGDIOBJ oldBitmap_ = nullptr;
   POINT position_{};
+  float scale_ = 1;
   SIZE size_{};
   std::wstring label_;
   ULONGLONG start_ = 0;
