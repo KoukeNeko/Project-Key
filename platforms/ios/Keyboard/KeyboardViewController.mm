@@ -28,6 +28,8 @@ std::string Std(NSString *s) {
 class DefaultsSettings : public ProjectKey::Settings {
  public:
   std::optional<int> stored(ProjectKey::Setting setting) const override {
+    // Candidates are for the word just typed, as on the system keyboard.
+    if (setting == ProjectKey::Setting::kCandidatePosition) return 1;
     NSString *name = @(Name(setting));
     if (![NSUserDefaults.standardUserDefaults objectForKey:name]) return std::nullopt;
     return static_cast<int>([NSUserDefaults.standardUserDefaults integerForKey:name]);
@@ -118,9 +120,11 @@ NSArray<NSArray<NSString *> *> *SymbolRows() {
   ];
 }
 
-constexpr CGFloat kBarHeight = 36, kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 3, kBottomInset = 3;
+constexpr CGFloat kBarHeight = 32, kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 2, kBottomInset = 2;
 // A row gap is this share of a row's pitch, so the rows keep their shape at any height.
-constexpr CGFloat kRowGapShare = 0.18;
+constexpr CGFloat kRowGapShare = 0.12;
+constexpr CGFloat kExpandWidth = 44, kGridRowHeight = 44;
+constexpr int kGridColumns = 6;
 
 // The system keyboard's key colors: character keys light, the others a step darker.
 UIColor *KeyColor(BOOL function) {
@@ -214,7 +218,9 @@ UIColor *PressedColor(BOOL function) {
 @implementation PKKeyboardViewController {
   std::unique_ptr<ClientAdapter> _client;
   std::unique_ptr<ProjectKey::Controller> _controller;
-  UIScrollView *_bar;
+  UIScrollView *_bar, *_grid;
+  UIButton *_expandKey;
+  BOOL _expanded;  // the candidates spread over the keys
   NSArray<NSArray<PKKeyButton *> *> *_zhuyinRows, *_symbolRows;
   PKKeyButton *_pageKey, *_commaKey, *_globeKey, *_spaceKey, *_erKey, *_deleteKey, *_returnKey;
   BOOL _symbols;
@@ -234,13 +240,17 @@ UIColor *PressedColor(BOOL function) {
   _controller = std::make_unique<ProjectKey::Controller>(SharedEnvironment(), *_client);
 
   _bar = [[UIScrollView alloc] init];
-  _bar.showsHorizontalScrollIndicator = NO;
-  if (@available(iOS 26.0, *)) {
-    // The default edge blur would cover the whole bar, which is only one row tall.
-    _bar.topEdgeEffect.hidden = YES;
-    _bar.bottomEdgeEffect.hidden = YES;
-    _bar.leftEdgeEffect.hidden = YES;
-    _bar.rightEdgeEffect.hidden = YES;
+  _grid = [[UIScrollView alloc] init];
+  for (UIScrollView *scroll in @[ _bar, _grid ]) {
+    scroll.showsHorizontalScrollIndicator = NO;
+    scroll.showsVerticalScrollIndicator = NO;
+    if (@available(iOS 26.0, *)) {
+      // The default edge blur would cover the candidates near the edges.
+      scroll.topEdgeEffect.hidden = YES;
+      scroll.bottomEdgeEffect.hidden = YES;
+      scroll.leftEdgeEffect.hidden = YES;
+      scroll.rightEdgeEffect.hidden = YES;
+    }
   }
   [self.view addSubview:_bar];
 
@@ -303,6 +313,12 @@ UIColor *PressedColor(BOOL function) {
     for (PKKeyButton *key in row) [key addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
   }
 
+  [self.view addSubview:_grid];
+  _expandKey = [UIButton buttonWithType:UIButtonTypeSystem];
+  _expandKey.tintColor = UIColor.labelColor;
+  [_expandKey addTarget:self action:@selector(toggleGrid) forControlEvents:UIControlEventTouchUpInside];
+  [self.view addSubview:_expandKey];
+
   [self reloadCandidates];
 }
 
@@ -332,7 +348,10 @@ UIColor *PressedColor(BOOL function) {
   // Rows share the height the system gave, which can differ from the one asked for.
   CGFloat pitch = (CGRectGetHeight(self.view.bounds) - kBarHeight - kTopInset - kBottomInset) / (5 - kRowGapShare);
   CGFloat rowGap = round(pitch * kRowGapShare), keyHeight = pitch - rowGap;
-  _bar.frame = CGRectMake(0, 0, width, kBarHeight);
+  _bar.frame = CGRectMake(0, 0, width - kExpandWidth, kBarHeight);
+  _expandKey.frame = CGRectMake(width - kExpandWidth, 0, kExpandWidth, kBarHeight);
+  _grid.frame = self.view.bounds;
+  if (_expanded) [self reloadCandidates];
   CGFloat y = kBarHeight + kTopInset;
   for (NSUInteger r = 0; r < 4; r++) {
     for (NSUInteger c = 0; c < 10; c++) {
@@ -373,9 +392,15 @@ UIColor *PressedColor(BOOL function) {
   return panel && !panel->rows.empty();
 }
 
+// Like Gboard, the bar lists candidates as soon as a syllable is complete.
+// Down opens them, and does nothing while a syllable is unfinished.
+- (void)showCandidates {
+  if (_controller->isComposing() && ![self choosing]) _controller->handleKey(Press("", Key::kDown));
+}
+
 - (void)send:(const ProjectKey::KeyEvent &)event {
-  // On screen a Zhuyin key always types: leave the candidates first, where 1–6 would pick.
-  if (event.key == Key::kCharacter) {
+  // The candidates are always open, so the keys act as when composing; Space alone pages them.
+  if (event.key != Key::kSpace) {
     for (int i = 0; i < 2 && [self choosing]; i++) _controller->handleKey(Press("", Key::kEscape));
   }
   if (!_controller->handleKey(event)) {
@@ -386,6 +411,7 @@ UIColor *PressedColor(BOOL function) {
       default: [self.textDocumentProxy insertText:String(event.characters)]; break;
     }
   }
+  [self showCandidates];
   [self reloadCandidates];
 }
 
@@ -468,13 +494,15 @@ UIColor *PressedColor(BOOL function) {
 #pragma mark - Candidates
 
 // While choosing: the candidate row the Controller shows, tapped to pick, and
-// › for its next row. While composing: the sentence, tapped to commit.
+// ⌄ to spread all the candidates over the keys. While composing: the
+// sentence, tapped to commit.
 - (void)reloadCandidates {
   if (!_bar) return;
   for (UIView *view in _bar.subviews) [view removeFromSuperview];
   NSMutableArray<UIButton *> *buttons = [NSMutableArray array];
   const auto &panel = _controller->panel();
-  if ([self choosing]) {
+  BOOL choosing = [self choosing];
+  if (choosing) {
     const auto &row = panel->rows[panel->selectedRow];
     for (size_t i = 0; i < row.size(); i++) {
       UIButton *button = [self candidate:String(row[i]) selected:static_cast<int>(i) == panel->selection];
@@ -482,33 +510,75 @@ UIColor *PressedColor(BOOL function) {
       [button addTarget:self action:@selector(pickCandidate:) forControlEvents:UIControlEventTouchUpInside];
       [buttons addObject:button];
     }
-    if (!panel->pageLabel.empty()) {
-      UIButton *more = [self candidate:@"›" selected:NO];
-      [more addTarget:self action:@selector(nextCandidates) forControlEvents:UIControlEventTouchUpInside];
-      [buttons addObject:more];
-    }
   } else if (!_client->marked.empty()) {
     UIButton *button = [self candidate:String(_client->marked) selected:NO];
     [button addTarget:self action:@selector(typeReturn) forControlEvents:UIControlEventTouchUpInside];
     [buttons addObject:button];
   }
-  CGFloat x = 8;
+  CGFloat x = 4;
   for (UIButton *button in buttons) {
     [button sizeToFit];
-    CGFloat w = MAX(44, CGRectGetWidth(button.bounds) + 20);
-    button.frame = CGRectMake(x, 0, w, kBarHeight);
+    CGFloat w = MAX(40, CGRectGetWidth(button.bounds) + 20);
+    button.frame = CGRectMake(x, 2, w, kBarHeight - 4);
     [_bar addSubview:button];
-    x += w;
+    x += w + 4;
   }
-  _bar.contentSize = CGSizeMake(x + 8, kBarHeight);
+  _bar.contentSize = CGSizeMake(x, kBarHeight);
+
+  BOOL more = choosing && !panel->pageLabel.empty();
+  if (!more) _expanded = NO;
+  _expandKey.hidden = !more;
+  [_expandKey setImage:[UIImage systemImageNamed:_expanded ? @"chevron.up" : @"chevron.down"] forState:UIControlStateNormal];
+  [self fillGrid];
+  _grid.hidden = !_expanded;
+  for (UIView *view in self.view.subviews) {
+    if (view != _grid && view != _expandKey) view.alpha = _expanded ? 0 : 1;
+  }
   [self updateReturnKey];
 }
 
+// Like the system keyboard: six columns with lines between the rows, the
+// first row leaving room for ⌃, a long word taking more than one column.
+- (void)fillGrid {
+  for (UIView *view in _grid.subviews) [view removeFromSuperview];
+  if (!_expanded) return;
+  CGFloat width = CGRectGetWidth(self.view.bounds), cell = width / kGridColumns;
+  const auto &candidates = _controller->candidates();
+  int row = 0, column = 0;
+  for (size_t i = 0; i < candidates.size(); i++) {
+    UIButton *button = [self candidate:String(candidates[i]) selected:NO];
+    [button sizeToFit];
+    int span = MIN(kGridColumns, static_cast<int>(ceil((CGRectGetWidth(button.bounds) + 16) / cell)));
+    if (column + span > (row == 0 ? kGridColumns - 1 : kGridColumns)) {
+      row++;
+      column = 0;
+    }
+    button.frame = CGRectMake(column * cell, row * kGridRowHeight, span * cell, kGridRowHeight);
+    button.tag = static_cast<NSInteger>(i);
+    [button addTarget:self action:@selector(pickFromGrid:) forControlEvents:UIControlEventTouchUpInside];
+    [_grid addSubview:button];
+    column += span;
+  }
+  CGFloat line = 1 / self.traitCollection.displayScale;
+  for (int r = 1; r <= row; r++) {
+    UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(0, r * kGridRowHeight - line, width, line)];
+    separator.backgroundColor = UIColor.separatorColor;
+    [_grid addSubview:separator];
+  }
+  _grid.contentSize = CGSizeMake(width, (row + 1) * kGridRowHeight);
+}
+
+// The selected candidate sits in a gray box, as the system keyboard marks the one Space takes.
 - (UIButton *)candidate:(NSString *)title selected:(BOOL)selected {
   UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
   [button setTitle:title forState:UIControlStateNormal];
-  button.titleLabel.font = [UIFont systemFontOfSize:20 weight:selected ? UIFontWeightSemibold : UIFontWeightRegular];
-  button.tintColor = selected ? UIColor.systemBlueColor : UIColor.labelColor;
+  button.titleLabel.font = [UIFont systemFontOfSize:20];
+  button.tintColor = UIColor.labelColor;
+  if (selected) {
+    button.backgroundColor = UIColor.tertiarySystemFillColor;
+    button.layer.cornerRadius = 8;
+    button.layer.cornerCurve = kCACornerCurveContinuous;
+  }
   return button;
 }
 
@@ -516,12 +586,22 @@ UIColor *PressedColor(BOOL function) {
   [self click];
   char digit = static_cast<char>('1' + button.tag);
   _controller->handleKey(Press(std::string(1, digit)));
+  [self showCandidates];
   [self reloadCandidates];
 }
 
-- (void)nextCandidates {
+- (void)pickFromGrid:(UIButton *)button {
   [self click];
-  _controller->handleKey(Press("", Key::kPageDown));
+  _expanded = NO;
+  _controller->choose(static_cast<int>(button.tag));
+  [self showCandidates];
+  [self reloadCandidates];
+}
+
+- (void)toggleGrid {
+  [self click];
+  _expanded = !_expanded;
+  _grid.contentOffset = CGPointZero;
   [self reloadCandidates];
 }
 
