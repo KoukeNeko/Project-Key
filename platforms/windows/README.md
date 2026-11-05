@@ -46,6 +46,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | | Delete | 刪除游標後的字 |
 | | Esc | 清除未完成的注音；再按一次清除整句 |
 | | Shift + 標點鍵 | 全形標點，例如 Shift+, 輸入「，」 |
+| | 標點鍵 | `\` 或 `'` 輸入「、」，`[` `]` 輸入 `「` `」` |
 | | 其他字元（如 Shift+字母） | 送出整句，接著輸入該字元 |
 | | Ctrl+Shift+P | 開關整句預覽 |
 | 選字中 | 1–6 | 選取所在那一列的字，選完跳到下一個可疑處 |

@@ -63,7 +63,7 @@ try {
     Start-Sleep -Milliseconds 40
   }
   function Tap-Shift { [PK.Native]::keybd_event(0x10, 0, 0, [UIntPtr]::Zero); [PK.Native]::keybd_event(0x10, 0, 2, [UIntPtr]::Zero); Start-Sleep -Milliseconds 150 }
-  $keys = @{ ' ' = 0x20; ',' = 0xBC; '.' = 0xBE; '/' = 0xBF; ';' = 0xBA; '-' = 0xBD }
+  $keys = @{ ' ' = 0x20; ',' = 0xBC; '.' = 0xBE; '/' = 0xBF; ';' = 0xBA; '-' = 0xBD; '''' = 0xDE; '\' = 0xDC; '[' = 0xDB; ']' = 0xDD }
   function Type-Keys([string]$text) {
     foreach ($c in $text.ToCharArray()) {
       $vk = if ($keys.ContainsKey([string]$c)) { $keys[[string]$c] } else { [byte][char]([string]$c).ToUpper() }
@@ -151,6 +151,13 @@ try {
   Start-Sleep -Milliseconds 300
   "after Caps Lock: [$(Text)]"
   if (-not (Text).EndsWith('ab')) { throw "expected lowercase ab, got [$(Text)]" }
+
+  # Punctuation keys without Shift, as on macOS.
+  Type-Keys "'\[]"
+  Press 0x0D
+  Start-Sleep -Milliseconds 300
+  "after punctuation: [$(Text)]"
+  if (-not (Text).EndsWith('、、「」')) { throw "expected 、、「」, got [$(Text)]" }
   'TypingTest passed'
 } finally {
   if (-not $host_.HasExited) { Stop-Process -Id $host_.Id -Force }

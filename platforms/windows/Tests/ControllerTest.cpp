@@ -152,6 +152,12 @@ int main(int argc, char** argv) {
   assert(Contains(client.committed, "的程式重") && client.marked.empty());
   size_t before = client.committed.size();
 
+  // Punctuation without Shift: ' and \ both give 、, [ and ] the corner brackets.
+  Type(controller, "'\\[]");
+  assert(client.marked == "、、「」");
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
+  assert(client.marked.empty());
+
   // Tone 1 via space, shifted punctuation, Backspace, Esc.
   Type(controller, "rup wu0 ");
   assert(controller.handleKey(Shifted("<")));

@@ -481,7 +481,9 @@ bool Controller::handleComposing(const KeyEvent& event) {
     refresh();
     return true;
   }
-  if (event.shift && composer_->insertPunctuation(key)) {
+  // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on ', as on macOS.
+  if (key == '\\' && !event.shift) key = '\'';
+  if (composer_->insertPunctuation(key)) {
     refresh();
     return true;
   }
