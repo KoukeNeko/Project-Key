@@ -198,6 +198,14 @@ int main(int argc, char** argv) {
   assert(HasSuffix(client.marked, second) && Utf16Length(client.marked) == 2);
   EscapeAll(controller, client);
 
+  // Moved to the end, where nothing follows the cursor, Space offers the last character.
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kHome)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kEnd)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(Utf16Length(client.panel.rows[0][0]) == 1);
+  EscapeAll(controller, client);
+
   // Set to the word before the cursor (macOS), the same cursor offers the whole 今天.
   settings.set(Setting::kCandidatePosition, 1);
   Type(controller, "rup wu0 ");

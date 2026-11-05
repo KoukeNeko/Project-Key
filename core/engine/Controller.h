@@ -192,6 +192,7 @@ class Controller {
   bool expanded_ = false;  // several rows shown; collapsed shows only the selection's row
   int firstRow_ = 0;       // first grid row on screen
   bool shiftAlone_ = false;
+  bool cursorMoved_ = false;  // arrows moved the cursor since the last typed key
   bool adjacentKeys_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
