@@ -257,6 +257,18 @@ int main(int argc, char** argv) {
   assert(Contains(client.marked, rare));
   EscapeAll(controller, client);
 
+  // The Zhuyin itself is a candidate after the first row; picking it commits it in place of the word.
+  settings.set(Setting::kCandidatePosition, 1);
+  Type(controller, "rup wu0 ji3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  const std::vector<std::string>& offered = controller.candidates();
+  auto zhuyin = std::find(offered.begin(), offered.end(), "ㄨㄛˇ");
+  assert(zhuyin != offered.end() && zhuyin - offered.begin() >= static_cast<long>(client.panel.rows[0].size()));
+  controller.choose(static_cast<int>(zhuyin - offered.begin()));
+  assert(client.marked.empty() && HasSuffix(client.committed, "今天ㄨㄛˇ"));
+  settings.remove(Setting::kCandidatePosition);
+  before = client.committed.size();
+
   // Down expands the rows into a grid; Up walks back up, folds the grid on
   // its first row, and closes the candidates after that.
   Type(controller, "rup wu0 ");
@@ -279,9 +291,9 @@ int main(int argc, char** argv) {
   // In the grid, number keys pick from the selection's row.
   assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
-  std::string secondRowFirst = client.panel.rows[1][0];
-  assert(controller.handleKey(Press("1")));
-  assert(client.marked.rfind(secondRowFirst, 0) == 0);
+  std::string secondRowLast = client.panel.rows[1].back();  // the first is the Zhuyin, which commits
+  assert(controller.handleKey(Press(std::to_string(client.panel.rows[1].size()))));
+  assert(client.marked.rfind(secondRowLast, 0) == 0);
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
   assert(client.marked.empty() && client.committed.size() == before);
 

@@ -641,6 +641,27 @@ void Controller::startChoosingAt(size_t start) {
   if (!segment) return;
   std::vector<std::string> candidates = composer_->candidates(*segment);
   if (candidates.empty()) return;
+  auto span = [this](const std::string& candidate) {
+    return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, kGridColumns);
+  };
+  // The syllables' Zhuyin itself, as the system keyboards offer it: last in the first row when
+  // all six columns hold one candidate each (iOS), otherwise right after the first row, which
+  // keeps the candidates' digits.
+  readingIndex_ = -1;
+  if (segment->reading.rfind("_", 0) != 0) {  // punctuation readings start with _
+    std::string zhuyin;
+    for (char c : segment->reading) {
+      if (c != '-') zhuyin += c;  // the grid's separator
+    }
+    if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
+      int used = 0, firstRow = 0;
+      while (firstRow < static_cast<int>(candidates.size()) && used + span(candidates[firstRow]) <= kGridColumns) {
+        used += span(candidates[firstRow++]);
+      }
+      readingIndex_ = std::min(firstRow, kGridColumns - 1);
+      candidates.insert(candidates.begin() + readingIndex_, zhuyin);
+    }
+  }
   choosing_ = true;
   expanded_ = false;
   firstRow_ = 0;
@@ -650,13 +671,12 @@ void Controller::startChoosingAt(size_t start) {
   columns_.clear();
   int column = kGridColumns;
   for (int i = 0; i < static_cast<int>(candidates_.size()); i++) {
-    int span = std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidates_[i]) : 1, 1, kGridColumns);
-    if (column + span > kGridColumns) {
+    if (column + span(candidates_[i]) > kGridColumns) {
       rowStarts_.push_back(i);
       column = 0;
     }
     columns_.push_back(column);
-    column += span;
+    column += span(candidates_[i]);
   }
   auto current = std::find(candidates_.begin(), candidates_.end(), segment->text);
   selection_ = current == candidates_.end() ? 0 : static_cast<int>(current - candidates_.begin());
@@ -669,6 +689,27 @@ void Controller::choose(int index) {
 
 void Controller::pick(int index) {
   std::optional<Segment> segment = composer_->segmentFrom(activeStart_);
+  if (segment && index == readingIndex_) {
+    // The grid holds only words, so the Zhuyin goes in with the rest of the composition, ending it.
+    std::string before, after;
+    for (const Segment& other : composer_->segments()) {
+      if (other.start + other.length <= segment->start) {
+        before += other.text;
+      } else if (other.start >= segment->start + segment->length) {
+        after += other.text;
+      } else if (other.start < segment->start) {
+        // A phrase the chosen part starts inside keeps its characters before that part.
+        // shortcut: a phrase without one character per syllable drops them; such phrases are rare.
+        std::u16string text = ToUtf16(other.text);
+        if (text.size() == other.length) before += ToUtf8(text.substr(0, segment->start - other.start));
+      }
+    }
+    client_.insertText(before + candidates_[index] + after);
+    composer_->clear();
+    choosing_ = false;
+    hidePanel();
+    return;
+  }
   if (segment) composer_->choose(*segment, candidates_[index]);
   std::optional<size_t> next;
   if (env_.settings->flag(Setting::kNextDoubtful)) next = doubtfulAfter(activeStart_, false);
