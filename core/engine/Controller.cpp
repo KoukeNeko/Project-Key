@@ -430,11 +430,9 @@ bool Controller::handleComposing(const KeyEvent& event) {
       return true;
     case Key::kReturn:
       if (empty) return false;
-      // Zhuyin symbols alone (ㄏ, ㄋㄧ) are typed as they are.
-      if (composer_->text().empty()) {
-        client_.insertText(composer_->pendingReading());
-        composer_->clear();
-      }
+      // The text as shown, with unfinished Zhuyin symbols (沒救ㄌ) as they are.
+      client_.insertText(shown_);
+      composer_->clear();
       commit();
       return true;
     case Key::kBackspace:
@@ -739,6 +737,7 @@ void Controller::refresh() {
   caret += static_cast<uint32_t>(reading.size());
   if (hasActive && activeStart >= caret - reading.size()) activeStart += static_cast<uint32_t>(reading.size());
   std::string markedText = ToUtf8(marked);
+  shown_ = markedText;
   client_.setComposition(Composition{markedText, caret, activeStart, hasActive ? activeLength : 0, replacing_});
   replacing_ = 0;
 

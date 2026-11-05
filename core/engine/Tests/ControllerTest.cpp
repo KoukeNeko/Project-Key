@@ -150,10 +150,13 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(Contains(client.committed, "的程式重") && client.marked.empty());
 
-  // Enter types Zhuyin symbols alone (ㄋㄧ) as they are.
+  // Enter types unfinished Zhuyin symbols as they are, alone (ㄋㄧ) or after text (我ㄏ).
   Type(controller, "su");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(HasSuffix(client.committed, "ㄋㄧ") && client.marked.empty());
+  Type(controller, "ji3c");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
+  assert(HasSuffix(client.committed, "我ㄏ") && client.marked.empty());
   size_t before = client.committed.size();
 
   // Typed twice, the sentence has two doubtful 城市 (choices not remembered, so
