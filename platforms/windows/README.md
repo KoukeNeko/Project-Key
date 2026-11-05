@@ -18,7 +18,14 @@ TSF（Text Services Framework）注音輸入法，大千鍵盤，功能與按鍵
 
 ## 建置與安裝
 
-需要 Visual Studio 2026（「使用 C++ 的桌面開發」，含 Windows SDK）、.NET 10 SDK 與 [uv](https://docs.astral.sh/uv/)（產生詞庫用的 Python）。設定視窗使用系統的 Windows App Runtime 2（Windows 11 已內建）。
+發行版：
+
+```powershell
+scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket
+scoop install koukeneko/project-key
+```
+
+自行建置需要 Visual Studio 2026（「使用 C++ 的桌面開發」，含 Windows SDK）、.NET 10 SDK 與 [uv](https://docs.astral.sh/uv/)（產生詞庫用的 Python）。設定視窗使用系統的 Windows App Runtime 2（Windows 11 已內建）。
 
 ```powershell
 platforms\windows\build.ps1      # 下載並編譯引擎、產生詞庫、跑測試，輸出到 .build\out
