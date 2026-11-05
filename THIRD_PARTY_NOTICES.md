@@ -10,6 +10,7 @@ Project Key 以 MIT 授權發布（見 [LICENSE](LICENSE)）。本檔列出 repo
 
 - `tests/corpus/corpus.tsv` 的 `zhuyin` 欄位由 McBopomofo 詞庫自動標註後再人工修正。
 - macOS 輸入法（`platforms/macos`）在建置時下載 McBopomofo 的引擎（gramambular2、Mandarin、McBopomofoLM）並連結進執行檔，詞庫 `data.txt` 隨 App 發布。App 內附授權條文 `McBopomofo-LICENSE.txt`。
+- Windows 輸入法（`platforms/windows`）同樣在建置時下載並連結這些引擎；建置腳本為了讓 MSVC 編譯，會改寫兩個檔案中 `string_view` 迭代器的宣告（見 `build.ps1`）。詞庫 `data.txt` 與 `McBopomofo-LICENSE.txt` 安裝在同一個資料夾。
 
 ```
 MIT License
@@ -34,6 +35,16 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+### Windows 設定視窗的 NuGet 套件
+
+`platforms/windows/Settings` 建置時由 NuGet 取得，連同設定程式一起安裝：
+
+| 元件 | 授權 |
+|---|---|
+| [Windows App SDK](https://github.com/microsoft/WindowsAppSDK)（WinUI 3） | MIT；執行環境 Windows App Runtime 由系統提供 |
+| [Windows Community Toolkit](https://github.com/CommunityToolkit/Windows)（`SettingsControls`） | MIT |
+| Microsoft.Windows.SDK.BuildTools | Microsoft 軟體授權條款（建置工具，不隨程式散布） |
 
 ## 執行時下載，不隨 repo 散布
 
