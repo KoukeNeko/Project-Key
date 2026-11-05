@@ -19,7 +19,7 @@ constexpr float kWindowRadius = 8, kPillRadius = 4, kGapToText = 8, kAnchorInset
 constexpr float kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
 constexpr float kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 // Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
-constexpr float kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6;
+constexpr float kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
 // Candidate row: padding 6 6 6 8; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
 constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
 constexpr float kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
