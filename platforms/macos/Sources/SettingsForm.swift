@@ -46,7 +46,10 @@ struct SettingsForm: View {
         }
       }
       Section("按鍵") {
-        Toggle("⇪ 切換中英", isOn: $capsLockToggle)
+        Toggle(isOn: $capsLockToggle) {
+          Text("⇪ 切換中英")
+          Text("開啟時大寫用 ⇧；關閉時 ⇪ 鎖定大寫")
+        }
         Toggle("單按 ⇧ 切換中英", isOn: $shiftToggle)
         Group {
           Toggle("英文轉注音", isOn: $englishToZhuyin)
