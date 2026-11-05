@@ -462,6 +462,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
           default: cursor = composer_->readingCount(); break;
         }
         composer_->setCursor(cursor);
+        cursorMoved_ = true;
         refresh();
       }
       return true;
@@ -479,6 +480,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
 
   char key = SingleCharacter(event);
   if (key < 0x20 || key > 0x7e) return !empty;
+  cursorMoved_ = false;
   if (!event.shift && composer_->isReadingKey(key)) {
     if (composer_->typeReadingKey(key) == Composer::KeyResult::kInvalid) client_.beep();
     refresh();
@@ -596,7 +598,7 @@ bool Controller::handleChoosing(const KeyEvent& event) {
 // Before the cursor (macOS): the word ending at or holding the syllable before the cursor, the
 // first word at the start. After it (Windows): the segment (or the rest of the phrase) right
 // after the cursor, or, with the cursor at the end, the first doubtful segment so Space goes
-// straight to the likely mistake.
+// straight to the likely mistake; moved to the end by the user, the last character.
 size_t Controller::defaultSegment() const {
   size_t cursor = composer_->cursor();
   if (env_.settings->get(Setting::kCandidatePosition) == 1) {
@@ -610,6 +612,7 @@ size_t Controller::defaultSegment() const {
       if (cursor < segment.start + segment.length) return std::max(cursor, segment.start);
     }
   }
+  if (cursorMoved_) return composer_->readingCount() - 1;
   for (const Segment& segment : composer_->segments()) {
     if (segment.doubtful) return segment.start;
   }
