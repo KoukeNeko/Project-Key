@@ -293,36 +293,79 @@ std::optional<KeyEvent> TextService::keyEvent(WPARAM vk, LPARAM) const {
   return event;
 }
 
+// TSF normally asks OnTestKeyDown first and calls OnKeyDown only for keys the
+// test took, but some apps (Chromium among them) call OnKeyDown and OnKeyUp
+// directly. Each key is handled once, in whichever call comes first.
 STDMETHODIMP TextService::OnTestKeyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten) {
   *eaten = FALSE;
   pending_.reset();
-  if (!context || keyboardDisabled(context)) return S_OK;
+  testedDown_ = wParam;
+  keyDown(context, wParam, lParam, eaten, true);
+  return S_OK;
+}
+
+STDMETHODIMP TextService::OnKeyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten) {
+  *eaten = FALSE;
+  if (pending_ && pendingKey_ == wParam) {
+    Protocol::Reply reply = std::move(*pending_);
+    pending_.reset();
+    testedDown_ = 0;
+    if (context) apply(context, reply);
+    *eaten = reply.handled;
+    return S_OK;
+  }
+  if (testedDown_ == wParam) {  // the test already handled it and left it to the app
+    testedDown_ = 0;
+    return S_OK;
+  }
+  keyDown(context, wParam, lParam, eaten, false);
+  return S_OK;
+}
+
+STDMETHODIMP TextService::OnTestKeyUp(ITfContext* context, WPARAM wParam, LPARAM, BOOL* eaten) {
+  *eaten = FALSE;
+  testedUp_ = wParam;
+  keyUp(context, wParam);
+  return S_OK;
+}
+
+STDMETHODIMP TextService::OnKeyUp(ITfContext* context, WPARAM wParam, LPARAM, BOOL* eaten) {
+  *eaten = FALSE;
+  if (testedUp_ == wParam) {
+    testedUp_ = 0;
+    return S_OK;
+  }
+  keyUp(context, wParam);
+  return S_OK;
+}
+
+void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten, bool testing) {
+  if (!context || keyboardDisabled(context)) return;
   bool repeat = (lParam & (1 << 30)) != 0;
   switch (wParam) {
     case VK_SHIFT:
       if (!repeat) request(context, {Protocol::Request::kShift, {}, true});
-      return S_OK;
+      return;
     case VK_CAPITAL:
       if (!repeat) request(context, {Protocol::Request::kCapsLock});
-      return S_OK;
+      return;
     case VK_CONTROL:
     case VK_MENU:
     case VK_LWIN:
     case VK_RWIN:
       if (!repeat) engine_.send({Protocol::Request::kOtherModifier});
-      return S_OK;
+      return;
   }
   std::optional<KeyEvent> key = keyEvent(wParam, lParam);
-  if (!key) return S_OK;
-  Protocol::Message message{Protocol::Request::kKeyDown, *key};
-  std::optional<Protocol::Reply> reply = engine_.send(message);
-  if (!reply) return S_OK;
-  if (reply->handled) {
+  if (!key) return;
+  std::optional<Protocol::Reply> reply = engine_.send({Protocol::Request::kKeyDown, *key});
+  if (!reply) return;
+  *eaten = reply->handled;
+  if (reply->handled && testing) {
     // TSF calls OnKeyDown next; the document is changed there.
     pending_ = std::move(reply);
     pendingKey_ = wParam;
-    *eaten = TRUE;
-    return S_OK;
+    return;
   }
   // In 英, the preview offers to turn Zhuyin into a composition, which needs the
   // text before the caret; documents of apps reached through the IMM32
@@ -332,44 +375,15 @@ STDMETHODIMP TextService::OnTestKeyDown(ITfContext* context, WPARAM wParam, LPAR
     std::erase_if(reply->operations, [](const Protocol::Operation& o) { return o.op == Protocol::Op::kShowPanel && !o.panel.keyHint.empty(); });
   }
   apply(context, *reply);  // e.g. the commit before a shortcut the app handles
-  return S_OK;
 }
 
-STDMETHODIMP TextService::OnKeyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten) {
-  *eaten = FALSE;
-  if (pending_ && pendingKey_ == wParam) {
-    Protocol::Reply reply = std::move(*pending_);
-    pending_.reset();
-    if (context) apply(context, reply);
-    *eaten = reply.handled;
-    return S_OK;
-  }
-  // Not tested first: handle it the same way here.
-  if (!context || keyboardDisabled(context)) return S_OK;
-  if (wParam == VK_SHIFT || wParam == VK_CAPITAL || wParam == VK_CONTROL || wParam == VK_MENU || wParam == VK_LWIN ||
-      wParam == VK_RWIN) {
-    return S_OK;
-  }
-  std::optional<KeyEvent> key = keyEvent(wParam, lParam);
-  if (!key) return S_OK;
-  if (std::optional<Protocol::Reply> reply = request(context, {Protocol::Request::kKeyDown, *key})) *eaten = reply->handled;
-  return S_OK;
-}
-
-STDMETHODIMP TextService::OnTestKeyUp(ITfContext* context, WPARAM wParam, LPARAM, BOOL* eaten) {
-  *eaten = FALSE;
-  if (wParam != VK_SHIFT || !context || keyboardDisabled(context)) return S_OK;
+void TextService::keyUp(ITfContext* context, WPARAM wParam) {
+  if (wParam != VK_SHIFT || !context || keyboardDisabled(context)) return;
   Protocol::Message message{Protocol::Request::kShift, {}, false};
   // In 英, a lone Shift may turn the Zhuyin just typed into a composition; the engine checks it is still there.
   // Apps reached through the IMM32 compatibility layer expose no text, so there it only switches.
   if (englishMode_) message.context = textBeforeCaret(context);
   request(context, message);
-  return S_OK;
-}
-
-STDMETHODIMP TextService::OnKeyUp(ITfContext*, WPARAM, LPARAM, BOOL* eaten) {
-  *eaten = FALSE;
-  return S_OK;
 }
 
 void TextService::toggleMode() {
