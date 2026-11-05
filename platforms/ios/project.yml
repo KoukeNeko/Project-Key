@@ -1,0 +1,61 @@
+# XcodeGen spec; build.sh generates ProjectKey.xcodeproj from it.
+name: ProjectKey
+options:
+  bundleIdPrefix: org.projectkey
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    CODE_SIGN_STYLE: Automatic
+    CLANG_CXX_LANGUAGE_STANDARD: c++20
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ProjectKey:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - target: Keyboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.projectkey.ios
+        INFOPLIST_KEY_CFBundleDisplayName: Project Key
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        GENERATE_INFOPLIST_FILE: YES
+  Keyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Keyboard
+      - path: ../../core/engine/Composer.cpp
+      - path: ../../core/engine/Controller.cpp
+      - path: ../../core/engine/Bigram.cpp
+      - path: .build/mcbopomofo/Source/Engine/AssociatedPhrasesV2.cpp
+      - path: .build/mcbopomofo/Source/Engine/ByteBlockBackedDictionary.cpp
+      - path: .build/mcbopomofo/Source/Engine/McBopomofoLM.cpp
+      - path: .build/mcbopomofo/Source/Engine/MemoryMappedFile.cpp
+      - path: .build/mcbopomofo/Source/Engine/ParselessPhraseDB.cpp
+      - path: .build/mcbopomofo/Source/Engine/ParselessLM.cpp
+      - path: .build/mcbopomofo/Source/Engine/PhraseReplacementMap.cpp
+      - path: .build/mcbopomofo/Source/Engine/UTF8Helper.cpp
+      - path: .build/mcbopomofo/Source/Engine/UserOverrideModel.cpp
+      - path: .build/mcbopomofo/Source/Engine/UserPhrasesLM.cpp
+      - path: .build/mcbopomofo/Source/Engine/VariantAnnotator.cpp
+      - path: .build/mcbopomofo/Source/Engine/Mandarin/Mandarin.cpp
+      - path: .build/mcbopomofo/Source/Engine/gramambular2/reading_grid.cpp
+      - path: .build/data.txt
+        buildPhase: resources
+    dependencies:  # Objective-C++ does not link its frameworks by itself
+      - sdk: UIKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: CoreGraphics.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.projectkey.ios.keyboard
+        PRODUCT_NAME: Keyboard
+        HEADER_SEARCH_PATHS: ["$(SRCROOT)/../../core/engine", "$(SRCROOT)/.build/mcbopomofo/Source/Engine"]
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Keyboard/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: Project Key
+        APPLICATION_EXTENSION_API_ONLY: YES
