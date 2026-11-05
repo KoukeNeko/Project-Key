@@ -8,22 +8,33 @@ $Dest = Join-Path $env:ProgramFiles 'Project Key'
 if (-not (Test-Path "$Source\ProjectKey.dll")) { throw 'run .\build.ps1 first' }
 
 if ($Elevated) {
-  # Apps keep the old DLL loaded and the server keeps its files open: stop the
-  # server and move loaded files aside; they are deleted at the next install.
-  Get-Process ProjectKeyServer -ErrorAction SilentlyContinue | Stop-Process -Force
-  Start-Sleep -Milliseconds 300
-  New-Item -ItemType Directory -Force $Dest | Out-Null
-  Get-ChildItem $Dest -Filter '*.old' -Recurse | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
-  if (Test-Path "$Dest\ProjectKey.dll") { Move-Item "$Dest\ProjectKey.dll" "$Dest\ProjectKey.$([guid]::NewGuid()).old" }
-  # Filtered first: Copy-Item -Recurse -Exclude flattens subfolders into odd names.
-  Get-ChildItem $Source | Where-Object Extension -notin '.lib', '.exp' | Copy-Item -Destination $Dest -Recurse -Force
-  & "$env:SystemRoot\System32\regsvr32.exe" /s "$Dest\ProjectKey.dll"
-  exit $LASTEXITCODE
+  $log = Join-Path $env:TEMP 'ProjectKey-install.log'
+  try {
+    # Apps keep the old DLL loaded and the server and settings keep their files
+    # open: stop those and move loaded DLLs aside; they are deleted once unused.
+    Get-Process ProjectKeyServer, ProjectKeySettings -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Milliseconds 300
+    New-Item -ItemType Directory -Force $Dest | Out-Null
+    Get-ChildItem $Dest -Filter '*.old' | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+    if (Test-Path "$Dest\ProjectKey.dll") { Move-Item "$Dest\ProjectKey.dll" "$Dest\ProjectKey.$([guid]::NewGuid()).old" }
+    # robocopy, not Copy-Item, which flattens subfolders into odd names when they exist.
+    & robocopy $Source $Dest /E /XF *.lib *.exp /NJH /NJS /NFL /NDL /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE" }
+    # Files an earlier Copy-Item flattened out of Settings\.
+    Remove-Item "$Dest\SettingsApp.xbf", "$Dest\SettingsMainWindow.xbf" -ErrorAction SilentlyContinue
+    # A GUI program: & would not wait for it, nor set its exit code.
+    $register = Start-Process "$env:SystemRoot\System32\regsvr32.exe" -ArgumentList '/s', "`"$Dest\ProjectKey.dll`"" -Wait -PassThru
+    if ($register.ExitCode) { throw "regsvr32 failed with exit code $($register.ExitCode)" }
+  } catch {
+    Set-Content $log "$_"
+    exit 1
+  }
+  exit 0
 }
 
 $pwsh = (Get-Process -Id $PID).Path
 $admin = Start-Process $pwsh -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Elevated'
-if ($admin.ExitCode) { throw "installing into $Dest failed with exit code $($admin.ExitCode)" }
+if ($admin.ExitCode) { throw "installing into $Dest failed: $(Get-Content (Join-Path $env:TEMP 'ProjectKey-install.log') -ErrorAction SilentlyContinue)" }
 
 # The server runs as the user, not elevated.
 $server = Join-Path $Dest 'ProjectKeyServer.exe'
