@@ -140,6 +140,10 @@ class Controller {
   bool englishMode() const { return env_.englishMode; }
   // The candidate window's last content, if shown; for tests.
   const std::optional<PanelContent>& panel() const { return panel_; }
+  // While choosing, every candidate, and picking one by its index there: for a
+  // touch screen grid that shows them all, past the rows the panel holds.
+  const std::vector<std::string>& candidates() const { return candidates_; }
+  void choose(int index);
 
   static constexpr int kExpandedRows = 5;  // rows the expanded grid shows at once
 

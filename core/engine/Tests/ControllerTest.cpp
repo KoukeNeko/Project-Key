@@ -248,6 +248,15 @@ int main(int argc, char** argv) {
   settings.remove(Setting::kProofPreviewLastOn);
   EscapeAll(controller, client);
 
+  // A touch grid picks any candidate, past the row the panel shows.
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(controller.candidates().size() > client.panel.rows[0].size());
+  std::string rare = controller.candidates().back();
+  controller.choose(static_cast<int>(controller.candidates().size()) - 1);
+  assert(Contains(client.marked, rare));
+  EscapeAll(controller, client);
+
   // Down expands the rows into a grid; Up walks back up, folds the grid on
   // its first row, and closes the candidates after that.
   Type(controller, "rup wu0 ");
