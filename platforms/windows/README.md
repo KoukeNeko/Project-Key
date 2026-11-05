@@ -64,7 +64,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | 英文模式 | 單按 Shift | 剛才打的大千鍵若是完整注音（如 ji3cl3），改成組字中的「我好」並切回中文；打到聲調鍵時會預覽轉換結果與 Shift 鍵帽 |
 | 組字中 | 單按 Shift | 組字的按鍵若拼成英文單字（如 hello，且不是注音音節），改回英文並切到英文模式。拼字檢查用 Windows 內建的英文拼字檢查 |
 
-工作列通知區域會顯示目前的模式（ㄅ／A）：左鍵切換中英，右鍵開啟「設定…」。Windows「設定」裡 Project Key 的「選項」也會開啟設定視窗。
+工作列通知區域會顯示目前的模式（ㄅ／A）：左鍵切換中英，右鍵開啟「設定…」。Windows「設定」裡 Project Key 的「選項」也會開啟設定視窗。設定視窗由引擎伺服器啟動：從沙盒中的 App 直接啟動的程式也會被關進沙盒。
 
 ## 設定
 
@@ -81,6 +81,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 - `Tests\ServerTest.ps1`：直接透過 pipe 對執行中的伺服器打一整句、選字、送出。
 - `Tests\TypingTest.ps1`：開一個 WPF 文字框（`-Kind winforms` 改用 Win32 的 Edit 控制項），只在該程序內啟用 Project Key，用模擬按鍵打字並截圖到 `.build\shots`：組字、候選、展開、中／英標記、英文轉注音預覽、Caps Lock。`-Flip` 把文字放在螢幕底部，檢查候選視窗翻到上方。需要已解鎖的桌面。
+- `Tests\BrowserTest.ps1`：在 Edge 的 textarea 打字並單按 Shift 切換中英。Chromium 會跳過 TSF 的測試階段，直接呼叫 `OnKeyDown`／`OnKeyUp`。Edge 無法只對單一程序啟用鍵盤，測試期間會把整個工作階段切到 Project Key，結束後切回英文（美國）。
 - `Tests\RestoreKeyboard.ps1`：把整個工作階段的鍵盤切回英文（美國）。
 
 ## 與 macOS 的差異

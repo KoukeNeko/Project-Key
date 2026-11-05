@@ -652,19 +652,14 @@ STDMETHODIMP TextService::GetDisplayName(BSTR* name) {
 }
 
 STDMETHODIMP TextService::Show(HWND, LANGID, REFGUID) {
-  ShowSettings();
+  showSettings();
   return S_OK;
 }
 
-void TextService::ShowSettings() {
-  std::wstring path = ModuleDirectory(gInstance) + kSettingsExe;
-  std::wstring command = L"\"" + path + L"\"";
-  STARTUPINFOW startup{sizeof(startup)};
-  PROCESS_INFORMATION process{};
-  if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
-    CloseHandle(process.hThread);
-    CloseHandle(process.hProcess);
-  }
+void TextService::showSettings() {
+  // The user just clicked here; let the window the server starts come to the front.
+  AllowSetForegroundWindow(ASFW_ANY);
+  if (!engine_.send({Protocol::Request::kShowSettings})) LaunchSettings(ModuleDirectory(gInstance));
 }
 
 void TextService::updateLangBar() {

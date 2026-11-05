@@ -145,7 +145,7 @@ STDMETHODIMP LangBarButton::InitMenu(ITfMenu* menu) {
 }
 
 STDMETHODIMP LangBarButton::OnMenuSelect(UINT id) {
-  if (id == kMenuSettings) TextService::ShowSettings();
+  if (id == kMenuSettings && service_) service_->showSettings();
   return S_OK;
 }
 
