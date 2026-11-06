@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Project Key Settings
+Name[zh_TW]=Project Key 設定
+Comment=Settings for the Project Key Zhuyin input method
+Comment[zh_TW]=Project Key 注音輸入法的設定
+Exec=projectkey-settings
+Icon=input-keyboard
+Categories=Settings;

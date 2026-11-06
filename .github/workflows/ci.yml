@@ -35,10 +35,10 @@ jobs:
       - run: platforms/windows/build.ps1
         shell: pwsh
 
-  # Builds the Fcitx5 addon and runs the engine and controller tests.
+  # Builds the Fcitx5 addon and settings window, and runs the engine and controller tests.
   linux:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev
+      - run: sudo apt-get update && sudo apt-get install -y libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev qt6-base-dev
       - run: platforms/linux/build.sh

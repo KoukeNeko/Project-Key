@@ -3,13 +3,17 @@
 // badge go into Project Key's own windows (Panel.cpp), which look like the
 // macOS and Windows ones; elsewhere, or where the app gives no screen position
 // for its caret, they go into Fcitx5's input panel and follow its theme.
+#include <dbus_public.h>
 #include <enchant.h>
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/enum.h>
 #include <fcitx-config/iniparser.h>
+#include <fcitx-utils/dbus/objectvtable.h>
 #include <fcitx-utils/i18n.h>
 #include <fcitx-utils/log.h>
+#include <fcitx-utils/misc.h>
 #include <fcitx-utils/utf8.h>
+#include <fcitx/action.h>
 #include <fcitx/addonfactory.h>
 #include <fcitx/addonmanager.h>
 #include <fcitx/candidatelist.h>
@@ -19,7 +23,9 @@
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/instance.h>
+#include <fcitx/statusarea.h>
 #include <fcitx/text.h>
+#include <fcitx/userinterfacemanager.h>
 
 #include <algorithm>
 #include <memory>
@@ -340,7 +346,29 @@ class Session : public fcitx::InputContextProperty, public Client {
   Controller controller;  // after the members it calls back into
 };
 
+// Choices the user made, shared by every context; in memory only, with McBopomofo's
+// capacity and 1.5-hour half-life, as on the other platforms.
+std::shared_ptr<McBopomofo::UserOverrideModel> NewUserModel() {
+  return std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+}
+
+// What the settings window (Settings/main.cpp) asks of the engine over D-Bus,
+// at /projectkey on Fcitx5's own bus name: forgetting the choices, which live
+// only in this process.
+class SettingsObject : public fcitx::dbus::ObjectVTable<SettingsObject> {
+ public:
+  explicit SettingsObject(Environment& environment) : environment_(environment) {}
+  void clearChoices() { *environment_.userModel = *NewUserModel(); }
+
+ private:
+  Environment& environment_;
+  FCITX_OBJECT_VTABLE_METHOD(clearChoices, "ClearChoices", "", "");
+};
+
 class Engine : public fcitx::InputMethodEngineV2 {
+  // Defined before its use in the constructor, which needs its deduced type.
+  FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
+
  public:
   explicit Engine(fcitx::Instance* instance)
       : instance_(instance), settings_(config_), panel_(instance->eventLoop(), settings_), factory_([this](fcitx::InputContext& ic) {
@@ -354,8 +382,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
     // The context ranking model from tools/bigram-trainer; without it, unigrams only.
     auto bigram = std::make_shared<Bigram>();
     if (bigram->load(dir + "/bigram.bin")) environment_.bigram = bigram;
-    // Choices the user made, shared by every context; in memory only, as on the other platforms.
-    environment_.userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+    environment_.userModel = NewUserModel();
     environment_.settings = &settings_;
     environment_.isEnglish = [this](const std::string& text) { return spelling_.isEnglish(text); };
     environment_.columnsSpannedBy = panel_.ok() ? std::function<int(const std::string&)>([this](const std::string& candidate) {
@@ -364,6 +391,13 @@ class Engine : public fcitx::InputMethodEngineV2 {
                                                 : Span;
     environment_.appTypesUnhandledKeys = true;  // a key the engine does not filter reaches the app
     instance_->inputContextManager().registerProperty("projectkey", &factory_);
+    // The settings window: from the Fcitx5 menu, as from the macOS input menu and the Windows language bar.
+    settingsAction_.setShortText("Project Key 設定…");
+    settingsAction_.connect<fcitx::SimpleAction::Activated>([](fcitx::InputContext*) { fcitx::startProcess({PROJECTKEY_SETTINGS}); });
+    instance_->userInterfaceManager().registerAction("projectkey-settings", &settingsAction_);
+    if (fcitx::AddonInstance* dbus = this->dbus()) {
+      dbus->call<fcitx::IDBusModule::bus>()->addObjectVTable("/projectkey", "org.projectkey.Engine", settingsObject_);
+    }
     // Fcitx5 takes Left Shift to switch input methods before an engine sees it;
     // while Project Key is on and Shift switches 中／英, Shift is its instead.
     shiftWatcher_ = instance_->watchEvent(
@@ -466,6 +500,10 @@ class Engine : public fcitx::InputMethodEngineV2 {
     }
   }
 
+  void activate(const fcitx::InputMethodEntry&, fcitx::InputContextEvent& event) override {
+    event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settingsAction_);
+  }
+
   std::string subMode(const fcitx::InputMethodEntry&, fcitx::InputContext&) override {
     return environment_.englishMode ? "英" : "中";
   }
@@ -489,6 +527,8 @@ class Engine : public fcitx::InputMethodEngineV2 {
   Environment environment_;
   fcitx::FactoryFor<Session> factory_;
   std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> shiftWatcher_, caretWatcher_;
+  fcitx::SimpleAction settingsAction_;
+  SettingsObject settingsObject_{environment_};
 };
 
 class Factory : public fcitx::AddonFactory {
