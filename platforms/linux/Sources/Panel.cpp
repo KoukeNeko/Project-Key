@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 namespace ProjectKey {
 
@@ -31,6 +32,9 @@ constexpr char kReplacedArrow[] = " → ";
 constexpr uint32_t kBackground = 0x23282c, kLine = 0x343b40, kText = 0xe8ecee, kMuted = 0x8e9aa3;
 constexpr uint32_t kAccent = 0x14806f, kAccentSoft = 0x3fb9a3;
 constexpr float kDoubtMarkAlpha = 0.7f;
+// The dark background's opacity over a blur. Darker than over Acrylic (0.6):
+// KWin's blur adds no tint of its own, so over a white page 0.6 reads as light gray.
+constexpr float kAcrylicTint = 0.85f;
 constexpr uint64_t kFrameUs = 8000;
 
 uint64_t NowMs() {
@@ -122,7 +126,7 @@ size_t BytesFor(const std::string& text, uint32_t units) {
   return std::min(i, text.size());
 }
 
-Panel::Panel(fcitx::EventLoop& loop) : loop_(loop) {
+Panel::Panel(fcitx::EventLoop& loop, const Settings& settings) : settings_(settings), loop_(loop) {
   if (std::getenv("WAYLAND_DISPLAY")) return;  // X windows cannot be placed at a Wayland app's caret
   int screenNumber = 0;
   connection_ = xcb_connect(nullptr, &screenNumber);
@@ -156,6 +160,7 @@ Panel::Panel(fcitx::EventLoop& loop) : loop_(loop) {
     colormap_ = screen_->default_colormap;
   }
   compositorAtom_ = Atom(connection_, "_NET_WM_CM_S" + std::to_string(screenNumber));
+  blurAtom_ = Atom(connection_, "_KDE_NET_WM_BLUR_BEHIND_REGION");
   scale_ = DpiScale(connection_, screen_);
 
   context_ = pango_font_map_create_context(pango_cairo_font_map_get_default());
@@ -230,11 +235,13 @@ void Panel::place(Window& window, int x, int y, int width, int height) {
                        XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT |
                            XCB_CONFIG_WINDOW_STACK_MODE,
                        values);
-  if (width != window.width || height != window.height) cairo_xcb_surface_set_size(window.surface, width, height);
+  bool resized = width != window.width || height != window.height;
+  if (resized) cairo_xcb_surface_set_size(window.surface, width, height);
   window.x = x;
   window.y = y;
   window.width = width;
   window.height = height;
+  if (resized && window.blurred) setBlur(window, true);
 }
 
 void Panel::map(Window& window) {
@@ -268,6 +275,49 @@ bool Panel::composited() {
   bool owned = reply && reply->owner != XCB_NONE;
   free(reply);
   return owned;
+}
+
+bool Panel::blurs() {
+  if (settings_.get(Setting::kAppearance) == 0 || !composited()) return false;
+  // KWin's blur effect, while it is on, sets this property on the root window.
+  xcb_get_property_reply_t* reply =
+      xcb_get_property_reply(connection_, xcb_get_property(connection_, 0, screen_->root, blurAtom_, XCB_GET_PROPERTY_TYPE_ANY, 0, 0), nullptr);
+  bool offered = reply && reply->type != XCB_NONE;
+  free(reply);
+  return offered;
+}
+
+// The region KWin blurs: the window's rounded rectangle, one row of pixels at
+// a time through the corners, so no blur shows outside them.
+void Panel::setBlur(Window& window, bool on) {
+  window.blurred = on;
+  if (!on) {
+    xcb_delete_property(connection_, window.id, blurAtom_);
+    return;
+  }
+  int radius = static_cast<int>(std::lround(kWindowRadius * scale_));
+  radius = std::min({radius, window.width / 2, window.height / 2});
+  std::vector<uint32_t> rects;
+  auto add = [&](int x, int y, int w, int h) {
+    rects.insert(rects.end(), {static_cast<uint32_t>(x), static_cast<uint32_t>(y), static_cast<uint32_t>(w), static_cast<uint32_t>(h)});
+  };
+  for (int y = 0; y < radius; y++) {
+    double dy = radius - y - 0.5;
+    int inset = static_cast<int>(std::lround(radius - std::sqrt(radius * radius - dy * dy)));
+    add(inset, y, window.width - 2 * inset, 1);
+    add(inset, window.height - 1 - y, window.width - 2 * inset, 1);
+  }
+  add(0, radius, window.width, window.height - 2 * radius);
+  xcb_change_property(connection_, XCB_PROP_MODE_REPLACE, window.id, blurAtom_, XCB_ATOM_CARDINAL, 32, rects.size(), rects.data());
+}
+
+// Over a blur the text sits on a translucent window, where subpixel
+// antialiasing would fringe; Windows draws it grayscale there too.
+void Panel::setFontOptions(bool blurred) {
+  cairo_font_options_t* options = cairo_font_options_create();
+  if (blurred) cairo_font_options_set_antialias(options, CAIRO_ANTIALIAS_GRAY);
+  pango_cairo_context_set_font_options(context_, options);
+  cairo_font_options_destroy(options);
 }
 
 // A repeating frame timer. It is never destroyed while it may be running its
@@ -366,7 +416,10 @@ void Panel::show(const void* owner, const PanelContent& content, const fcitx::Re
   Rect from = shownSelectionRect();
   owner_ = owner;
   content_ = content;
-  if (!wasVisible) rounded_ = composited();
+  if (!wasVisible) {
+    rounded_ = composited();
+    setBlur(panel_, blurs());
+  }
 
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
   int width = static_cast<int>(std::ceil(fittingWidth() * scale_));
@@ -437,16 +490,19 @@ void Panel::paintPanel() {
   if (!content_ || !panel_.mapped) return;
   cairo_t* cr = cairo_create(panel_.surface);
   cairo_push_group(cr);
+  setFontOptions(panel_.blurred);
   pango_cairo_update_context(cr, context_);
   cairo_scale(cr, scale_, scale_);
   float width = panel_.width / scale_, height = panel_.height / scale_;
 
-  // The window: the dark background with a 1px edge, rounded where a compositor shows the corners.
+  // The window: the dark background with a 1px edge, rounded where a compositor
+  // shows the corners; over a blur, a dark tint, as over Acrylic on Windows.
   float radius = rounded_ ? kWindowRadius : 0;
+  float lineAlpha = panel_.blurred ? 0.6f : 1;
   RoundedRect(cr, 0.5, 0.5, width - 0.5, height - 0.5, radius);
-  SetColor(cr, kBackground);
+  SetColor(cr, kBackground, panel_.blurred ? kAcrylicTint : 1);
   cairo_fill_preserve(cr);
-  SetColor(cr, kLine);
+  SetColor(cr, kLine, lineAlpha);
   cairo_set_line_width(cr, 1);
   cairo_stroke(cr);
 
@@ -455,7 +511,7 @@ void Panel::paintPanel() {
   float proofTop = proofBelow_ ? height - proofHeight() : 0;
   if (both) {
     float y = proofBelow_ ? proofTop - 1 : proofHeight();
-    SetColor(cr, kLine);
+    SetColor(cr, kLine, lineAlpha);
     cairo_rectangle(cr, 0, y, width, 1);
     cairo_fill(cr);
   }
@@ -633,6 +689,7 @@ void Panel::showBadge(const std::string& label, const fcitx::Rect& anchor) {
   // Without a compositor a window cannot fade or round its corners: it shows square at full strength.
   badgeFades_ = composited();
   badgeAlpha_ = badgeFades_ ? 0 : 1;
+  setBlur(badge_, blurs());  // the same appearance as the panel
   map(badge_);
   paintBadge();
   startTimer(badgeTimer_, &Panel::tickBadge);
@@ -689,11 +746,12 @@ void Panel::paintBadge() {
   if (!badge_.mapped) return;
   cairo_t* cr = cairo_create(badge_.surface);
   cairo_push_group(cr);
+  setFontOptions(badge_.blurred);
   pango_cairo_update_context(cr, context_);
   cairo_scale(cr, scale_, scale_);
   float width = badge_.width / scale_;
   RoundedRect(cr, 0.25, 0.25, width - 0.25, kBadgeSide - 0.25, badgeFades_ ? kWindowRadius : 0);
-  SetColor(cr, kBackground);
+  SetColor(cr, kBackground, badge_.blurred ? kAcrylicTint : 1);
   cairo_fill_preserve(cr);
   cairo_set_source_rgba(cr, 0, 0, 0, 0.5);
   cairo_set_line_width(cr, 0.5);

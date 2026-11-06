@@ -40,6 +40,9 @@ enum class ProofMode { Always, WhenDoubtful, Off };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(ProofMode, N_("永遠"), N_("有可疑字時"), N_("關閉"));
 enum class CandidatePosition { AfterCursor, BeforeCursor };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(CandidatePosition, N_("游標後"), N_("游標前"));
+// Setting::kAppearance's first two values: the dark window, and a dark tint over the blurred windows behind it.
+enum class Appearance { Dark, Blur };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(Appearance, N_("深色"), N_("模糊"));
 
 bool DefaultFlag(Setting setting) {
   return Settings::DefaultValue(setting) != 0;
@@ -52,6 +55,8 @@ FCITX_CONFIGURATION(
     fcitx::OptionWithAnnotation<CandidatePosition, CandidatePositionI18NAnnotation> candidatePosition{
         this, "CandidatePosition", "選字位置",
         static_cast<CandidatePosition>(Settings::DefaultValue(Setting::kCandidatePosition))};
+    fcitx::OptionWithAnnotation<Appearance, AppearanceI18NAnnotation> appearance{
+        this, "Appearance", "候選視窗外觀", static_cast<Appearance>(Settings::DefaultValue(Setting::kAppearance))};
     fcitx::Option<bool> nextDoubtful{this, "NextDoubtful", "選完跳到下一個可疑處", DefaultFlag(Setting::kNextDoubtful)};
     fcitx::Option<bool> adjacentKeys{this, "AdjacentKeys", "鄰鍵修正", DefaultFlag(Setting::kAdjacentKeys)};
     fcitx::Option<bool> rememberChoices{this, "RememberChoices", "記住選過的字", DefaultFlag(Setting::kRememberChoices)};
@@ -85,7 +90,7 @@ class ConfigSettings : public Settings {
       case Setting::kZhuyinToEnglish: return *config_.zhuyinToEnglish;
       case Setting::kCandidatePosition: return static_cast<int>(*config_.candidatePosition);
       case Setting::kNextDoubtful: return *config_.nextDoubtful;
-      case Setting::kAppearance: return std::nullopt;  // the dark window only: X11 has no system materials
+      case Setting::kAppearance: return static_cast<int>(*config_.appearance);
     }
     return std::nullopt;
   }
@@ -338,7 +343,7 @@ class Session : public fcitx::InputContextProperty, public Client {
 class Engine : public fcitx::InputMethodEngineV2 {
  public:
   explicit Engine(fcitx::Instance* instance)
-      : instance_(instance), settings_(config_), panel_(instance->eventLoop()), factory_([this](fcitx::InputContext& ic) {
+      : instance_(instance), settings_(config_), panel_(instance->eventLoop(), settings_), factory_([this](fcitx::InputContext& ic) {
           return new Session(environment_, instance_, panel_, ic);
         }) {
     fcitx::readAsIni(config_, kConfigPath);
