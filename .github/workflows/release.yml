@@ -1,6 +1,6 @@
 name: Release
 
-# Pushing a tag vX.Y.Z, where X.Y.Z is the version in Info.plist and ProjectKey.rc,
+# Pushing a tag vX.Y.Z, where X.Y.Z is the version in Info.plist, ProjectKey.rc and the Linux CMakeLists.txt,
 # builds both platforms, publishes the GitHub release, and points the Homebrew cask
 # and the Scoop manifest at its files.
 on:
@@ -26,8 +26,9 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mac="$(/usr/bin/env python3 -c 'import plistlib; print(plistlib.load(open("platforms/macos/Resources/Info.plist", "rb"))["CFBundleShortVersionString"])')"
           win="$(sed -n 's/.*VALUE "ProductVersion", "\(.*\)".*/\1/p' platforms/windows/Sources/TextService/ProjectKey.rc)"
-          if [ "$mac" != "$version" ] || [ "$win" != "$version" ]; then
-            echo "::error::the tag $GITHUB_REF_NAME does not match Info.plist ($mac) and ProjectKey.rc ($win)" >&2
+          linux="$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' platforms/linux/CMakeLists.txt)"
+          if [ "$mac" != "$version" ] || [ "$win" != "$version" ] || [ "$linux" != "$version" ]; then
+            echo "::error::the tag $GITHUB_REF_NAME does not match Info.plist ($mac), ProjectKey.rc ($win) and CMakeLists.txt ($linux)" >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
