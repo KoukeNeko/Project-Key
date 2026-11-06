@@ -430,7 +430,11 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
     updateLangBar();
   }
   appearance_ = reply.appearance;
-  bool needsDocument = false;
+  // The reply came from a new server session (the server restarted, or a request
+  // timed out): it knows nothing of the composition in the document, so that
+  // text stays as typed instead of being replaced by the new session's.
+  bool orphaned = engine_.takeNewSession() && composition_;
+  bool needsDocument = orphaned;
   for (const Protocol::Operation& o : reply.operations) {
     needsDocument |= o.op == Protocol::Op::kInsertText || o.op == Protocol::Op::kSetComposition || o.op == Protocol::Op::kShowPanel ||
                      o.op == Protocol::Op::kIndicator;
@@ -459,7 +463,8 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
     showWindows(nullptr, nullptr);
     return;
   }
-  editSession(composition_ ? compositionContext_ : context, TF_ES_READWRITE, [this, context, reply, showWindows](TfEditCookie cookie) {
+  editSession(composition_ ? compositionContext_ : context, TF_ES_READWRITE, [this, context, reply, showWindows, orphaned](TfEditCookie cookie) {
+    if (orphaned && composition_) keepComposition(cookie);
     ITfContext* target = composition_ ? compositionContext_ : context;
     target->AddRef();
     watchLayout(target);
@@ -551,6 +556,16 @@ void TextService::insertText(TfEditCookie cookie, ITfContext* context, const std
     range->Release();
   }
   insert->Release();
+}
+
+// Ends the composition, leaving its text in the document as plain text.
+void TextService::keepComposition(TfEditCookie cookie) {
+  ITfRange* range = nullptr;
+  if (SUCCEEDED(composition_->GetRange(&range))) {
+    setAttribute(cookie, compositionContext_, range, TF_INVALID_GUIDATOM);
+    range->Release();
+  }
+  endComposition(cookie);
 }
 
 void TextService::endComposition(TfEditCookie cookie) {

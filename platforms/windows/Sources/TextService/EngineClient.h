@@ -6,6 +6,7 @@
 #include <windows.h>
 
 #include <optional>
+#include <utility>
 
 #include "Common/Protocol.h"
 
@@ -16,6 +17,10 @@ class EngineClient {
   ~EngineClient() { disconnect(); }
   std::optional<Protocol::Reply> send(const Protocol::Message& message);
   void disconnect();
+  // Whether a new connection was opened since the last call. Each connection
+  // is a new session on the server, which knows nothing of a composition the
+  // old one left in the document.
+  bool takeNewSession() { return std::exchange(newSession_, false); }
 
  private:
   bool connect();
@@ -24,6 +29,7 @@ class EngineClient {
   HANDLE pipe_ = INVALID_HANDLE_VALUE;
   HANDLE event_ = nullptr;
   DWORD lastLaunch_ = 0;
+  bool newSession_ = false;
 };
 
 }  // namespace ProjectKey
