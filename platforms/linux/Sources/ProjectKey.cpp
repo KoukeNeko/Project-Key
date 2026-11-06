@@ -240,9 +240,14 @@ class Session : public fcitx::InputContextProperty, public Client {
       };
       for (size_t i = 0; i < content.segments.size(); i++) {
         const std::string& segment = content.segments[i];
-        fcitx::TextFormatFlags format = static_cast<int>(i) == content.activeSegment ? fcitx::TextFormatFlag::HighLight
-                                        : i < content.doubtful.size() && content.doubtful[i] ? fcitx::TextFormatFlag::Underline
-                                                                                              : fcitx::TextFormatFlag::NoFlag;
+        // The word being chosen in the theme's highlight (the accent color, as the selected
+        // cell; Fcitx5 has one highlight style), a doubtful one underlined.
+        fcitx::TextFormatFlags format = fcitx::TextFormatFlag::NoFlag;
+        if (static_cast<int>(i) == content.activeSegment) {
+          format = fcitx::TextFormatFlag::HighLight;
+        } else if (i < content.doubtful.size() && content.doubtful[i]) {
+          format = fcitx::TextFormatFlag::Underline;
+        }
         uint32_t length = Utf16Length(segment);
         if (content.caret == at) reading();
         if (content.caret > at && content.caret < at + length) {
@@ -266,16 +271,18 @@ class Session : public fcitx::InputContextProperty, public Client {
     if (content.rows.empty()) {
       panel.setCandidateList(nullptr);
     } else if (content.rows.size() > 1 && content.selectedRow >= 0) {
-      // The expanded grid. Fcitx5's candidate list is one row or one column, and a
-      // panel the app draws (GNOME on Wayland) shows each candidate as plain text on
-      // one line, so each grid row is one candidate of a column: the selected row
-      // takes the selection's colors and brackets mark the selected cell.
+      // The expanded grid. Fcitx5's candidate list is one row or one column, so each
+      // grid row is one candidate of a column. Fcitx5's own panel shows the selected
+      // cell in the selection's colors, as the candidate window does; a panel the app
+      // draws (GNOME on Wayland) takes each candidate as plain text, so there the
+      // selected row takes the selection's colors and brackets mark the cell.
+      bool plain = ic_.capabilityFlags().test(fcitx::CapabilityFlag::ClientSideInputPanel);
       auto list = std::make_unique<fcitx::CommonCandidateList>();
       list->setLayoutHint(fcitx::CandidateLayoutHint::Vertical);
       list->setPageSize(static_cast<int>(content.rows.size()));
-      for (size_t r = 0; r < content.rows.size(); r++) list->append<GridRow>(RowText(content, r));
+      for (size_t r = 0; r < content.rows.size(); r++) list->append<GridRow>(RowText(content, r, plain));
       list->setLabels(std::vector<std::string>(content.rows.size(), ""));
-      list->setGlobalCursorIndex(content.selectedRow);
+      if (plain) list->setGlobalCursorIndex(content.selectedRow);
       panel.setCandidateList(std::move(list));
     } else {
       // The row shown while typing (selectedRow -1) has no digits: those keys type Zhuyin.
@@ -338,11 +345,12 @@ class Session : public fcitx::InputContextProperty, public Client {
   // A row of the expanded grid as text, its columns lined up as the candidate
   // window's: each cell is a label slot (a digit on the selected row, a figure
   // space elsewhere), an en space and two ideographic widths per column for the
-  // word, between ideographic spaces, or between brackets for the selected cell.
-  static std::string RowText(const PanelContent& content, size_t r) {
+  // word, between ideographic spaces. The selected cell is in the selection's
+  // colors, or between brackets where the panel takes plain text.
+  static fcitx::Text RowText(const PanelContent& content, size_t r, bool plain) {
     static const std::string kFigure = " ", kEn = " ", kIdeographic = "　";
     bool labeled = static_cast<int>(r) == content.selectedRow;
-    std::string text;
+    fcitx::Text text;
     for (size_t i = 0; i < content.rows[r].size(); i++) {
       const std::string& word = content.rows[r][i];
       int columns = Span(word);
@@ -353,10 +361,12 @@ class Session : public fcitx::InputContextProperty, public Client {
         else if ((c & 0xc0) != 0x80) halves += 2;
       }
       bool on = labeled && static_cast<int>(i) == content.selection;
-      text += (on ? "［" : kIdeographic) + (labeled ? std::to_string(i + 1) : kFigure) + kEn + word;
-      for (int pad = std::max(0, 4 * columns - halves); pad > 0; pad -= pad >= 2 ? 2 : 1) text += pad >= 2 ? kIdeographic : kEn;
-      for (int extra = 1; extra < columns; extra++) text += kIdeographic + kFigure + kEn + kIdeographic;  // the columns it spans past the first
-      text += on ? "］" : kIdeographic;
+      std::string cell = (labeled ? std::to_string(i + 1) : kFigure) + kEn + word;
+      for (int pad = std::max(0, 4 * columns - halves); pad > 0; pad -= pad >= 2 ? 2 : 1) cell += pad >= 2 ? kIdeographic : kEn;
+      for (int extra = 1; extra < columns; extra++) cell += kIdeographic + kFigure + kEn + kIdeographic;  // the columns it spans past the first
+      text.append(on && plain ? "［" : kIdeographic);
+      text.append(cell, on && !plain ? fcitx::TextFormatFlag::HighLight : fcitx::TextFormatFlag::NoFlag);
+      text.append(on && plain ? "］" : kIdeographic);
     }
     return text;
   }
@@ -364,7 +374,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   // A row of the expanded grid in Fcitx5's panel; the keys choose within it, as in the candidate window.
   class GridRow : public fcitx::CandidateWord {
    public:
-    explicit GridRow(const std::string& text) : fcitx::CandidateWord(fcitx::Text(text)) {}
+    explicit GridRow(fcitx::Text text) : fcitx::CandidateWord(std::move(text)) {}
     void select(fcitx::InputContext*) const override {}
   };
   // A candidate clicked in the panel: its row's cells sit together in the
