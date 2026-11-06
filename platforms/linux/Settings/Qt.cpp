@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
   ApplyDarkPalette();
   QApplication::setApplicationName("Project Key 設定");
   QApplication::setDesktopFileName("projectkey-settings");
-  QApplication::setWindowIcon(QIcon::fromTheme("input-keyboard"));
+  QApplication::setWindowIcon(QIcon::fromTheme("fcitx-projectkey"));
 
   QDBusInterface controller(kFcitx, "/controller", "org.fcitx.Fcitx.Controller1");
   const QVariantMap config = ReadConfig(controller);
