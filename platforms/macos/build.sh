@@ -1,10 +1,10 @@
 #!/bin/sh
-# Builds .build/ProjectKey.app and runs the engine and controller tests. Needs Xcode command
+# Builds build/ProjectKey.app and runs the engine and controller tests. Needs Xcode command
 # line tools and CMake. The McBopomofo engine and dictionary (MIT) are fetched
-# at a pinned commit into .build/.
+# at a pinned commit into build/.
 set -eu
 cd "$(dirname "$0")"
-BUILD=.build
+BUILD=build
 MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)
 CORE=../../core/engine  # the engine shared with Windows
 ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/Controller.cpp"

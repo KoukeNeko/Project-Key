@@ -91,7 +91,7 @@ exit [PKS.S]::Run()
   $screen = [Windows.Forms.Screen]::PrimaryScreen.Bounds
   $shot = [Drawing.Bitmap]::new($screen.Width, $screen.Height)
   [Drawing.Graphics]::FromImage($shot).CopyFromScreen(0, 0, 0, 0, $shot.Size)
-  $shot.Save((Join-Path $PSScriptRoot '..\.build\shots\browser-badge.png'))
+  $shot.Save((Join-Path $PSScriptRoot '..\build\shots\browser-badge.png'))
   $areaRect = $area.Current.BoundingRectangle
   if (-not $badges) { throw 'no 中／英 badge after Shift' }
   $top = [int]($badges[0] -split ',')[1]

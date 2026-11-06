@@ -1,7 +1,7 @@
 # The Fcitx5 input method: an addon that drives the shared engine
 # (core/engine) and shows its candidates in its own X11 window (Sources/Panel.cpp),
 # and the settings windows (Settings/).
-# build.sh fetches McBopomofo (MIT) into .build/mcbopomofo and points MCBOPOMOFO here.
+# build.sh fetches McBopomofo (MIT) into build/mcbopomofo and points MCBOPOMOFO here.
 cmake_minimum_required(VERSION 3.16)
 project(fcitx5-projectkey VERSION 0.2.2 LANGUAGES CXX)
 

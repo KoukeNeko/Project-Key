@@ -21,16 +21,16 @@ Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「
 
 ## 建置與安裝
 
-需要 CMake、C++20 編譯器、Python 3（產生詞庫），以及 Fcitx5、Enchant、Cairo、Pango 與 Qt 6 的開發檔；GNOME 版設定視窗另需 libadwaita、libsoup 3 與 json-glib。Debian／Ubuntu：
+需要 CMake、Ninja、C++20 編譯器、Python 3（產生詞庫），以及 Fcitx5、Enchant、Cairo、Pango 與 Qt 6 的開發檔；GNOME 版設定視窗另需 libadwaita、libsoup 3 與 json-glib。Debian／Ubuntu：
 
 ```sh
-sudo apt install cmake g++ python3 git libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev hunspell-en-us fonts-noto-cjk
-platforms/linux/build.sh                       # 下載並編譯引擎、產生詞庫、跑測試，輸出到 .build
-sudo cmake --install platforms/linux/.build    # 安裝到 /usr
+sudo apt install cmake ninja-build g++ python3 git libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev hunspell-en-us fonts-noto-cjk
+platforms/linux/build.sh                       # 下載並編譯引擎、產生詞庫、跑測試，輸出到 build
+sudo cmake --install platforms/linux/build    # 安裝到 /usr
 ```
 
 安裝後重新啟動 Fcitx5（`fcitx5 -r`），在 Fcitx5 設定的「輸入法」加入 Project Key（取消「只顯示目前語言」才看得到）。之後用 Ctrl+Space 切換。
 
 設定視窗的分組與 macOS、Windows 相同，改了立即生效。`projectkey-settings` 依桌面開啟對應的版本：KDE 上是 Qt 6（`Settings/Qt.cpp`），GNOME 等 GTK 桌面上是 libadwaita（`Settings/Gtk.cpp`，沒有建置時改開 Qt 版）。兩者的列定義在 `Settings/Rows.h`。從 Fcitx5 選單的「Project Key 設定…」或應用程式選單打開。它透過 Fcitx5 的 D-Bus 介面讀寫設定，所以 Fcitx5 設定裡 Project Key 的「設定」頁也能改同一份，存在 `~/.config/fcitx5/conf/projectkey.conf`。「清除選字紀錄」呼叫 addon 在 Fcitx5 D-Bus 上的 `/projectkey`：選字紀錄只存在記憶體裡，和其他平台一樣。
 
-移除：`sudo xargs rm < platforms/linux/.build/install_manifest.txt`。
+移除：`sudo xargs rm < platforms/linux/build/install_manifest.txt`。

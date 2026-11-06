@@ -19,7 +19,7 @@ CACHE=.cache
 SHARD_URL=https://huggingface.co/api/datasets/wikimedia/wikipedia/parquet/20231101.zh/train/0.parquet
 CHEWING_URL=https://raw.githubusercontent.com/chewing/libchewing-data/c44e81aef24b06f1509f19e1be54c99812d0c43f/dict/chewing/tsi.csv
 TEXT=$CACHE/text-$LIMIT.txt  # delete it after fetching gazette texts
-DATA=../../platforms/macos/.build/mcbopomofo/Source/Data/data.txt  # built by platforms/macos/build.sh
+DATA=../../platforms/macos/build/mcbopomofo/Source/Data/data.txt  # built by platforms/macos/build.sh
 
 [ -f "$DATA" ] || { echo "run platforms/macos/build.sh first" >&2; exit 1; }
 command -v opencc >/dev/null || brew install opencc
@@ -28,7 +28,7 @@ mkdir -p "$CACHE/wiki"
 [ -f "$CACHE/tsi.csv" ] || curl -fsSL -o "$CACHE/tsi.csv" "$CHEWING_URL"
 [ -x "$CACHE/venv/bin/python" ] || { python3 -m venv "$CACHE/venv"; "$CACHE/venv/bin/pip" install -q pyarrow; }
 
-MCB_ENGINE=../../platforms/macos/.build/mcbopomofo/Source/Engine  # the models map their files with its MemoryMappedFile
+MCB_ENGINE=../../platforms/macos/build/mcbopomofo/Source/Engine  # the models map their files with its MemoryMappedFile
 c++ -std=c++20 -O2 -I../../core/engine -I$MCB_ENGINE train.cpp ../../core/engine/Bigram.cpp $MCB_ENGINE/MemoryMappedFile.cpp -o "$CACHE/train"
 c++ -std=c++20 -O2 -I../../core/engine -I$MCB_ENGINE chars.cpp ../../core/engine/CharModel.cpp $MCB_ENGINE/MemoryMappedFile.cpp -o "$CACHE/chars"
 c++ -std=c++20 -O2 -I../../core/engine mine.cpp -o "$CACHE/mine"
