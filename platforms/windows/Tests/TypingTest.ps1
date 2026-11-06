@@ -5,7 +5,7 @@
 # -Kind winforms types into a classic Win32 edit control instead of WPF.
 # -Flip puts the text near the bottom of the screen and only checks the
 # candidate window opens above it.
-param([string]$Shots = (Join-Path $PSScriptRoot '..\.build\shots'), [ValidateSet('wpf', 'winforms')][string]$Kind = 'wpf',
+param([string]$Shots = (Join-Path $PSScriptRoot '..\build\shots'), [ValidateSet('wpf', 'winforms')][string]$Kind = 'wpf',
   [switch]$Flip)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing

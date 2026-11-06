@@ -13,7 +13,7 @@ brew install --cask koukeneko/tap/project-key
 自行建置需要 Xcode（或 Command Line Tools）與 CMake，macOS 13 以上。
 
 ```bash
-platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑測試、輸出 .build/ProjectKey.app
+platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑測試、輸出 build/ProjectKey.app
 platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註冊
 ```
 

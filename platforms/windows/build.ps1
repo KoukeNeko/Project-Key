@@ -1,10 +1,10 @@
-# Builds the Windows input method into .build\out and runs the tests. Needs
+# Builds the Windows input method into build\out and runs the tests. Needs
 # Visual Studio with the C++ desktop workload (MSVC and the Windows SDK) and
 # uv (for the Python that generates McBopomofo's dictionary). The McBopomofo
-# engine and dictionary (MIT) are fetched at a pinned commit into .build\.
+# engine and dictionary (MIT) are fetched at a pinned commit into build\.
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
-$Build = Join-Path $PSScriptRoot '.build'
+$Build = Join-Path $PSScriptRoot 'build'
 $McbCommit = (Get-Content "$PSScriptRoot\..\..\MCBOPOMOFO_COMMIT").Trim()
 $Mcb = Join-Path $Build 'mcbopomofo'
 $Obj = Join-Path $Build 'obj'

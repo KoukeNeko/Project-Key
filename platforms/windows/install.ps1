@@ -1,8 +1,8 @@
-# Installs .build\out (or -Source, an unpacked release) into Program Files
+# Installs build\out (or -Source, an unpacked release) into Program Files
 # (where apps in a sandbox can read it), registers the input method, and starts
 # the engine server now and at sign-in.
 # Adding it as a keyboard is left to Settings > Time & language > Language & region.
-param([string]$Source = (Join-Path $PSScriptRoot '.build\out'), [switch]$Elevated)
+param([string]$Source = (Join-Path $PSScriptRoot 'build\out'), [switch]$Elevated)
 $ErrorActionPreference = 'Stop'
 $Dest = Join-Path $env:ProgramFiles 'Project Key'
 if (-not (Test-Path "$Source\ProjectKey.dll")) { throw 'run .\build.ps1 first' }
