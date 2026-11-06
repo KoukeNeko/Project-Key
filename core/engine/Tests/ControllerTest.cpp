@@ -497,6 +497,14 @@ int main(int argc, char** argv) {
   controller.reset();
   assert(!controller.isComposing());
 
+  // The pinyin layout takes effect with the next composition; , is punctuation there.
+  settings.set(Setting::kKeyboardLayout, 1);
+  client.committed.clear();
+  Type(controller, "ni3hao,");
+  assert(client.marked == "你好，");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && client.committed == "你好，");
+  settings.remove(Setting::kKeyboardLayout);
+
   std::printf("ControllerTest passed\n");
   return 0;
 }

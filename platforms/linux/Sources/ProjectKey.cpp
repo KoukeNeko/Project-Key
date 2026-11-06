@@ -54,6 +54,8 @@ FCITX_CONFIG_ENUM_NAME_WITH_I18N(CandidatePosition, N_("游標後"), N_("游標�
 // Setting::kAppearance's first two values: the dark window, and a dark tint over the blurred windows behind it.
 enum class Appearance { Dark, Blur };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(Appearance, N_("深色"), N_("模糊"));
+enum class KeyboardLayout { Daqian, HanyuPinyin };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(KeyboardLayout, N_("大千注音"), N_("漢語拼音"));
 
 bool DefaultFlag(Setting setting) {
   return Settings::DefaultValue(setting) != 0;
@@ -75,6 +77,8 @@ FCITX_CONFIGURATION(
         this, "ProofPreview", "輸入時的整句預覽", static_cast<ProofMode>(Settings::DefaultValue(Setting::kProofPreview))};
     fcitx::OptionWithAnnotation<ProofMode, ProofModeI18NAnnotation> choosingProof{
         this, "ChoosingProof", "選字時的整句預覽", static_cast<ProofMode>(Settings::DefaultValue(Setting::kChoosingProof))};
+    fcitx::OptionWithAnnotation<KeyboardLayout, KeyboardLayoutI18NAnnotation> keyboardLayout{
+        this, "KeyboardLayout", "輸入法", static_cast<KeyboardLayout>(Settings::DefaultValue(Setting::kKeyboardLayout))};
     fcitx::Option<bool> capsLockToggle{this, "CapsLockToggle", "Caps Lock 切換中英", DefaultFlag(Setting::kCapsLockToggle)};
     fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "單按 Shift 切換中英", DefaultFlag(Setting::kShiftToggle)};
     fcitx::Option<bool> englishToZhuyin{this, "EnglishToZhuyin", "Tab 英文轉注音", DefaultFlag(Setting::kEnglishToZhuyin)};
@@ -102,6 +106,7 @@ class ConfigSettings : public Settings {
       case Setting::kCandidatePosition: return static_cast<int>(*config_.candidatePosition);
       case Setting::kNextDoubtful: return *config_.nextDoubtful;
       case Setting::kAppearance: return static_cast<int>(*config_.appearance);
+      case Setting::kKeyboardLayout: return static_cast<int>(*config_.keyboardLayout);
     }
     return std::nullopt;
   }

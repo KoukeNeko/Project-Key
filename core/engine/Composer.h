@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "Bigram.h"
@@ -54,11 +55,12 @@ class Composer {
   // Each syllable typed with its tone also matches the readings one adjacent key away (a slip
   // such as ㄧㄡˇ for ㄧㄝˇ, or a key in the row above or below), scored adjacentKeyScore
   // lower; -infinity turns it off.
+  // With pinyin, keys are Hanyu Pinyin letters, 2-5 for the tones, and ' between syllables.
   explicit Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram = nullptr,
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
                     double adjacentKeyScore = kAdjacentKeyScore, std::shared_ptr<const CharModel> chars = nullptr,
-                    double charWeight = kCharWeight);
+                    double charWeight = kCharWeight, bool pinyin = false);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -3;
   // How much the character model's log10 probability adds to a word's score (it only works with a Bigram).
@@ -72,7 +74,10 @@ class Composer {
   bool isEmpty() const { return grid_.length() == 0 && reading_.isEmpty(); }
   // A syllable is open: a tone key or Space completes it.
   bool hasPendingReading() const { return !reading_.isEmpty(); }
-  bool isReadingKey(char key) const { return reading_.isValidKey(key); }
+  bool isReadingKey(char key) const {
+    return reading_.isValidKey(key) || (pinyin_ && key == '\'' && !reading_.isEmpty());
+  }
+  bool isPinyin() const { return pinyin_; }
   // Whether `keys` type exactly one dictionary syllable: each key sets its own
   // component (none replaces another, as in English words), ending with a tone
   // key, a space for the first tone, or neither for any tone.
@@ -122,6 +127,8 @@ class Composer {
  private:
   KeyResult insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned);
   bool startsSyllable(char key) const;
+  KeyResult typePinyinKey(char key);
+  bool isPinyinStart(const std::string& letters) const { return pinyinStarts_.count(letters) > 0; }
   void showReading();
   void hideReading();
   void endReading();
@@ -144,6 +151,9 @@ class Composer {
   // dictionary_, plus the words of readings one key off when adjacentKeyScore_ is finite.
   std::shared_ptr<Formosa::Gramambular2::LanguageModel> gridModel_;
   Formosa::Gramambular2::ReadingGrid grid_;
+  bool pinyin_;
+  // Every start of a pinyin syllable the dictionary has, toneless, the whole syllable included.
+  std::unordered_set<std::string> pinyinStarts_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
   bool readingShown_ = false;  // the open syllable is in the grid, toneless, right before the cursor
   bool toned_ = false;         // the last syllable this composition closed was typed with a tone
