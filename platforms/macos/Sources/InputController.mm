@@ -53,12 +53,6 @@ PKPanelContent *Content(const ProjectKey::PanelContent &panel) {
   return content;
 }
 
-// Choices the user made, shared by every input session. Kept in memory only,
-// with McBopomofo's capacity and 1.5-hour half-life.
-McBopomofo::UserOverrideModel NewUserModel() {
-  return McBopomofo::UserOverrideModel(500, 5400.0);
-}
-
 // Settings in NSUserDefaults, under the names Settings::Name gives.
 class DefaultsSettings : public ProjectKey::Settings {
  public:
@@ -97,7 +91,7 @@ ProjectKey::Environment &SharedEnvironment() {
         NSLog(@"Project Key: cannot load %@", path);
       }
     }
-    env->userModel = std::make_shared<McBopomofo::UserOverrideModel>(NewUserModel());
+    env->userModel = ProjectKey::NewUserModel();
     static DefaultsSettings settings;
     env->settings = &settings;
     env->isEnglish = [](const std::string &text) {
@@ -287,7 +281,7 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 
 - (void)showSettings:(id)sender {
   [PKSettingsWindow showWithClearChoices:^{
-    *SharedEnvironment().userModel = NewUserModel();
+    *SharedEnvironment().userModel = *ProjectKey::NewUserModel();
   }];
 }
 

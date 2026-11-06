@@ -9,6 +9,7 @@ namespace {
 
 constexpr DWORD kTimeoutMs = 500;
 constexpr DWORD kLaunchWaitMs = 3000;
+constexpr size_t kMaxReply = 1 << 20;  // far beyond any real reply; a bigger one is not the server's
 
 bool InAppContainer() {
   HANDLE token = nullptr;
@@ -19,10 +20,30 @@ bool InAppContainer() {
   return isAppContainer != 0;
 }
 
-// Starts the server next to this DLL. Not from an app container: the server
-// would inherit the sandbox. The installer also starts it at sign-in.
+// Whether this process runs as the user signs in: medium integrity, not elevated.
+bool PlainUser() {
+  HANDLE token = nullptr;
+  if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return false;
+  TOKEN_ELEVATION elevation{};
+  DWORD size = sizeof(elevation);
+  bool plain = GetTokenInformation(token, TokenElevation, &elevation, size, &size) && !elevation.TokenIsElevated;
+  BYTE label[64];
+  if (plain && GetTokenInformation(token, TokenIntegrityLevel, label, sizeof(label), &size)) {
+    PSID sid = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(label)->Label.Sid;
+    DWORD rid = *GetSidSubAuthority(sid, *GetSidSubAuthorityCount(sid) - 1);
+    plain = rid == SECURITY_MANDATORY_MEDIUM_RID;
+  } else {
+    plain = false;
+  }
+  CloseHandle(token);
+  return plain;
+}
+
+// Starts the server next to this DLL. Only from a process with the user's plain
+// token: from an app container it would inherit the sandbox, from an elevated or
+// low-integrity app that app's rights. The installer also starts it at sign-in.
 bool LaunchServer() {
-  if (InAppContainer()) return false;
+  if (InAppContainer() || !PlainUser()) return false;
   std::wstring path = ModuleDirectory(gInstance) + kServerExe;
   STARTUPINFOW startup{sizeof(startup)};
   PROCESS_INFORMATION process{};
@@ -42,7 +63,9 @@ bool EngineClient::connect() {
   if (pipe_ != INVALID_HANDLE_VALUE) return true;
   std::wstring name = PipeName();
   for (int attempt = 0; attempt < 2; attempt++) {
-    pipe_ = CreateFileW(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
+    // The server may identify this client but not act as it.
+    pipe_ = CreateFileW(name.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                        FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, nullptr);
     if (pipe_ != INVALID_HANDLE_VALUE) break;
     DWORD error = GetLastError();
     if (error == ERROR_PIPE_BUSY) {
@@ -58,6 +81,15 @@ bool EngineClient::connect() {
     for (DWORD waited = 0; waited < kLaunchWaitMs && !WaitNamedPipeW(name.c_str(), 50); waited += 50) Sleep(50);
   }
   if (pipe_ == INVALID_HANDLE_VALUE) return false;
+  // Keys go only to the installed server: any process of this user could serve a pipe of
+  // that name. A sandbox that cannot read another process's image (an app container)
+  // has only the pipe's own access rules.
+  ULONG server = 0;
+  std::wstring image = GetNamedPipeServerProcessId(pipe_, &server) ? ProcessImage(server) : L"?";
+  if (!image.empty() && !SamePath(image, ModuleDirectory(gInstance) + kServerExe)) {
+    disconnect();
+    return false;
+  }
   newSession_ = true;
   DWORD mode = PIPE_READMODE_MESSAGE;
   SetNamedPipeHandleState(pipe_, &mode, nullptr, nullptr);
@@ -97,6 +129,10 @@ std::optional<std::string> EngineClient::transact(const std::string& request) {
   size_t total = read;
   // A reply longer than the buffer: read the rest of the message.
   while (result == kMore) {
+    if (total + kChunk > kMaxReply) {
+      CancelIoEx(pipe_, nullptr);
+      return std::nullopt;
+    }
     reply.resize(total + kChunk);
     overlapped = {};
     overlapped.hEvent = event_;

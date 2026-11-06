@@ -46,7 +46,6 @@ class Bigram {
   };
 
   bool isLoaded() const { return pairs_.count > 0; }
-  size_t pairCount() const { return pairs_.count; }
   std::optional<uint32_t> id(const std::string& word) const;
   std::optional<double> log10Probability(uint32_t previous, uint32_t next) const;
   std::optional<double> log10Probability(uint32_t first, uint32_t second, uint32_t next) const;

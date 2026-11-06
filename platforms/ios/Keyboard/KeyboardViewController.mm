@@ -65,7 +65,7 @@ ProjectKey::Environment &SharedEnvironment() {
         NSLog(@"Project Key: cannot load %@", path);
       }
     }
-    env->userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+    env->userModel = ProjectKey::NewUserModel();
     static DefaultsSettings settings;
     env->settings = &settings;
     return env;
@@ -146,7 +146,7 @@ constexpr CGFloat kBarHeight = kKeyHeight / (1 - kRowGapShare);
 // A candidate's box: shorter than a key, midway between the keyboard's top and the keys.
 constexpr CGFloat kChipHeight = 34, kChipTop = (kBarHeight + kTopInset - kChipHeight) / 2;
 constexpr CGFloat kExpandWidth = 44, kGridRowHeight = 44;
-constexpr int kGridColumns = 6;
+using ProjectKey::kGridColumns;  // the engine packs rows to the same width
 // Candidate buttons are tagged from here with their index, so viewWithTag: never finds the view itself (tag 0).
 constexpr NSInteger kCandidateTag = 1;
 

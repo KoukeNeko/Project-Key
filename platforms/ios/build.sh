@@ -15,8 +15,12 @@ command -v xcodegen >/dev/null || brew install xcodegen
 if [ ! -d "$MCB/.git" ]; then
   git init -q "$MCB"
   git -C "$MCB" remote add origin https://github.com/openvanilla/McBopomofo
+fi
+# Again whenever MCBOPOMOFO_COMMIT moves, with the dictionary built from it.
+if [ "$(git -C "$MCB" rev-parse -q --verify HEAD)" != "$MCB_COMMIT" ]; then
   git -C "$MCB" fetch -q --depth 1 origin "$MCB_COMMIT"
   git -C "$MCB" checkout -q FETCH_HEAD
+  rm -f "$MCB/Source/Data/data.txt"
 fi
 [ -f "$MCB/Source/Data/data.txt" ] || make -C "$MCB/Source/Data" data.txt
 if [ -f "$TRAINED/data.txt" ]; then cp "$TRAINED/data.txt" $BUILD/data.txt; else cp "$MCB/Source/Data/data.txt" $BUILD/data.txt; fi

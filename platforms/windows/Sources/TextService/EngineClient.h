@@ -14,7 +14,10 @@ namespace ProjectKey {
 
 class EngineClient {
  public:
-  ~EngineClient() { disconnect(); }
+  ~EngineClient() {
+    disconnect();
+    if (event_) CloseHandle(event_);
+  }
   std::optional<Protocol::Reply> send(const Protocol::Message& message);
   void disconnect();
   // Whether a new connection was opened since the last call. Each connection

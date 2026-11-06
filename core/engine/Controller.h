@@ -91,6 +91,12 @@ class Settings {
   static const char* Name(Setting setting);
 };
 
+// The remembered choices, empty, with McBopomofo's capacity and 1.5-hour half-life;
+// every platform starts from it and clears to it.
+inline std::shared_ptr<McBopomofo::UserOverrideModel> NewUserModel() {
+  return std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+}
+
 // What every session shares: the models, settings and the 中/英 switch.
 struct Environment {
   std::shared_ptr<Lexicon> lm;
@@ -186,6 +192,8 @@ class Controller {
   // The segment holding the syllable still open without a tone, while its word shows.
   std::optional<size_t> openSegment() const;
   int span(const std::string& candidate) const;
+  // How many of words, from the first, fit one grid row.
+  size_t firstRowSize(const std::vector<std::string>& words) const;
   std::optional<size_t> doubtfulAfter(size_t start, bool backwards) const;
   void startChoosingAt(size_t start);
   void pick(int index);

@@ -22,6 +22,8 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSettings>
+#include <QMessageBox>
+#include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QVBoxLayout>
 #include <QVersionNumber>
@@ -48,9 +50,16 @@ QVariantMap ReadConfig(QDBusInterface& controller) {
   return qdbus_cast<QVariantMap>(value.value<QDBusArgument>());
 }
 
-void WriteConfig(QDBusInterface& controller, const QString& key, const QString& value) {
+// Whether Fcitx5 took the value: it may have stopped since the window opened.
+bool WriteConfig(QDBusInterface& controller, const QString& key, const QString& value) {
   // The addon merges what it is given, so one key at a time leaves the others as they are.
-  controller.call("SetConfig", QString(kConfig), QVariant::fromValue(QDBusVariant(QVariantMap{{key, value}})));
+  QDBusMessage reply = controller.call("SetConfig", QString(kConfig), QVariant::fromValue(QDBusVariant(QVariantMap{{key, value}})));
+  return reply.type() == QDBusMessage::ReplyMessage;
+}
+
+// The control has gone back to what is saved.
+void Unsaved(QWidget* control) {
+  QMessageBox::warning(control->window(), "Project Key 設定", "無法儲存：Fcitx5 沒有回應，設定沒有改變。");
 }
 
 // The newest GitHub release, which the other platforms' package managers install from.
@@ -166,7 +175,12 @@ int main(int argc, char** argv) {
         auto* box = new QCheckBox(row.title);
         box->setChecked(Text(config.value(key)) == "True");
         box->setEnabled(available);
-        QObject::connect(box, &QCheckBox::toggled, [&controller, key](bool on) { WriteConfig(controller, key, on ? "True" : "False"); });
+        QObject::connect(box, &QCheckBox::toggled, [&controller, key, box](bool on) {
+          if (WriteConfig(controller, key, on ? "True" : "False")) return;
+          QSignalBlocker quiet(box);
+          box->setChecked(!on);
+          Unsaved(box);
+        });
         form->addRow(box);
       } else if (row.kind == Row::kChoice) {
         QStringList values, shown;
@@ -176,8 +190,15 @@ int main(int argc, char** argv) {
         combo->addItems(shown);
         combo->setCurrentIndex(std::max(0, static_cast<int>(values.indexOf(Text(config.value(key))))));
         combo->setEnabled(available);
-        QObject::connect(combo, &QComboBox::currentIndexChanged, [&controller, key, values](int index) {
-          if (index >= 0) WriteConfig(controller, key, values[index]);
+        QObject::connect(combo, &QComboBox::currentIndexChanged, [&controller, key, values, combo, saved = combo->currentIndex()](int index) mutable {
+          if (index < 0) return;
+          if (WriteConfig(controller, key, values[index])) {
+            saved = index;
+            return;
+          }
+          QSignalBlocker quiet(combo);
+          combo->setCurrentIndex(saved);
+          Unsaved(combo);
         });
         form->addRow(row.title, combo);
       } else {

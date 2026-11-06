@@ -33,6 +33,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Controller.h"
@@ -116,7 +117,10 @@ class ConfigSettings : public Settings {
   }
 
  private:
-  static std::optional<int> LastOn(int value) { return value < 0 ? std::nullopt : std::optional<int>(value); }
+  // The proof mode the switch turns back on: 永遠 or 有可疑字時; anything else (a file edited by hand) is unset.
+  static std::optional<int> LastOn(int value) {
+    return value == 0 || value == 1 ? std::optional<int>(value) : std::nullopt;  // ProofMode::kProofAlways, kProofWhenDoubtful
+  }
   Config& config_;
 };
 
@@ -166,6 +170,19 @@ class Spelling {
 };
 
 }  // namespace
+
+class Session;
+// The session the engine is working for, set around each call into its controller:
+// candidates packed into rows for Project Key's window are measured as the window
+// draws them, for Fcitx5's panel as the text it shows (Span).
+const Session* gActive = nullptr;
+struct Active {
+  explicit Active(const Session* session) : previous(std::exchange(gActive, session)) {}
+  ~Active() { gActive = previous; }
+  Active(const Active&) = delete;
+  Active& operator=(const Active&) = delete;
+  const Session* previous;
+};
 
 // One input context's composition: what the Controller does to the app goes
 // into the context's preedit, commit and panel.
@@ -247,6 +264,12 @@ class Session : public fcitx::InputContextProperty, public Client {
       merged.selectedRow = shown_->selectedRow;
       merged.selection = shown_->selection;
       merged.pageLabel = shown_->pageLabel;
+      // The hint covers the proof row that showed the guess, so the guess leads the row instead.
+      int guess = shown_->activeSegment;
+      if (shown_->selectedRow < 0 && guess >= 0 && guess < static_cast<int>(shown_->segments.size())) {
+        if (merged.rows.empty()) merged.rows.emplace_back();
+        merged.rows[0].insert(merged.rows[0].begin(), shown_->segments[guess]);
+      }
     }
     showInFcitx(merged);
   }
@@ -414,6 +437,7 @@ class Session : public fcitx::InputContextProperty, public Client {
     Word(Session* session, const std::vector<std::string>& row, int index)
         : fcitx::CandidateWord(fcitx::Text(row[index])), session_(session), row_(row), index_(index) {}
     void select(fcitx::InputContext*) const override {
+      Active active(session_);
       const std::vector<std::string>& all = session_->controller.candidates();
       auto found = std::search(all.begin(), all.end(), row_.begin(), row_.end());
       if (found != all.end()) session_->controller.choose(static_cast<int>(found - all.begin()) + index_);
@@ -435,13 +459,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   Controller controller;  // after the members it calls back into
 };
 
-// Choices the user made, shared by every context; in memory only, with McBopomofo's
-// capacity and 1.5-hour half-life, as on the other platforms.
-std::shared_ptr<McBopomofo::UserOverrideModel> NewUserModel() {
-  return std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
-}
-
-// What the settings window (Settings/main.cpp) asks of the engine over D-Bus,
+// What the settings windows (Settings/Qt.cpp, Settings/Gtk.cpp) ask of the engine over D-Bus,
 // at /projectkey on Fcitx5's own bus name: forgetting the choices, which live
 // only in this process.
 class SettingsObject : public fcitx::dbus::ObjectVTable<SettingsObject> {
@@ -477,10 +495,9 @@ class Engine : public fcitx::InputMethodEngineV2 {
     environment_.settings = &settings_;
     environment_.isEnglish = [this](const std::string& text) { return spelling_.isEnglish(text); };
     environment_.hintWindow = true;  // beside the candidate window, as on macOS and Windows (Session::showHint)
-    environment_.columnsSpannedBy = panel_.ok() ? std::function<int(const std::string&)>([this](const std::string& candidate) {
-      return panel_.span(candidate);
-    })
-                                                : Span;
+    environment_.columnsSpannedBy = [this](const std::string& candidate) {
+      return gActive && gActive->ownPanel() ? panel_.span(candidate) : Span(candidate);
+    };
     environment_.appTypesUnhandledKeys = true;  // a key the engine does not filter reaches the app
     instance_->inputContextManager().registerProperty("projectkey", &factory_);
     // The settings window: from the Fcitx5 menu, as from the macOS input menu and the Windows language bar.
@@ -500,7 +517,9 @@ class Engine : public fcitx::InputMethodEngineV2 {
               !settings_.flag(Setting::kShiftToggle)) {
             return;
           }
-          event.inputContext()->propertyFor(&factory_)->controller.handleShift(!event.isRelease());
+          Session* session = event.inputContext()->propertyFor(&factory_);
+          Active active(session);
+          session->controller.handleShift(!event.isRelease());
           event.filter();  // the app still gets the key
         });
     caretWatcher_ = instance_->watchEvent(
@@ -512,6 +531,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
 
   void keyEvent(const fcitx::InputMethodEntry&, fcitx::KeyEvent& event) override {
     Session* session = event.inputContext()->propertyFor(&factory_);
+    Active active(session);
     Controller& controller = session->controller;
     fcitx::Key key = event.rawKey();
     fcitx::KeySym sym = key.sym();

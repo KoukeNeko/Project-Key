@@ -1,5 +1,6 @@
 #include "Bigram.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
@@ -47,7 +48,7 @@ bool Bigram::load(const std::string& path) {
   if (!take(magic, sizeof magic) || std::memcmp(magic, kMagic, sizeof kMagic) != 0) return fail();
   uint32_t wordCount = 0;
   if (!take(&wordCount, sizeof wordCount)) return fail();
-  ids_.reserve(wordCount);
+  ids_.reserve(std::min<size_t>(wordCount, (end - at) / sizeof(uint16_t)));  // a word is at least its length
   for (uint32_t id = 0; id < wordCount; id++) {
     uint16_t length = 0;
     if (!take(&length, sizeof length) || static_cast<size_t>(end - at) < length) return fail();

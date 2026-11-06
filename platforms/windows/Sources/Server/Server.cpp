@@ -39,12 +39,6 @@ class RegistrySettings : public Settings {
   }
 };
 
-// Choices the user made, shared by every input session. Kept in memory only,
-// with McBopomofo's capacity and 1.5-hour half-life, as on macOS.
-McBopomofo::UserOverrideModel NewUserModel() {
-  return McBopomofo::UserOverrideModel(500, 5400.0);
-}
-
 // Records what the controller does as reply operations.
 class Recorder : public Client {
  public:
@@ -143,7 +137,7 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kDeactivate: controller->deactivate(); break;
         case Protocol::Request::kReset: controller->reset(); break;
         case Protocol::Request::kClearChoices:
-          if (FromSettings(pipe)) *gEnvironment.userModel = NewUserModel();
+          if (FromSettings(pipe)) *gEnvironment.userModel = *NewUserModel();
           break;
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
         case Protocol::Request::kShowSettings: LaunchSettings(ModuleDirectory(nullptr)); break;
@@ -166,11 +160,15 @@ void Serve(HANDLE pipe) {
 }
 
 // The pipe admits this user from any integrity level and app container, as
-// the text service runs inside every app.
+// the text service runs inside every app. App containers may read and write it
+// (0x12019b: FILE_GENERIC_READ | FILE_GENERIC_WRITE without FILE_CREATE_PIPE_INSTANCE)
+// but not serve an instance of their own; the text service also checks which
+// program serves it.
 SECURITY_ATTRIBUTES* PipeSecurity() {
   static SECURITY_ATTRIBUTES attributes{sizeof(attributes)};
   static PSECURITY_DESCRIPTOR descriptor = [] {
-    std::wstring sddl = L"D:(A;;GA;;;" + UserSid() + L")(A;;GA;;;SY)(A;;GA;;;AC)(A;;GA;;;S-1-15-2-2)S:(ML;;NW;;;LW)";
+    std::wstring sddl =
+        L"D:(A;;GA;;;" + UserSid() + L")(A;;GA;;;SY)(A;;0x12019b;;;AC)(A;;0x12019b;;;S-1-15-2-2)S:(ML;;NW;;;LW)";
     PSECURITY_DESCRIPTOR sd = nullptr;
     ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &sd, nullptr);
     return sd;
@@ -215,7 +213,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       Log(L"cannot load " + dir + L"chars.bin");
     }
   }
-  gEnvironment.userModel = std::make_shared<McBopomofo::UserOverrideModel>(NewUserModel());
+  gEnvironment.userModel = NewUserModel();
   gEnvironment.settings = &gSettings;
   gEnvironment.isEnglish = IsEnglish;
   gEnvironment.hintWindow = true;

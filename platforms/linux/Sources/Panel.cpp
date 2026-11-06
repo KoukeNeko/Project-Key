@@ -274,7 +274,9 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   fcitx::Rect caret = screen_->caret(anchor);
   int left = caret.left() - static_cast<int>(std::lround(kAnchorInset * scale_));
   int top = caret.bottom() + gap;
-  proofBelow_ = panel_->above() || top + height > screen_->height();
+  // A Tab hint goes under the window too, so it needs the room as well.
+  int hintRoom = hintContent_ ? hintHeight() + static_cast<int>(std::lround(kHintGap * scale_)) : 0;
+  proofBelow_ = panel_->above() || top + height + hintRoom > screen_->height();
   if (proofBelow_) top = caret.top() - gap - height;
   left = std::max(0, std::min(left, screen_->width() - width));
 
@@ -342,7 +344,10 @@ void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
   if (!ok() || !panel_ || !panel_->mapped || &ic != owner_) return;
   if (!hint_) hint_ = screen_->createWindow([this] { paintHint(); }, [this] { paintHint(); });
   if (!hint_->mapped) hint_->setBlur(blurs());
+  bool hadHint = hintContent_.has_value();
   hintContent_ = hint;
+  // Placed without room for a hint under it, the window may have to go above the text now.
+  if (!hadHint && !proofBelow_) show(ic, PanelContent(*content_), anchor_);
   placeHint();
   hint_->map(ic);
   paintHint();
@@ -355,18 +360,22 @@ void Panel::hideHint() {
   hintContent_.reset();
 }
 
-// Its left edge on the panel's, on the panel's side away from the text: below
-// it under the text, above it over the text.
+int Panel::hintHeight() const {
+  return static_cast<int>(std::ceil((kProofPad + kProofLine + kProofPad) * scale_));
+}
+
+// Its left edge on the panel's, kept on screen, on the panel's side away from the
+// text: below it under the text, above it over the text (show() leaves the room).
 // shortcut: on Wayland the compositor turns each popup by its own height, so a hint the panel's
 // side cannot fit can open on the other; place both from one popup if that shows.
 void Panel::placeHint() {
   if (!hintContent_) return;
   const Frame& next = resizing_ ? frameTo_ : panel_->frame;
-  int width = static_cast<int>(std::ceil(proofWidth(*hintContent_) * scale_));
-  int height = static_cast<int>(std::ceil((kProofPad + kProofLine + kProofPad) * scale_));
+  int width = static_cast<int>(std::ceil(proofWidth(*hintContent_) * scale_)), height = hintHeight();
   int gap = static_cast<int>(std::lround(kHintGap * scale_));
+  int left = std::max(0, std::min(next.x, screen_->width() - width));
   int top = proofBelow_ ? next.y - gap - height : next.y + next.height + gap;
-  hint_->place({next.x, top, width, height});
+  hint_->place({left, top, width, height});
 }
 
 void Panel::paintHint() {

@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstring>
 
+#include "Utf8.h"
+
 namespace ProjectKey {
 
 using Formosa::Gramambular2::LanguageModel;
@@ -399,12 +401,9 @@ void Composer::setTextBefore(const std::string& text) {
   for (size_t count = 0; start > 0 && count < kWordBeforeLength; count++) {
     size_t at = start - 1;
     while (at > 0 && (static_cast<unsigned char>(text[at]) & 0xC0) == 0x80) at--;
-    auto byte = [&](size_t i) { return static_cast<unsigned char>(text[i]); };
-    size_t length = start - at;
-    uint32_t c = length == 3 ? (byte(at) & 0x0F) << 12 | (byte(at + 1) & 0x3F) << 6 | (byte(at + 2) & 0x3F)
-               : length == 4 ? (byte(at) & 0x07) << 18 | (byte(at + 1) & 0x3F) << 12 | (byte(at + 2) & 0x3F) << 6 | (byte(at + 3) & 0x3F)
-               : 0;
-    if (!IsHan(c)) break;
+    size_t end = at;
+    uint32_t c = NextCodePoint(text, end);
+    if (end != start || !IsHan(c)) break;  // a malformed sequence ends the run too
     start = at;
   }
   hanBefore_ = text.substr(start);
@@ -499,26 +498,37 @@ void Composer::walk() {
     }
     return charWeight_ * total;
   };
+  // Words the typed reading itself has; the others came from an adjacent key, which only
+  // varies syllables typed with a tone (a reading with fewer kAnyTone than syllables).
+  auto slipsIn = [&](const std::string& reading) {
+    return adjacentKeyScore_ != -INFINITY &&
+           std::count(reading.begin(), reading.end(), kAnyTone) <= std::count(reading.begin(), reading.end(), kSeparator);
+  };
+  auto typedWords = [&](const std::string& reading) {
+    std::vector<std::string> typed;
+    if (slipsIn(reading)) {
+      for (const auto& unigram : dictionary_->getUnigrams(reading)) typed.push_back(unigram.value());
+    }
+    return typed;
+  };
+  // A word from an adjacent key pays adjacentKeyScore_, on the whole word, context included.
+  auto penaltyOf = [&](const std::string& reading, const std::vector<std::string>& typed, const std::string& value) {
+    return slipsIn(reading) && std::find(typed.begin(), typed.end(), value) == typed.end() ? adjacentKeyScore_ : 0.0;
+  };
   std::vector<Choice> choices;
   std::vector<std::vector<int>> endingAt(n + 1);
   for (size_t start = 0; start < n; start++) {
     for (size_t length = 1; length <= spans[start].maxLength(); length++) {
       const ReadingGrid::NodePtr& node = spans[start].nodeOf(length);
       if (!node) continue;
-      // Words the typed reading itself has; the others came from an adjacent key, which only
-      // varies syllables typed with a tone (a reading with fewer kAnyTone than syllables).
       const std::string& reading = node->reading();
-      bool slips = adjacentKeyScore_ != -INFINITY &&
-                   std::count(reading.begin(), reading.end(), kAnyTone) <= std::count(reading.begin(), reading.end(), kSeparator);
-      std::vector<std::string> typed;
-      if (slips) {
-        for (const auto& unigram : dictionary_->getUnigrams(reading)) typed.push_back(unigram.value());
-      }
+      bool slips = slipsIn(reading);
+      std::vector<std::string> typed = typedWords(reading);
       auto add = [&](std::string value, double unigramScore) {
         endingAt[start + length].push_back(static_cast<int>(choices.size()));
         uint32_t id = idOf(value);
-        // The penalty moves from the dictionary score to the whole word, context included.
-        double penalty = slips && std::find(typed.begin(), typed.end(), value) == typed.end() ? adjacentKeyScore_ : 0;
+        // The penalty moves from the dictionary score to the whole word.
+        double penalty = penaltyOf(reading, typed, value);
         std::vector<uint32_t> chars = chars_ ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
         choices.push_back({start, length, node, std::move(value), id, unigramScore - penalty, penalty, {}, std::move(chars)});
       };
@@ -629,11 +639,14 @@ void Composer::walk() {
     if (!choice.node->isOverridden() && !learned(i > 0 ? path[i - 1] : -1, choice)) {
       double chosen = local(choice.id, choice.unigramScore, choice.chars) + choice.penalty;
       const auto& unigrams = choice.node->unigrams();
+      const std::vector<std::string> typed = typedWords(choice.node->reading());
       for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()) && !doubtful; k++) {
         if (unigrams[k].value() != choice.value) {
           const std::string& value = unigrams[k].value();
           std::vector<uint32_t> chars = chars_ ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
-          doubtful = chosen - local(idOf(value), unigrams[k].score(), chars) < kDoubtfulScoreGap;
+          // Scored as the walk scores it: the penalty out of the unigram, onto the whole word.
+          double penalty = penaltyOf(choice.node->reading(), typed, value);
+          doubtful = chosen - (local(idOf(value), unigrams[k].score() - penalty, chars) + penalty) < kDoubtfulScoreGap;
         }
       }
     }

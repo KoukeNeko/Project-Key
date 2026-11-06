@@ -36,10 +36,14 @@ function Invoke-Native {
 if (-not (Test-Path "$Mcb\.git")) {
   Invoke-Native git init -q $Mcb
   Invoke-Native git -C $Mcb remote add origin https://github.com/openvanilla/McBopomofo
-  Invoke-Native git -C $Mcb fetch -q --depth 1 origin $McbCommit
-  Invoke-Native git -C $Mcb checkout -q FETCH_HEAD
 }
 $Data = Join-Path $Mcb 'Source\Data\data.txt'
+# Again whenever MCBOPOMOFO_COMMIT moves, with the dictionary built from it.
+if ((& git -C $Mcb rev-parse -q --verify HEAD 2>$null) -ne $McbCommit) {
+  Invoke-Native git -C $Mcb fetch -q --depth 1 origin $McbCommit
+  Invoke-Native git -C $Mcb checkout -q FETCH_HEAD
+  Remove-Item $Data -ErrorAction SilentlyContinue
+}
 if (-not (Test-Path $Data)) {
   $python = (& uv python find 3.12 2>$null) ; if (-not $python) { Invoke-Native uv python install 3.12; $python = & uv python find 3.12 }
   $env:PYTHONUTF8 = '1'

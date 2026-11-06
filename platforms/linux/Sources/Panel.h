@@ -76,6 +76,7 @@ class Panel {
   void drawCandidates(cairo_t* cr, float top, float width);
 
   // Tab hint.
+  int hintHeight() const;
   void placeHint();
   void paintHint();
 

@@ -114,10 +114,10 @@ public sealed partial class MainWindow : Window {
       using var pipe = new NamedPipeClientStream(".", "ProjectKey-" + sid, PipeDirection.InOut);
       pipe.Connect(1000);
       pipe.ReadMode = PipeTransmissionMode.Message;
-      // Protocol.h: version 1, Request::kClearChoices, an empty key event, no context.
+      // Protocol.h: kVersion (2), Request::kClearChoices, an empty key event, no context.
       var message = new MemoryStream();
       var writer = new BinaryWriter(message);
-      writer.Write(1u);
+      writer.Write(2u);
       writer.Write((byte)7);
       writer.Write((byte)0);
       writer.Write(0u);

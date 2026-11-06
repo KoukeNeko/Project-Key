@@ -48,8 +48,6 @@ class CharModel {
   bool isLoaded() const { return unigrams_.count > 0; }
   // P(next | first, second).
   double probability(uint32_t first, uint32_t second, uint32_t next) const;
-  // log10 P(chars | first, second), each character given the two before it.
-  double log10Probability(uint32_t first, uint32_t second, const std::vector<uint32_t>& chars) const;
   static std::vector<uint32_t> CodePoints(const std::string& utf8);
 
  private:

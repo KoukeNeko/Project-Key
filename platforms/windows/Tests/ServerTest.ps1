@@ -1,6 +1,8 @@
 # Talks to a running ProjectKeyServer over its pipe, as the text service does,
 # and checks a typed sentence comes back as a composition and a commit.
-# Usage: Tests\ServerTest.ps1   (start build\out\ProjectKeyServer.exe first)
+# Usage: Tests\ServerTest.ps1   (on a fresh server: stop the running one, start build\out\ProjectKeyServer.exe;
+# the server takes clearing the choices only from the settings app, so what an earlier
+# run or typing taught it would change the guesses)
 $ErrorActionPreference = 'Stop'
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', "ProjectKey-$sid", [IO.Pipes.PipeDirection]::InOut)
@@ -9,7 +11,7 @@ $pipe.ReadMode = [IO.Pipes.PipeTransmissionMode]::Message
 
 function Send([byte]$type, [byte]$key = 0, [string]$chars = '', [byte]$flags = 0) {
   $m = [IO.MemoryStream]::new(); $w = [IO.BinaryWriter]::new($m)
-  $w.Write([uint32]1); $w.Write($type); $w.Write($key)
+  $w.Write([uint32]2); $w.Write($type); $w.Write($key)  # Protocol.h kVersion
   $b = [Text.Encoding]::UTF8.GetBytes($chars); $w.Write([uint32]$b.Length); $w.Write($b); $w.Write($flags)
   $w.Write([byte]0); $w.Write([uint32]0)
   $bytes = $m.ToArray(); $pipe.Write($bytes, 0, $bytes.Length); $pipe.Flush()
@@ -24,16 +26,17 @@ function Send([byte]$type, [byte]$key = 0, [string]$chars = '', [byte]$flags = 0
     switch ($op) {
       1 { $result.Ops += [pscustomobject]@{ Op = 'insert'; Text = & $str } }
       2 { $result.Ops += [pscustomobject]@{ Op = 'composition'; Text = & $str; Caret = $r.ReadUInt32(); ActiveStart = $r.ReadUInt32(); ActiveLength = $r.ReadUInt32(); Replace = $r.ReadUInt32() } }
-      3 {
+      { $_ -in 3, 7 } {  # the panel, or the Tab hint's own window with the same content
         $segments = @(); $n = $r.ReadUInt32(); for ($k = 0; $k -lt $n; $k++) { $segments += & $str }
         $n = $r.ReadUInt32(); $r.ReadBytes($n) | Out-Null
         $active = $r.ReadInt32(); $pending = & $str; $caret = $r.ReadUInt32(); $proof = $r.ReadByte(); $hint = & $str; $replaced = & $str
         $rows = @(); $n = $r.ReadUInt32(); for ($k = 0; $k -lt $n; $k++) { $row = @(); $c = $r.ReadUInt32(); for ($j = 0; $j -lt $c; $j++) { $row += & $str }; $rows += , $row }
-        $result.Ops += [pscustomobject]@{ Op = 'panel'; Segments = $segments; Rows = $rows; SelectedRow = $r.ReadInt32(); Selection = $r.ReadInt32(); Page = & $str }
+        $result.Ops += [pscustomobject]@{ Op = $(if ($op -eq 7) { 'hint' } else { 'panel' }); Segments = $segments; Rows = $rows; SelectedRow = $r.ReadInt32(); Selection = $r.ReadInt32(); Page = & $str }
       }
       4 { $result.Ops += [pscustomobject]@{ Op = 'hide' } }
       5 { $result.Ops += [pscustomobject]@{ Op = 'indicator'; Text = & $str } }
       6 { $result.Ops += [pscustomobject]@{ Op = 'beep' } }
+      8 { $result.Ops += [pscustomobject]@{ Op = 'hide hint' } }
     }
   }
   $result
@@ -43,8 +46,6 @@ function Type-Keys([string]$keys) {
   foreach ($c in $keys.ToCharArray()) { $last = if ($c -eq ' ') { Send 1 1 ' ' } else { Send 1 0 ([string]$c) }; if (-not $last.Handled) { throw "not handled: $c" } }
   $last
 }
-
-[void](Send 7)  # forget choices earlier runs taught the server
 
 $reply = Type-Keys 'ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3'
 $composition = ($reply.Ops | Where-Object Op -eq 'composition')[-1].Text

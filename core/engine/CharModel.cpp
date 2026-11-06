@@ -8,6 +8,8 @@
 #include <fstream>
 #include <optional>
 
+#include "Utf8.h"
+
 namespace ProjectKey {
 
 namespace {
@@ -137,26 +139,9 @@ double CharModel::probability(uint32_t first, uint32_t second, uint32_t next) co
   return kept + *backoff * probability(second, next);
 }
 
-double CharModel::log10Probability(uint32_t first, uint32_t second, const std::vector<uint32_t>& chars) const {
-  double total = 0;
-  for (uint32_t next : chars) {
-    total += std::log10(probability(first, second, next));
-    first = second;
-    second = next;
-  }
-  return total;
-}
-
 std::vector<uint32_t> CharModel::CodePoints(const std::string& utf8) {
   std::vector<uint32_t> result;
-  for (size_t i = 0; i < utf8.size();) {
-    unsigned char lead = utf8[i];
-    size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
-    uint32_t c = length == 1 ? lead : length == 2 ? lead & 0x1F : length == 3 ? lead & 0x0F : lead & 0x07;
-    for (size_t k = 1; k < length && i + k < utf8.size(); k++) c = c << 6 | (utf8[i + k] & 0x3F);
-    result.push_back(c);
-    i += length;
-  }
+  for (size_t i = 0; i < utf8.size();) result.push_back(NextCodePoint(utf8, i));
   return result;
 }
 

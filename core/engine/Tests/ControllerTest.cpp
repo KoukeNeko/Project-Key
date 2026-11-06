@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
   env.lm = std::make_shared<Lexicon>();
   env.lm->loadLanguageModel(argv[1]);
   assert(env.lm->isDataModelLoaded());
-  env.userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+  env.userModel = ProjectKey::NewUserModel();
   env.settings = &settings;
   env.isEnglish = [](const std::string& text) { return text == "hello" || text == "hello world" || text == "ja"; };
   env.columnsSpannedBy = Span;
@@ -199,6 +199,10 @@ int main(int argc, char** argv) {
   // Looking at the candidates and coming back changes nothing, so the hint is still there.
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && client.panel.selectedRow == 0);
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
+  assert(typing.replacedText == "我ㄇ" && typing.segments[0] == "ja");
+  // Backspace among the candidates only closes them, as Escape does.
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && client.panel.selectedRow == 0);
+  assert(controller.handleKey(Special(ProjectKey::Key::kBackspace)));
   assert(typing.replacedText == "我ㄇ" && typing.segments[0] == "ja");
   EscapeAll(controller, client);
   // Where the hint has a window of its own, the panel keeps the guess in its proof row.
@@ -446,6 +450,20 @@ int main(int argc, char** argv) {
   assert(!controller.handleKey(Special(ProjectKey::Key::kTab)));
   assert(client.marked.empty() && controller.englishMode());
   TapShift(controller);
+
+  // Keys a Shift ended by committing are not behind the next composition: "hello" in 中,
+  // Shift, ji3 and Tab in 英 make 我, with no offer to turn it into "hello", and the next
+  // Tab opens the candidates instead of typing it.
+  Type(controller, "hello");
+  TapShift(controller);
+  assert(controller.englishMode() && client.marked.empty());
+  for (std::string key : {"j", "i", "3"}) controller.handleKey(Press(key)), client.committed += key;
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)));
+  assert(client.marked == "我" && (!client.panelVisible || client.panel.keyHint.empty()));
+  size_t beforeTab = client.committed.size();
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)));
+  assert(client.marked == "我" && client.committed.size() == beforeTab && !controller.englishMode());
+  EscapeAll(controller, client);
 
   // Off by default, Caps Lock leaves 中/英 alone.
   controller.handleCapsLock();

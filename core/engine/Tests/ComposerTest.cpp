@@ -8,6 +8,7 @@
 #include <string>
 
 #include "Composer.h"
+#include "Controller.h"
 
 using ProjectKey::Composer;
 using ProjectKey::Segment;
@@ -200,7 +201,7 @@ int main(int argc, char** argv) {
   std::remove(slipPath.c_str());
 
   // The user model: after choosing 列 following 第一 once, the next walk keeps it.
-  auto userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
+  auto userModel = ProjectKey::NewUserModel();
   Composer learning(lm, nullptr, userModel);
   type(learning, "2u4u xu,4g6");
   const ProjectKey::Segment* hunt = nullptr;

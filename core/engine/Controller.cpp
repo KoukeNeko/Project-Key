@@ -4,22 +4,11 @@
 #include <cmath>
 #include <cstring>
 
+#include "Utf8.h"
+
 namespace ProjectKey {
 
 namespace {
-
-// Decodes one UTF-8 sequence at `i`, advancing it; malformed bytes decode as U+FFFD.
-char32_t NextCodePoint(const std::string& s, size_t& i) {
-  unsigned char c = static_cast<unsigned char>(s[i++]);
-  int extra = c < 0x80 ? 0 : (c >> 5) == 0x6 ? 1 : (c >> 4) == 0xe ? 2 : (c >> 3) == 0x1e ? 3 : -1;
-  if (extra < 0) return 0xfffd;
-  char32_t cp = extra == 0 ? c : c & (0x3f >> extra);
-  for (int k = 0; k < extra; k++) {
-    if (i >= s.size() || (static_cast<unsigned char>(s[i]) & 0xc0) != 0x80) return 0xfffd;
-    cp = cp << 6 | (static_cast<unsigned char>(s[i++]) & 0x3f);
-  }
-  return cp;
-}
 
 std::u16string ToUtf16(const std::string& s) {
   std::u16string out;
@@ -363,15 +352,16 @@ void Controller::trackZhuyin(const KeyEvent& event) {
   switch (event.key) {
     case Key::kDown:
     case Key::kTab:
+    case Key::kSpace:  // opens the candidates as Down does; with a reading pending it types
       browsing = choosing_ || composer_->pendingReading().empty();
       break;
     case Key::kUp:
     case Key::kLeft:
     case Key::kRight:
-    case Key::kSpace:
     case Key::kPageUp:
     case Key::kPageDown:
     case Key::kEscape:
+    case Key::kBackspace:  // while choosing it only closes the candidates, as Escape does
       browsing = choosing_;
       break;
     default:
@@ -435,6 +425,9 @@ bool Controller::convertEnglishRun() {
   // The composition takes the English's place.
   replacing_ = static_cast<uint32_t>(typed.size());
   typeKeys(keys);
+  // The keys of an earlier composition, ended by a commit that kept them, are not behind this one.
+  zhuyinKeys_.clear();
+  zhuyinEdited_ = true;
   env_.englishMode = false;
   refresh();
   client_.showIndicator("ㄅ");
@@ -664,6 +657,12 @@ int Controller::span(const std::string& candidate) const {
   return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, kGridColumns);
 }
 
+size_t Controller::firstRowSize(const std::vector<std::string>& words) const {
+  size_t count = 0;
+  for (int used = 0; count < words.size() && used + span(words[count]) <= kGridColumns; count++) used += span(words[count]);
+  return count;
+}
+
 // The next doubtful segment in reading order, wrapping around, excluding `start`.
 std::optional<size_t> Controller::doubtfulAfter(size_t start, bool backwards) const {
   std::vector<size_t> doubtful;
@@ -698,11 +697,7 @@ void Controller::startChoosingAt(size_t start) {
       if (c != '-' && c != Composer::kAnyTone) zhuyin += c;  // the grid's separator
     }
     if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
-      int used = 0, firstRow = 0;
-      while (firstRow < static_cast<int>(candidates.size()) && used + span(candidates[firstRow]) <= kGridColumns) {
-        used += span(candidates[firstRow++]);
-      }
-      readingIndex_ = std::min(firstRow, kGridColumns - 1);
+      readingIndex_ = std::min(static_cast<int>(firstRowSize(candidates)), kGridColumns - 1);
       candidates.insert(candidates.begin() + readingIndex_, zhuyin);
     }
   }
@@ -859,10 +854,7 @@ void Controller::refresh() {
     }
   }
   auto fill = [this](const std::vector<std::string>& words, std::vector<std::string>& row) {
-    for (int used = 0; row.size() < words.size() && used + span(words[row.size()]) <= kGridColumns;) {
-      used += span(words[row.size()]);
-      row.push_back(words[row.size()]);
-    }
+    row.assign(words.begin(), words.begin() + static_cast<std::ptrdiff_t>(firstRowSize(words)));
   };
   fill(here, withGuess);
   std::erase(here, guess);

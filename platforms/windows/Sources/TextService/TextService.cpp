@@ -272,7 +272,7 @@ bool TextService::keyboardDisabled(ITfContext* context) {
   return disabled;
 }
 
-std::optional<KeyEvent> TextService::keyEvent(WPARAM vk, LPARAM) const {
+KeyEvent TextService::keyEvent(WPARAM vk) const {
   KeyEvent event;
   event.shift = IsDown(VK_SHIFT);
   event.control = IsDown(VK_CONTROL);
@@ -363,27 +363,26 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
       if (!repeat) engine_.send({Protocol::Request::kOtherModifier});
       return;
   }
-  std::optional<KeyEvent> key = keyEvent(wParam, lParam);
-  if (!key) return;
-  Protocol::Message message{Protocol::Request::kKeyDown, *key};
+  Protocol::Message message{Protocol::Request::kKeyDown, keyEvent(wParam)};
   // In 英, Tab may turn the Zhuyin just typed into a composition; the engine checks it is still there.
   // Apps reached through the IMM32 compatibility layer expose no text, so there Tab stays a Tab.
   if (englishMode_ && wParam == VK_TAB) message.context = textBeforeCaret(context);
   std::optional<Protocol::Reply> reply = engine_.send(message);
   if (!reply) return;
+  // In 英, the preview offers to turn Zhuyin into a composition, which needs the
+  // text before the caret; documents of apps reached through the IMM32
+  // compatibility layer (transitory) do not show it, so the offer would be empty.
+  // Before the reply is kept for OnKeyDown, which applies it as it is.
+  TF_STATUS status{};
+  if (englishMode_ && SUCCEEDED(context->GetStatus(&status)) && (status.dwStaticFlags & TS_SS_TRANSITORY)) {
+    std::erase_if(reply->operations, [](const Protocol::Operation& o) { return o.op == Protocol::Op::kShowPanel && !o.panel.keyHint.empty(); });
+  }
   *eaten = reply->handled;
   if (reply->handled && testing) {
     // TSF calls OnKeyDown next; the document is changed there.
     pending_ = std::move(reply);
     pendingKey_ = wParam;
     return;
-  }
-  // In 英, the preview offers to turn Zhuyin into a composition, which needs the
-  // text before the caret; documents of apps reached through the IMM32
-  // compatibility layer (transitory) do not show it, so the offer would be empty.
-  TF_STATUS status{};
-  if (englishMode_ && SUCCEEDED(context->GetStatus(&status)) && (status.dwStaticFlags & TS_SS_TRANSITORY)) {
-    std::erase_if(reply->operations, [](const Protocol::Operation& o) { return o.op == Protocol::Op::kShowPanel && !o.panel.keyHint.empty(); });
   }
   apply(context, *reply);  // e.g. the commit before a shortcut the app handles
 }
@@ -477,6 +476,8 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
     return;
   }
   editSession(composition_ ? compositionContext_ : context, TF_ES_READWRITE, [this, context, reply, showWindows, orphaned](TfEditCookie cookie) {
+    // An app may run the session later, after Deactivate let go of the composition and sinks.
+    if (!threadMgr_) return;
     if (orphaned && composition_) keepComposition(cookie);
     ITfContext* target = composition_ ? compositionContext_ : context;
     target->AddRef();
@@ -515,7 +516,11 @@ void TextService::watchLayout(ITfContext* context) {
 // The document laid out again: the composition or caret may be somewhere else,
 // or (in Chromium) known only now.
 STDMETHODIMP TextService::OnLayoutChange(ITfContext* context, TfLayoutCode code, ITfContextView*) {
-  if (code == TF_LC_DESTROY || !context || (!candidates_.visible() && !badge_.visible())) return S_OK;
+  if (code == TF_LC_DESTROY) {
+    if (context == layoutContext_) watchLayout(nullptr);  // let go of the closed view's document
+    return S_OK;
+  }
+  if (!context || (!candidates_.visible() && !badge_.visible())) return S_OK;
   editSession(context, TF_ES_READ, [this, context](TfEditCookie cookie) {
     HWND window = nullptr;
     RECT anchor = anchorRect(cookie, context, &window);

@@ -19,6 +19,7 @@
 #include <array>
 #include <climits>
 #include <cstring>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -97,8 +98,14 @@ class WaylandScreen final : public Screen {
   bool blurs() override { return false; }
 
   zwp_input_method_v2* inputMethod(fcitx::InputContext& ic) const {
-    if (ic.frontendName() != "wayland_v2") return nullptr;
-    return Proxy(waylandim_->call<fcitx::IWaylandIMModule::getInputMethodV2>(&ic));
+    if (!waylandim_ || ic.frontendName() != "wayland_v2") return nullptr;
+    // A Fcitx5 whose waylandim does not register the call throws; Fcitx5's panel stands in there.
+    try {
+      return Proxy(waylandim_->call<fcitx::IWaylandIMModule::getInputMethodV2>(&ic));
+    } catch (const std::exception&) {
+      waylandim_ = nullptr;
+      return nullptr;
+    }
   }
   // The globals on ic's connection, once both have arrived. Fcitx5 gives each
   // connection its own focus group, so the group finds it (libwayland only tells
@@ -117,7 +124,7 @@ class WaylandScreen final : public Screen {
   void connect(wl_display* display, fcitx::FocusGroup* group);
   void disconnect(wl_display* display);
 
-  fcitx::AddonInstance* waylandim_;
+  mutable fcitx::AddonInstance* waylandim_;  // dropped once it turns out not to offer the call
   std::unordered_map<wl_display*, Globals> connections_;
   std::vector<WaylandWindow*> windows_;
   std::unique_ptr<fcitx::HandlerTableEntry<fcitx::WaylandConnectionCreated>> created_;

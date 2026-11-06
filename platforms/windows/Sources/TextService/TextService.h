@@ -99,7 +99,7 @@ class TextService : public ITfTextInputProcessorEx,
   RECT anchorRect(TfEditCookie cookie, ITfContext* context, HWND* window);
   std::string textBeforeCaret(ITfContext* context);
   bool keyboardDisabled(ITfContext* context);
-  std::optional<KeyEvent> keyEvent(WPARAM wParam, LPARAM lParam) const;
+  KeyEvent keyEvent(WPARAM wParam) const;
   void keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten, bool testing);
   void keyUp(ITfContext* context, WPARAM wParam);
   void updateLangBar();

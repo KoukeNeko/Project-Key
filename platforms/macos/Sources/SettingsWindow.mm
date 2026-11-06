@@ -33,17 +33,18 @@ NSString *const PKNextDoubtfulKey = @"NextDoubtful";
 
 + (void)showWithClearChoices:(void (^)(void))clearChoices {
   static NSWindow *window;
+  // A new form each time: one opened again offers 清除 again and checks for an update again.
+  NSView *form = [PKSettingsForm makeViewWithClearChoices:clearChoices];
   if (!window) {
-    NSView *form = [PKSettingsForm makeViewWithClearChoices:clearChoices];
     window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, form.fittingSize.width, form.fittingSize.height)
                                          styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
                                            backing:NSBackingStoreBuffered
                                              defer:YES];
     window.title = @"Project Key 設定";
     window.releasedWhenClosed = NO;
-    window.contentView = form;
     [window center];
   }
+  if (!window.visible) window.contentView = form;  // an open window keeps its state
   // The input method is a background app; it has to come forward for the window to take keys.
   [NSApp activateIgnoringOtherApps:YES];
   [window makeKeyAndOrderFront:nil];

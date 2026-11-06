@@ -49,13 +49,47 @@ std::map<std::string, std::string> ReadConfig() {
 }
 
 // The addon merges what it is given, so one key at a time leaves the others as they are.
-void WriteConfig(const char* key, const char* value) {
+// Whether Fcitx5 took the value: it may have stopped since the window opened.
+bool WriteConfig(const char* key, const char* value) {
   GVariantBuilder builder;
   g_variant_builder_init(&builder, G_VARIANT_TYPE_VARDICT);
   g_variant_builder_add(&builder, "{sv}", key, g_variant_new_string(value));
-  g_dbus_connection_call(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "SetConfig",
-                         g_variant_new("(sv)", kConfig, g_variant_builder_end(&builder)), nullptr, G_DBUS_CALL_FLAGS_NONE, -1,
-                         nullptr, nullptr, nullptr);
+  GVariant* reply = g_dbus_connection_call_sync(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "SetConfig",
+                                                g_variant_new("(sv)", kConfig, g_variant_builder_end(&builder)), nullptr,
+                                                G_DBUS_CALL_FLAGS_NONE, 3000, nullptr, nullptr);
+  if (reply) g_variant_unref(reply);
+  return reply != nullptr;
+}
+
+// The row has gone back to what is saved.
+void Unsaved(GtkWidget* row) {
+  AdwDialog* dialog = adw_alert_dialog_new("無法儲存", "Fcitx5 沒有回應，設定沒有改變。");
+  adw_alert_dialog_add_response(ADW_ALERT_DIALOG(dialog), "close", "好");
+  adw_dialog_present(dialog, row);
+}
+
+void ToggleChanged(AdwSwitchRow* toggle, GParamSpec*, gpointer key) {
+  bool on = adw_switch_row_get_active(toggle);
+  if (WriteConfig(static_cast<const char*>(key), on ? "True" : "False")) return;
+  g_signal_handlers_block_by_func(toggle, reinterpret_cast<gpointer>(ToggleChanged), key);
+  adw_switch_row_set_active(toggle, !on);
+  g_signal_handlers_unblock_by_func(toggle, reinterpret_cast<gpointer>(ToggleChanged), key);
+  Unsaved(GTK_WIDGET(toggle));
+}
+
+// The row keeps the index last saved as its "saved" data.
+void ChoiceChanged(AdwComboRow* combo, GParamSpec*, gpointer data) {
+  const Row* row = static_cast<const Row*>(data);
+  guint index = adw_combo_row_get_selected(combo);
+  if (index >= row->values.size()) return;
+  if (WriteConfig(row->key, row->values[index])) {
+    g_object_set_data(G_OBJECT(combo), "saved", GUINT_TO_POINTER(index));
+    return;
+  }
+  g_signal_handlers_block_by_func(combo, reinterpret_cast<gpointer>(ChoiceChanged), data);
+  adw_combo_row_set_selected(combo, GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(combo), "saved")));
+  g_signal_handlers_unblock_by_func(combo, reinterpret_cast<gpointer>(ChoiceChanged), data);
+  Unsaved(GTK_WIDGET(combo));
 }
 
 std::vector<int> VersionParts(const std::string& version) {
@@ -146,10 +180,7 @@ void Activate(GtkApplication* app) {
       if (row.kind == Row::kToggle) {
         widget = adw_switch_row_new();
         adw_switch_row_set_active(ADW_SWITCH_ROW(widget), text(row.key) == "True");
-        g_signal_connect(widget, "notify::active", G_CALLBACK((+[](AdwSwitchRow* toggle, GParamSpec*, gpointer key) {
-                           WriteConfig(static_cast<const char*>(key), adw_switch_row_get_active(toggle) ? "True" : "False");
-                         })),
-                         const_cast<char*>(row.key));
+        g_signal_connect(widget, "notify::active", G_CALLBACK(ToggleChanged), const_cast<char*>(row.key));
       } else if (row.kind == Row::kChoice) {
         widget = adw_combo_row_new();
         std::vector<const char*> shown = row.shown.empty() ? row.values : row.shown;
@@ -160,12 +191,8 @@ void Activate(GtkApplication* app) {
         for (size_t i = 0; i < row.values.size(); i++) {
           if (text(row.key) == row.values[i]) adw_combo_row_set_selected(ADW_COMBO_ROW(widget), static_cast<guint>(i));
         }
-        g_signal_connect(widget, "notify::selected", G_CALLBACK((+[](AdwComboRow* combo, GParamSpec*, gpointer data) {
-                           const Row* row = static_cast<const Row*>(data);
-                           guint index = adw_combo_row_get_selected(combo);
-                           if (index < row->values.size()) WriteConfig(row->key, row->values[index]);
-                         })),
-                         const_cast<Row*>(&row));
+        g_object_set_data(G_OBJECT(widget), "saved", GUINT_TO_POINTER(adw_combo_row_get_selected(ADW_COMBO_ROW(widget))));
+        g_signal_connect(widget, "notify::selected", G_CALLBACK(ChoiceChanged), const_cast<Row*>(&row));
       } else {
         widget = adw_action_row_new();
         GtkWidget* clear = gtk_button_new_with_label("清除");
