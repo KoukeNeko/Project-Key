@@ -531,12 +531,21 @@ static NSString *Layout(PKPanelContent *content) {
   }
   NSRect visible = screen.visibleFrame;
   NSRect frame = NSMakeRect(NSMinX(lineRect) - kAnchorInset, NSMinY(lineRect) - kGapToText - size.height, size.width, size.height);
+  BOOL wasBelow = _view.proofBelow;
   _view.proofBelow = NSMinY(frame) < NSMinY(visible);
   if (_view.proofBelow) frame.origin.y = NSMaxY(lineRect) + kGapToText;
   frame.origin.x = MAX(NSMinX(visible), MIN(NSMinX(frame), NSMaxX(visible) - size.width));
   _target = frame;
   [PKModeIndicator.shared avoid:frame];  // both sit under the caret
   [_view moveSelectionAnimated:animate];
+  if (animate && wasBelow != _view.proofBelow) {
+    // Changing sides of the text (the grid no longer fits below it): jump there at the old
+    // size, the proof row next to the text, and grow or shrink away from it, rather than
+    // sliding the whole window across the text.
+    NSSize old = _panel.frame.size;
+    CGFloat y = _view.proofBelow ? NSMinY(frame) : NSMaxY(frame) - old.height;
+    [_panel setFrame:NSMakeRect(NSMinX(frame), y, old.width, old.height) display:YES];
+  }
   if (animate && !NSEqualSizes(_panel.frame.size, frame.size)) {
     [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
       context.duration = kResizeDuration;
