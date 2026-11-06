@@ -19,6 +19,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPushButton>
+#include <QScreen>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QVBoxLayout>
@@ -83,30 +86,31 @@ bool PrefersDark() {
 }
 
 // Dark colors when the desktop is dark. Qt 6 follows the desktop through its
-// platform theme, but Plasma 5 (Ubuntu 24.04) has that theme only for Qt 5,
-// so here the window takes KDE's colors from kdeglobals itself, or Fusion's
-// dark colors elsewhere. Read at startup only.
+// platform theme, but Plasma 5 (Ubuntu 24.04) has that theme only for Qt 5 and
+// GNOME has none, so here the window takes KDE's colors from kdeglobals on KDE,
+// or GNOME's (Adwaita's) dark colors elsewhere. Read at startup only.
 void ApplyDarkPalette() {
   if (!PrefersDark()) return;
-  QString kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, "kdeglobals");
-  QSettings kde(kdeglobals, QSettings::IniFormat);
+  // kdeglobals can be left over from KDE on a machine now running GNOME.
+  bool kdeDesktop = qEnvironmentVariable("XDG_CURRENT_DESKTOP").split(':').contains("KDE");
+  QSettings kde(QStandardPaths::locate(QStandardPaths::GenericConfigLocation, "kdeglobals"), QSettings::IniFormat);
   // A KDE color is "r,g,b", which QSettings reads as a list.
-  auto color = [&kde, &kdeglobals](const QString& key, QColor fallback) {
-    QStringList rgb = kdeglobals.isEmpty() ? QStringList() : kde.value(key).toStringList();
+  auto color = [&kde, kdeDesktop](const QString& key, QColor fallback) {
+    QStringList rgb = kdeDesktop ? kde.value(key).toStringList() : QStringList();
     return rgb.size() == 3 ? QColor(rgb[0].toInt(), rgb[1].toInt(), rgb[2].toInt()) : fallback;
   };
-  QColor window = color("Colors:Window/BackgroundNormal", QColor(0x2a2e32));
-  QColor button = color("Colors:Button/BackgroundNormal", QColor(0x31363b));
+  QColor window = color("Colors:Window/BackgroundNormal", QColor(0x242424));
+  QColor button = color("Colors:Button/BackgroundNormal", QColor(0x353535));
   QPalette palette(button, window);  // derives the bevel shades
-  palette.setColor(QPalette::WindowText, color("Colors:Window/ForegroundNormal", QColor(0xfcfcfc)));
-  palette.setColor(QPalette::Base, color("Colors:View/BackgroundNormal", QColor(0x1b1e20)));
-  palette.setColor(QPalette::AlternateBase, color("Colors:View/BackgroundAlternate", QColor(0x232629)));
-  palette.setColor(QPalette::Text, color("Colors:View/ForegroundNormal", QColor(0xfcfcfc)));
-  palette.setColor(QPalette::ButtonText, color("Colors:Button/ForegroundNormal", QColor(0xfcfcfc)));
-  palette.setColor(QPalette::Highlight, color("Colors:Selection/BackgroundNormal", QColor(0x3daee9)));
-  palette.setColor(QPalette::HighlightedText, color("Colors:Selection/ForegroundNormal", QColor(0xfcfcfc)));
-  palette.setColor(QPalette::Link, color("Colors:View/ForegroundLink", QColor(0x1d99f3)));
-  QColor inactive = color("Colors:View/ForegroundInactive", QColor(0xa1a9b1));
+  palette.setColor(QPalette::WindowText, color("Colors:Window/ForegroundNormal", QColor(0xffffff)));
+  palette.setColor(QPalette::Base, color("Colors:View/BackgroundNormal", QColor(0x1e1e1e)));
+  palette.setColor(QPalette::AlternateBase, color("Colors:View/BackgroundAlternate", QColor(0x2a2a2a)));
+  palette.setColor(QPalette::Text, color("Colors:View/ForegroundNormal", QColor(0xffffff)));
+  palette.setColor(QPalette::ButtonText, color("Colors:Button/ForegroundNormal", QColor(0xffffff)));
+  palette.setColor(QPalette::Highlight, color("Colors:Selection/BackgroundNormal", QColor(0x3584e4)));
+  palette.setColor(QPalette::HighlightedText, color("Colors:Selection/ForegroundNormal", QColor(0xffffff)));
+  palette.setColor(QPalette::Link, color("Colors:View/ForegroundLink", QColor(0x78aeed)));
+  QColor inactive = color("Colors:View/ForegroundInactive", QColor(0x9a9996));
   palette.setColor(QPalette::PlaceholderText, inactive);
   for (QPalette::ColorRole role : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText}) {
     palette.setColor(QPalette::Disabled, role, inactive);
@@ -127,10 +131,15 @@ int main(int argc, char** argv) {
   const QVariantMap config = ReadConfig(controller);
   const bool available = !config.isEmpty();
 
-  QWidget window;
+  // As tall as the rows, like the other platforms' windows, but no taller than
+  // the screen (a 768-pixel laptop with GNOME's larger font): then it scrolls.
+  QScrollArea window;
   window.setWindowTitle("Project Key 設定");
-  auto* layout = new QVBoxLayout(&window);
-  layout->setSizeConstraint(QLayout::SetFixedSize);  // as tall as the rows, like the other platforms' windows
+  window.setFrameShape(QFrame::NoFrame);
+  window.setWidgetResizable(true);
+  window.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  auto* content = new QWidget;
+  auto* layout = new QVBoxLayout(content);
   if (!available) {
     auto* message = new QLabel("讀不到設定：Fcitx5 沒有在執行，或沒有安裝 Project Key。");
     message->setWordWrap(true);
@@ -211,7 +220,12 @@ int main(int argc, char** argv) {
 
   QNetworkAccessManager network;
   CheckForUpdate(network, update);
-  window.setMinimumWidth(460);
+  window.setWidget(content);
+  content->setMinimumWidth(460);
+  QSize size = content->sizeHint();
+  int room = window.screen()->availableGeometry().height() - 60;  // the title bar
+  if (size.height() > room) size = QSize(size.width() + window.verticalScrollBar()->sizeHint().width(), room);
+  window.resize(size);
   window.show();
   return QApplication::exec();
 }
