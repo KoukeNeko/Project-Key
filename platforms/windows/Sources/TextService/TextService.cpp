@@ -179,6 +179,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
 STDMETHODIMP TextService::Deactivate() {
   if (composition_) request(compositionContext_, {Protocol::Request::kDeactivate});
   candidates_.hide();
+  hint_.hide();
   badge_.hide();
   ITfSource* source = nullptr;
   if (threadMgr_ && SUCCEEDED(threadMgr_->QueryInterface(IID_ITfSource, reinterpret_cast<void**>(&source)))) {
@@ -216,6 +217,7 @@ STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr*, ITfDocumentMgr*) {
     request(compositionContext_, {Protocol::Request::kDeactivate});
   } else {
     candidates_.hide();
+    hint_.hide();
   }
   return S_OK;
 }
@@ -224,6 +226,7 @@ STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr*, ITfDocumentMgr*) {
 STDMETHODIMP TextService::OnKillThreadFocus() {
   if (composition_) request(compositionContext_, {Protocol::Request::kDeactivate});
   candidates_.hide();
+  hint_.hide();
   badge_.hide();
   return S_OK;
 }
@@ -245,6 +248,7 @@ STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie cookie, ITfCompos
   }
   engine_.send({Protocol::Request::kReset});
   candidates_.hide();
+  hint_.hide();
   return S_OK;
 }
 
@@ -442,9 +446,11 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
   // The windows follow the composition, so they update after the document does.
   auto showWindows = [this, reply](const RECT* anchor, HWND window) {
     const Protocol::Operation* panel = nullptr;
+    const Protocol::Operation* hint = nullptr;
     const Protocol::Operation* indicator = nullptr;
     for (const Protocol::Operation& o : reply.operations) {
       if (o.op == Protocol::Op::kShowPanel || o.op == Protocol::Op::kHidePanel) panel = &o;
+      if (o.op == Protocol::Op::kShowHint || o.op == Protocol::Op::kHideHint) hint = &o;
       if (o.op == Protocol::Op::kIndicator) indicator = &o;
       if (o.op == Protocol::Op::kBeep) MessageBeep(MB_OK);
     }
@@ -453,6 +459,13 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
       candidates_.show(panel->panel, *anchor, owner, appearance_);
     } else if (panel) {
       candidates_.hide();
+      hint_.hide();
+    }
+    // Placed from the candidate window, so after it.
+    if (hint && hint->op == Protocol::Op::kShowHint && candidates_.visible()) {
+      hint_.showBeside(hint->panel, candidates_, owner, appearance_);
+    } else if (hint) {
+      hint_.hide();
     }
     if (indicator && anchor) {
       RECT frame = candidates_.frame();
@@ -511,6 +524,10 @@ STDMETHODIMP TextService::OnLayoutChange(ITfContext* context, TfLayoutCode code,
     if (candidates_.visible() && candidates_.content()) {
       PanelContent content = *candidates_.content();  // show() replaces it
       candidates_.show(content, anchor, owner, appearance_);
+    }
+    if (hint_.visible() && hint_.content()) {
+      PanelContent content = *hint_.content();
+      hint_.showBeside(content, candidates_, owner, appearance_);
     }
     RECT frame = candidates_.frame();
     badge_.follow(anchor, candidates_.visible() ? &frame : nullptr);
