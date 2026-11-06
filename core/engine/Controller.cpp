@@ -357,10 +357,29 @@ void Controller::trackZhuyin(const KeyEvent& event) {
   char c = SingleCharacter(event);
   bool typing = !choosing_ && !event.shift &&
                 (event.key == Key::kSpace ? composer_->hasPendingReading() : c && composer_->isReadingKey(c));
-  // Any other key (Backspace, arrows, choosing) edits the composition apart from the keys.
+  // Opening the candidates and moving among them changes nothing; any other key
+  // (Backspace, arrows in the text, picking) edits the composition apart from the keys.
+  bool browsing = false;
+  switch (event.key) {
+    case Key::kDown:
+    case Key::kTab:
+      browsing = choosing_ || composer_->pendingReading().empty();
+      break;
+    case Key::kUp:
+    case Key::kLeft:
+    case Key::kRight:
+    case Key::kSpace:
+    case Key::kPageUp:
+    case Key::kPageDown:
+    case Key::kEscape:
+      browsing = choosing_;
+      break;
+    default:
+      break;
+  }
   if (typing) {
     zhuyinKeys_ += c;
-  } else {
+  } else if (!browsing) {
     zhuyinEdited_ = true;
   }
 }
@@ -713,6 +732,7 @@ void Controller::choose(int index) {
 }
 
 void Controller::pick(int index) {
+  zhuyinEdited_ = true;  // also when picked by a click, which passes no key
   std::optional<Segment> segment = composer_->segmentFrom(activeStart_);
   if (segment && index == readingIndex_) {
     // The grid holds only words, so the Zhuyin goes in with the rest of the composition, ending it.
@@ -754,6 +774,7 @@ void Controller::showPanel(const PanelContent& content) {
 }
 
 void Controller::hidePanel() {
+  client_.hideHint();
   if (!panel_) return;
   panel_.reset();
   client_.hidePanel();
@@ -788,6 +809,8 @@ void Controller::refresh() {
   // in the candidates. Not while choosing, where the text is what is chosen.
   std::u16string open = choosing_ ? u"" : ToUtf16(composer_->shownReading());
   uint32_t openGrowth = 0;
+  // That word is a guess, so the proof row shows it marked in the sentence.
+  std::optional<size_t> typing = choosing_ ? std::nullopt : openSegment();
   for (const Segment& segment : composer_->segments()) {
     std::u16string text = ToUtf16(segment.text);
     uint32_t length = static_cast<uint32_t>(text.size());
@@ -805,6 +828,7 @@ void Controller::refresh() {
       activeStart = static_cast<uint32_t>(marked.size());
       activeLength = length;
     }
+    if (typing && segment.start == *typing) content.activeSegment = static_cast<int>(content.segments.size());
     content.segments.push_back(segment.text);
     content.doubtful.push_back(segment.doubtful);
     if (spliced) {
@@ -823,34 +847,60 @@ void Controller::refresh() {
   client_.setComposition(Composition{markedText, caret, activeStart, hasActive ? activeLength : 0, replacing_});
   replacing_ = 0;
 
-  std::optional<std::string> english = choosing_ ? std::nullopt : englishTyped();
-  if (english) {  // what Tab would turn it into
-    PanelContent hint;
-    hint.segments = {*english};
-    hint.doubtful = {false};
-    hint.caret = Utf16Length(*english);
-    hint.showsProof = true;
-    hint.keyHint = env_.tabKeycap;
-    hint.replacedText = markedText;
-    showPanel(hint);
+  // Below the guess, the other words there, in a row without digits (selectedRow -1):
+  // those keys still type Zhuyin. The Tab hint takes the proof row's place, so there the
+  // row starts with the guess itself.
+  std::vector<std::string> here, others, withGuess;
+  std::string guess;
+  if (typing) {
+    if (std::optional<Segment> segment = composer_->segmentFrom(*typing)) {
+      here = composer_->candidates(*segment);
+      guess = segment->text;
+    }
+  }
+  auto fill = [this](const std::vector<std::string>& words, std::vector<std::string>& row) {
+    for (int used = 0; row.size() < words.size() && used + span(words[row.size()]) <= kGridColumns;) {
+      used += span(words[row.size()]);
+      row.push_back(words[row.size()]);
+    }
+  };
+  fill(here, withGuess);
+  std::erase(here, guess);
+  fill(here, others);
+  auto showRow = [](PanelContent& panel, const std::vector<std::string>& row) {
+    if (row.empty()) return;
+    panel.rows = {row};
+    panel.selectedRow = -1;
+    panel.selection = -1;
+  };
+
+  std::optional<PanelContent> hint;  // what Tab would turn the keys into; ja is English and ㄨㄇ alike
+  if (std::optional<std::string> english = choosing_ ? std::nullopt : englishTyped()) {
+    hint.emplace();
+    hint->segments = {*english};
+    hint->doubtful = {false};
+    hint->caret = Utf16Length(*english);
+    hint->showsProof = true;
+    hint->keyHint = env_.tabKeycap;
+    hint->replacedText = markedText;
+  }
+  // Beside the panel, which goes on as without it; otherwise in the panel's proof row,
+  // with the guess leading the row instead.
+  bool hintApart = hint && typing && env_.hintWindow;
+  if (!hintApart) client_.hideHint();
+  if (hint && !hintApart) {
+    showRow(*hint, withGuess);
+    showPanel(*hint);
     return;
   }
   bool showsProof = proofVisible();
-  // While a syllable is open without a tone, its word is a guess the composition does not
-  // show, so the panel shows it with the other words there: first symbols (ㄨㄇ) show 我們.
-  // No row is selected, so no digits: those keys still type Zhuyin.
-  std::optional<size_t> typing = choosing_ ? std::nullopt : openSegment();
-  std::vector<std::string> guesses;
-  if (typing) {
-    if (std::optional<Segment> segment = composer_->segmentFrom(*typing)) guesses = composer_->candidates(*segment);
-  }
-  if (!choosing_ && !showsProof && guesses.empty()) {
+  if (!choosing_ && !showsProof && !typing) {
     hidePanel();
     return;
   }
   content.pendingReading = ToUtf8(reading);
   content.caret = caret - static_cast<uint32_t>(reading.size()) - openGrowth;
-  content.showsProof = showsProof;
+  content.showsProof = showsProof || typing;
   if (choosing_) {
     int row = rowOf(selection_), rows = static_cast<int>(rowStarts_.size());
     // Collapsed: the selection's row. Expanded: up to kExpandedRows rows, scrolled to the selection.
@@ -868,17 +918,11 @@ void Controller::refresh() {
     content.selectedRow = row - first;
     content.selection = selection_ - rowStarts_[row];
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
-  } else if (!guesses.empty()) {
-    std::vector<std::string> cells;
-    for (int used = 0; cells.size() < guesses.size() && used + span(guesses[cells.size()]) <= kGridColumns;) {
-      used += span(guesses[cells.size()]);
-      cells.push_back(guesses[cells.size()]);
-    }
-    content.rows = {std::move(cells)};
-    content.selectedRow = -1;
-    content.selection = -1;
+  } else {
+    showRow(content, others);
   }
   showPanel(content);
+  if (hintApart) client_.showHint(*hint);  // placed by the panel just shown
 }
 
 }  // namespace ProjectKey

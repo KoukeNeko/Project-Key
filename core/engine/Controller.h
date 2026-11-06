@@ -56,6 +56,10 @@ class Client {
   virtual void beep() = 0;
   // Up to a few dozen characters before the caret; empty when unknown.
   virtual std::string textBeforeCaret() = 0;
+  // The Tab hint in a window of its own beside the candidate window, on platforms that set
+  // Environment::hintWindow; elsewhere the hint takes the panel's proof row.
+  virtual void showHint(const PanelContent&) {}
+  virtual void hideHint() {}
 };
 
 // Settings, stored by the platform (the registry on Windows). Same names as
@@ -103,6 +107,9 @@ struct Environment {
   // macOS lets the app type a key the input method returns; TSF does not
   // deliver a key once its test phase handed it on, so there the input method types it.
   bool appTypesUnhandledKeys = false;
+  // While a syllable is open, the Tab hint goes to Client::showHint and the panel keeps
+  // the guess in its proof row.
+  bool hintWindow = false;
 };
 
 enum class Key {

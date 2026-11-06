@@ -103,7 +103,7 @@ class Panel {
   std::unique_ptr<fcitx::EventSourceIO> io_;
 
   PangoContext* context_ = nullptr;
-  PangoFontDescription *proofFont_ = nullptr, *candidateFont_ = nullptr, *labelFont_ = nullptr, *pageFont_ = nullptr,
+  PangoFontDescription *proofFont_ = nullptr, *candidateFont_ = nullptr, *typingFont_ = nullptr, *labelFont_ = nullptr, *pageFont_ = nullptr,
                        *keyFont_ = nullptr, *badgeFont_ = nullptr;
   float columnWidth_ = 0;
 
