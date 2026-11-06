@@ -21,11 +21,12 @@ include(GNUInstallDirs)
 
 # The KDE settings window in the Qt that KDE's own look (the Breeze style and KDE's platform
 # theme) is installed for: Qt 6 on Plasma 6, Qt 5 on Plasma 5 (Ubuntu 24.04), where a Qt 6
-# window would fall back to Fusion. Distributions keep Qt's plugins in <libdir>/qt5|qt6/plugins.
+# window would fall back to Fusion. Distributions keep Qt's plugins in <libdir>/qt5|qt6/plugins, the
+# libdir Fcitx5 is in (installed elsewhere, as by Homebrew, the install prefix's is not it).
 set(PROJECTKEY_QT "" CACHE STRING "Qt for the KDE settings window: 5 or 6 (default: the one KDE's look is installed for)")
 if(NOT PROJECTKEY_QT)
   set(PROJECTKEY_QT 6)
-  set(THEMES "${CMAKE_INSTALL_FULL_LIBDIR}")
+  get_filename_component(THEMES "${Fcitx5Core_DIR}/../.." ABSOLUTE)
   if(EXISTS "${THEMES}/qt5/plugins/platformthemes/KDEPlasmaPlatformTheme.so" AND
      NOT EXISTS "${THEMES}/qt6/plugins/platformthemes/KDEPlasmaPlatformTheme6.so")
     set(PROJECTKEY_QT 5)
@@ -86,7 +87,9 @@ endif()
 install(TARGETS projectkey DESTINATION "${FCITX_INSTALL_LIBDIR}/fcitx5")
 install(TARGETS projectkey-settings-qt DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(PROGRAMS projectkey-settings DESTINATION "${CMAKE_INSTALL_BINDIR}")
-install(FILES projectkey-settings.desktop DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+# By full path: a session's PATH may not have the install prefix's bin (Homebrew's).
+configure_file(projectkey-settings.desktop.in projectkey-settings.desktop @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-settings.desktop" DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 # The icon (tools/icon/make-icons.ps1), for the input method and the settings launcher. Desktops read
 # icons through hicolor's cache, so refresh it as a package's trigger would.
 install(FILES fcitx-projectkey.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
@@ -96,6 +99,13 @@ install(DIRECTORY gnome-shell/project-key@koukeneko.github.io DESTINATION "${CMA
 # The Fcitx5 theme in the candidate window's look, for Fcitx5's own panel (Wayland, other input methods).
 install(DIRECTORY theme/ DESTINATION "${FCITX_INSTALL_PKGDATADIR}/themes/projectkey")
 install(CODE "execute_process(COMMAND gtk-update-icon-cache -q -t -f \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor\" ERROR_QUIET)")
+# Fcitx5 finds an addon's library in its own addon directory; installed under another prefix
+# (Homebrew's), the conf names it by full path.
+if(FCITX_INSTALL_USE_FCITX_SYS_PATHS)
+  set(LIBRARY projectkey)
+else()
+  set(LIBRARY "${FCITX_INSTALL_ADDONDIR}/projectkey")
+endif()
 configure_file(projectkey-addon.conf.in projectkey-addon.conf @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-addon.conf" RENAME projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/addon")
 install(FILES projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmethod")

@@ -2,7 +2,7 @@ name: Release
 
 # Pushing a tag vX.Y.Z, where X.Y.Z is the version in Info.plist, ProjectKey.rc and the Linux CMakeLists.txt,
 # builds both platforms, publishes the GitHub release, and points the Homebrew cask
-# and the Scoop manifest at its files.
+# and the Scoop manifest at its files and the Homebrew formula (Linux) at its source.
 on:
   push:
     tags: ['v*']
@@ -109,7 +109,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: checksums
-      - name: Homebrew cask
+      - name: Homebrew cask and formula
         env:
           TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
@@ -146,6 +146,88 @@ jobs:
             uninstall quit: "org.projectkey.inputmethod.ProjectKey"
 
             caveats "Add Project Key in System Settings > Keyboard > Input Sources."
+          end
+          EOF
+          # Linux: a formula built from the tag's source against the distribution's own Fcitx5,
+          # which loads the addon. Named apart from the cask, so macOS's `brew install project-key`
+          # still finds the cask.
+          mcb="$(curl -sSfL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/MCBOPOMOFO_COMMIT" | tr -d '[:space:]')"
+          src_sha="$(curl -sSfL "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$GITHUB_REF_NAME.tar.gz" | sha256sum | cut -d' ' -f1)"
+          mcb_sha="$(curl -sSfL "https://github.com/openvanilla/McBopomofo/archive/$mcb.tar.gz" | sha256sum | cut -d' ' -f1)"
+          mkdir -p tap/Formula
+          sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHA256@/$src_sha/" -e "s/@MCBOPOMOFO@/$mcb/" -e "s/@MCBOPOMOFO_SHA256@/$mcb_sha/" \
+            > tap/Formula/fcitx5-projectkey.rb <<'EOF'
+          class Fcitx5Projectkey < Formula
+            desc "Zhuyin input method for Fcitx5"
+            homepage "https://github.com/KoukeNeko/Project-Key"
+            url "https://github.com/KoukeNeko/Project-Key/archive/refs/tags/v@VERSION@.tar.gz"
+            sha256 "@SHA256@"
+            license "MIT"
+
+            livecheck do
+              url :stable
+              strategy :github_latest
+            end
+
+            depends_on "cmake" => :build
+            depends_on "ninja" => :build
+            depends_on :linux
+
+            resource "mcbopomofo" do
+              url "https://github.com/openvanilla/McBopomofo/archive/@MCBOPOMOFO@.tar.gz"
+              sha256 "@MCBOPOMOFO_SHA256@"
+            end
+
+            def install
+              # The addon is loaded by the distribution's Fcitx5, so it is built with the system's
+              # compiler, against the system's Fcitx5, Qt and other libraries (see caveats).
+              ENV["PKG_CONFIG"] = "/usr/bin/pkg-config"
+              ENV["PKG_CONFIG_LIBDIR"] =
+                Utils.safe_popen_read("/usr/bin/pkg-config", "--variable", "pc_path", "pkg-config").strip
+              ENV.delete "PKG_CONFIG_PATH"
+              (buildpath/"mcbopomofo").install resource("mcbopomofo")
+              system "make", "-C", "mcbopomofo/Source/Data", "data.txt"
+              system "cmake", "-S", "platforms/linux", "-B", "build", "-G", "Ninja",
+                     "-DCMAKE_C_COMPILER=/usr/bin/cc", "-DCMAKE_CXX_COMPILER=/usr/bin/c++",
+                     "-DMCBOPOMOFO=#{buildpath}/mcbopomofo", *std_cmake_args
+              system "cmake", "--build", "build"
+              %w[ComposerTest ControllerTest].each { |test| system "build/#{test}", "mcbopomofo/Source/Data/data.txt" }
+              system "cmake", "--install", "build"
+
+              # Fcitx5, GNOME Shell and the desktop also read the user's data directory, where Homebrew
+              # cannot write: projectkey-link links the files they read there, to opt so upgrades keep them.
+              (bin/"projectkey-link").write <<~SH
+                #!/bin/sh
+                set -e
+                data=${XDG_DATA_HOME:-$HOME/.local/share}
+                for file in fcitx5/addon/projectkey.conf fcitx5/inputmethod/projectkey.conf fcitx5/themes/projectkey \\
+                            gnome-shell/extensions/project-key@koukeneko.github.io applications/projectkey-settings.desktop \\
+                            icons/hicolor/scalable/apps/fcitx-projectkey.svg; do
+                  mkdir -p "$data/$(dirname "$file")"
+                  rm -rf "${data:?}/$file"
+                  ln -s "#{opt_share}/$file" "$data/$file"
+                done
+                echo "Linked Project Key into $data. Restart Fcitx5 (fcitx5 -r) and add Project Key in its input methods."
+              SH
+              chmod 0755, bin/"projectkey-link"
+            end
+
+            def caveats
+              <<~EOS
+                Built against the system's Fcitx5. On Debian or Ubuntu first install:
+                  sudo apt install g++ python3 pkg-config libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev libwayland-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev hunspell-en-us fonts-noto-cjk
+                (on Plasma 5, qtbase5-dev too).
+
+                Then run projectkey-link once: it links the files Fcitx5 and GNOME read into ~/.local/share.
+                Restart Fcitx5 (fcitx5 -r) and add Project Key in Fcitx5's input methods. On GNOME, log in
+                again and turn on the Project Key extension in the Extensions app.
+              EOS
+            end
+
+            test do
+              assert_path_exists lib/"fcitx5/projectkey.so"
+              assert_match "Library=#{lib}/fcitx5/projectkey", (share/"fcitx5/addon/projectkey.conf").read
+            end
           end
           EOF
           cd tap

@@ -25,7 +25,16 @@ Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「
 
 ## 建置與安裝
 
-需要 CMake、Ninja、C++20 編譯器、Python 3（產生詞庫），以及 Fcitx5、Enchant、Cairo、Pango、Wayland（含 wayland-scanner）與 Qt 的開發檔；GNOME 版設定視窗另需 libadwaita、libsoup 3 與 json-glib。KDE 版設定視窗用 KDE 外觀所裝的那一版 Qt：Plasma 6 是 Qt 6，Plasma 5（Ubuntu 24.04）是 Qt 5（`qtbase5-dev`），否則會是 Qt 的預設外觀；也可用 `-DPROJECTKEY_QT=5` 或 `6` 指定。Debian／Ubuntu（Plasma 5 另裝 `qtbase5-dev`）：
+用 Homebrew（Linux）安裝發行版：先裝下面 `apt install` 那一行的套件，再
+
+```sh
+brew install koukeneko/tap/fcitx5-projectkey
+projectkey-link    # 把 Fcitx5 與 GNOME 讀的檔案連結到 ~/.local/share
+```
+
+它從原始碼建置，用的是系統的編譯器、Fcitx5 與 Qt（載入它的是系統的 Fcitx5），裝在 Homebrew 的目錄。Fcitx5 只在自己的目錄與 `~/.local/share/fcitx5` 找附加元件，所以附加元件的設定檔以完整路徑指向程式庫，`projectkey-link` 再把設定檔、主題、GNOME 擴充功能、設定視窗的捷徑與圖示連結過去（連到 `opt`，升級後仍有效）。之後同下面「安裝後」的步驟。
+
+自行建置需要 CMake、Ninja、C++20 編譯器、Python 3（產生詞庫），以及 Fcitx5、Enchant、Cairo、Pango、Wayland（含 wayland-scanner）與 Qt 的開發檔；GNOME 版設定視窗另需 libadwaita、libsoup 3 與 json-glib。KDE 版設定視窗用 KDE 外觀所裝的那一版 Qt：Plasma 6 是 Qt 6，Plasma 5（Ubuntu 24.04）是 Qt 5（`qtbase5-dev`），否則會是 Qt 的預設外觀；也可用 `-DPROJECTKEY_QT=5` 或 `6` 指定。Debian／Ubuntu（Plasma 5 另裝 `qtbase5-dev`）：
 
 ```sh
 sudo apt install cmake ninja-build g++ python3 git libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev libwayland-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev hunspell-en-us fonts-noto-cjk

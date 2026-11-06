@@ -5,6 +5,6 @@ GenericName=Input method settings
 GenericName[zh_TW]=輸入法設定
 Comment=Settings for the Project Key Zhuyin input method
 Comment[zh_TW]=Project Key 注音輸入法的設定
-Exec=projectkey-settings
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/projectkey-settings
 Icon=fcitx-projectkey
 Categories=Settings;
