@@ -12,7 +12,6 @@ NSString *const PKEnglishToZhuyinKey = @"EnglishToZhuyin";
 NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
 NSString *const PKCandidatePositionKey = @"CandidatePosition";
 NSString *const PKNextDoubtfulKey = @"NextDoubtful";
-NSString *const PKKeyboardLayoutKey = @"KeyboardLayout";
 
 @implementation PKSettingsWindow
 
@@ -29,7 +28,6 @@ NSString *const PKKeyboardLayoutKey = @"KeyboardLayout";
     PKChoosingProofKey : @1,
     PKCandidatePositionKey : @1,  // before the cursor, as the system Zhuyin input does
     PKNextDoubtfulKey : @YES,
-    PKKeyboardLayoutKey : @0,
   }];
 }
 

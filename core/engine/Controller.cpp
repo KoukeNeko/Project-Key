@@ -87,7 +87,6 @@ int Settings::DefaultValue(Setting setting) {
       return 1;  // Acrylic; macOS registers its own default
     case Setting::kCapsLockToggle:
     case Setting::kCandidatePosition:
-    case Setting::kKeyboardLayout:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
       return 0;
@@ -111,7 +110,6 @@ const char* Settings::Name(Setting setting) {
     case Setting::kAppearance: return "Appearance";
     case Setting::kCandidatePosition: return "CandidatePosition";
     case Setting::kNextDoubtful: return "NextDoubtful";
-    case Setting::kKeyboardLayout: return "KeyboardLayout";
   }
   return "";
 }
@@ -125,16 +123,12 @@ void Controller::makeComposer() {
   if (!composer_) replacing_ = 0;
   bool adjacentKeys = env_.settings->flag(Setting::kAdjacentKeys);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
-  bool pinyin = env_.settings->get(Setting::kKeyboardLayout) == 1;
-  if (composer_ && adjacentKeys == adjacentKeys_ && rememberChoices == rememberChoices_ && pinyin == pinyin_) return;
+  if (composer_ && adjacentKeys == adjacentKeys_ && rememberChoices == rememberChoices_) return;
   adjacentKeys_ = adjacentKeys;
   rememberChoices_ = rememberChoices;
-  pinyin_ = pinyin;
-  // Adjacent keys are slips on the Daqian keyboard.
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight,
-                                         adjacentKeys && !pinyin ? Composer::kAdjacentKeyScore : -INFINITY, env_.chars,
-                                         Composer::kCharWeight, pinyin);
+                                         adjacentKeys ? Composer::kAdjacentKeyScore : -INFINITY, env_.chars);
 }
 
 void Controller::deactivate() {
@@ -325,7 +319,7 @@ void Controller::typeKeys(const std::string& keys) {
 // spell a first-tone syllable.
 void Controller::showEnglishHint() {
   size_t trailingSpaces = 0;
-  std::string keys = env_.settings->flag(Setting::kEnglishToZhuyin) && !pinyin_ ? zhuyinAtEnd(&trailingSpaces) : "";
+  std::string keys = env_.settings->flag(Setting::kEnglishToZhuyin) ? zhuyinAtEnd(&trailingSpaces) : "";
   if (keys.find_first_of("3467") == std::string::npos) {
     if (panel_ && !panel_->keyHint.empty()) hidePanel();
     return;
@@ -383,8 +377,7 @@ void Controller::trackZhuyin(const KeyEvent& event) {
 // The keys behind the composition as English when they spell words that are
 // not themselves Zhuyin syllables; empty otherwise.
 std::optional<std::string> Controller::englishTyped() const {
-  // Pinyin letters are English letters: the keys alone cannot tell the two apart.
-  if (zhuyinEdited_ || pinyin_ || !env_.settings->flag(Setting::kZhuyinToEnglish)) return std::nullopt;
+  if (zhuyinEdited_ || !env_.settings->flag(Setting::kZhuyinToEnglish)) return std::nullopt;
   const std::string& keys = zhuyinKeys_;
   for (char c : keys) {
     if (c != ' ' && (c < 'a' || c > 'z')) return std::nullopt;
@@ -421,7 +414,7 @@ bool Controller::convertZhuyinKeys() {
 // composition of them and switches to 中. False when no tone key is there.
 bool Controller::convertEnglishRun() {
   size_t trailingSpaces = 0;
-  std::string keys = env_.settings->flag(Setting::kEnglishToZhuyin) && !pinyin_ ? zhuyinAtEnd(&trailingSpaces) : "";
+  std::string keys = env_.settings->flag(Setting::kEnglishToZhuyin) ? zhuyinAtEnd(&trailingSpaces) : "";
   englishRun_.clear();
   // Only what the preview shows: after plain words like "so ", Tab is a Tab.
   if (keys.find_first_of("3467") == std::string::npos) return false;

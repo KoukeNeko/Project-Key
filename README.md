@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/KoukeNeko/Project-Key)](https://github.com/KoukeNeko/Project-Key/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-大千注音輸入法，也可改用漢語拼音；macOS、Windows、Linux（Fcitx5）與 iOS 共用同一個組字引擎。連續打完整句再一起選字，引擎依上下文排序，並標出可能選錯的地方。
+大千注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共用同一個組字引擎。連續打完整句再一起選字，引擎依上下文排序，並標出可能選錯的地方。
 
 ![候選視窗：上方整句預覽標出可疑的「程式」，下方為候選列](.github/assets/candidate-window.png)
 
@@ -17,7 +17,6 @@
 - **中英互轉**：在中文模式打成英文（hello）或在英文模式打成注音（ji3cl3），按 Tab 轉回來。
 - **接著前文選字**：組字接著游標前的漢字算，不當成句首（macOS、Linux、iOS）。
 - **記住選過的字**：同樣的上下文下次直接選它。
-- **漢語拼音**：設定的「輸入法」可改為漢語拼音（macOS、Windows、Linux）。聲調鍵為 2–5，空白鍵為一聲，可省略；音節之間可用 ' 分開（fang'an）；ü 打成 v。拼音不提供鄰鍵修正與 Tab 中英互轉。
 
 ## 安裝
 

@@ -47,7 +47,6 @@ inline const std::vector<Group>& Groups() {
        }},
       {"按鍵",
        {
-           {Row::kChoice, "KeyboardLayout", "輸入法", nullptr, {"大千注音", "漢語拼音"}},
            {Row::kToggle, "CapsLockToggle", "Caps Lock 切換中英", "開啟時大寫用 Shift；關閉時 Caps Lock 鎖定大寫"},
            {Row::kToggle, "ShiftToggle", "單按 Shift 切換中英"},
            {Row::kToggle, "EnglishToZhuyin", "Tab 英文轉注音"},

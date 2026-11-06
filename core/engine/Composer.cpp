@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <chrono>
 #include <unordered_map>
-#include <cctype>
 #include <cmath>
 #include <cstring>
 
@@ -236,7 +235,7 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, double adjacentKeyScore, std::shared_ptr<const CharModel> chars,
-                   double charWeight, bool pinyin)
+                   double charWeight)
     : lm_(lm),
       dictionary_(std::make_shared<TonelessModel>(lm)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
@@ -249,35 +248,9 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
       adjacentKeyScore_(bigram_ ? adjacentKeyScore : -INFINITY),
       gridModel_(GridModel(dictionary_, adjacentKeyScore_)),
       grid_(gridModel_),
-      pinyin_(pinyin),
-      reading_(pinyin ? BopomofoKeyboardLayout::HanyuPinyinLayout() : BopomofoKeyboardLayout::StandardLayout()) {
-  if (!pinyin_) return;
-  using BPMF = BopomofoSyllable;
-  const BPMF::Component consonants[] = {0, BPMF::B, BPMF::P, BPMF::M, BPMF::F, BPMF::D, BPMF::T, BPMF::N, BPMF::L,
-                                        BPMF::G, BPMF::K, BPMF::H, BPMF::J, BPMF::Q, BPMF::X, BPMF::ZH, BPMF::CH,
-                                        BPMF::SH, BPMF::R, BPMF::Z, BPMF::C, BPMF::S};
-  const BPMF::Component medials[] = {0, BPMF::I, BPMF::U, BPMF::UE};
-  const BPMF::Component vowels[] = {0, BPMF::A, BPMF::O, BPMF::ER, BPMF::E, BPMF::AI, BPMF::EI, BPMF::AO,
-                                    BPMF::OU, BPMF::AN, BPMF::EN, BPMF::ANG, BPMF::ENG, BPMF::ERR};
-  for (BPMF::Component c : consonants) {
-    for (BPMF::Component m : medials) {
-      for (BPMF::Component v : vowels) {
-        BPMF syllable(c | m | v);
-        if (syllable.isEmpty()) continue;
-        std::string symbols = syllable.composedString();
-        bool known = false;
-        for (const char* tone : {"", "ˊ", "ˇ", "ˋ", "˙"}) known = known || lm_->hasUnigrams(symbols + tone);
-        std::string letters = syllable.HanyuPinyinString(false, true);
-        // Only spellings that read back as the syllable: ü is typed as v.
-        if (!known || BPMF::FromHanyuPinyin(letters) != syllable) continue;
-        for (size_t length = 1; length <= letters.size(); length++) pinyinStarts_.insert(letters.substr(0, length));
-      }
-    }
-  }
-}
+      reading_(BopomofoKeyboardLayout::StandardLayout()) {}
 
 Composer::KeyResult Composer::typeReadingKey(char key) {
-  if (pinyin_) return typePinyinKey(key);
   if (!reading_.isValidKey(key)) return KeyResult::kInvalid;
   bool shown = readingShown_;
   if (readingShown_ && startsSyllable(key)) {
@@ -300,49 +273,10 @@ Composer::KeyResult Composer::completeWithFirstTone() {
   return insertPendingSyllable(untoned);
 }
 
-// A letter that cannot continue the open syllable begins the next one. When the open syllable's
-// last letter and this one begin a syllable and the rest is one, that letter moves over
-// (ke|ne for kene, as in keneng); ' keeps them apart (fang'an).
-Composer::KeyResult Composer::typePinyinKey(char key) {
-  key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
-  if (key == '\'') {
-    if (!readingShown_) return KeyResult::kInvalid;
-    endReading();
-    return KeyResult::kHandled;
-  }
-  if (!reading_.isValidKey(key)) return KeyResult::kInvalid;
-  std::string open = reading_.composedString();
-  bool letter = key >= 'a' && key <= 'z';
-  if (letter && !open.empty() && !isPinyinStart(open + key)) {
-    if (!readingShown_) return KeyResult::kInvalid;
-    std::string head = open.substr(0, open.size() - 1), moved = open.substr(open.size() - 1);
-    if (!head.empty() && isPinyinStart(moved + key) &&
-        dictionary_->hasUnigrams(BopomofoSyllable::FromHanyuPinyin(head).composedString() + kAnyTone)) {
-      hideReading();
-      reading_.clear();
-      for (char c : head) reading_.combineKey(c);
-      showReading();
-      endReading();
-      reading_.combineKey(moved[0]);
-    } else {
-      endReading();
-    }
-  }
-  if (letter && reading_.isEmpty() && !isPinyinStart(std::string(1, key))) return KeyResult::kInvalid;  // i, u, v
-  bool shown = readingShown_;
-  Formosa::Mandarin::BopomofoReadingBuffer untoned = reading_;
-  hideReading();
-  reading_.combineKey(key);
-  if (reading_.hasToneMarker() && !reading_.hasToneMarkerOnly()) return insertPendingSyllable(untoned);
-  showReading();
-  if (shown || readingShown_) walk();
-  return KeyResult::kHandled;
-}
-
 // `untoned` is the reading before its tone: when the dictionary lacks that tone, a whole
 // syllable or a lone symbol goes back as it was, still shown as its word; anything else is dropped.
 Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned) {
-  std::string syllable = reading_.syllable().composedString();
+  std::string syllable = reading_.composedString();
   reading_.clear();
   // The grid's model decides: with adjacent keys on, a syllable the dictionary lacks
   // still goes in when a slip of one key explains it.
@@ -380,7 +314,7 @@ bool Composer::startsSyllable(char key) const {
 // Puts the open syllable in the grid, toneless, when the dictionary has it, so its word shows.
 void Composer::showReading() {
   if (reading_.isEmpty() || reading_.hasToneMarker()) return;
-  std::string reading = reading_.syllable().composedString() + kAnyTone;
+  std::string reading = reading_.composedString() + kAnyTone;
   readingShown_ = dictionary_->hasUnigrams(reading) && grid_.insertReading(reading);
 }
 
@@ -415,7 +349,7 @@ void Composer::clearPendingReading() {
 }
 
 bool Composer::insertPunctuation(char key) {
-  for (const std::string& prefix : {pinyin_ ? "_punctuation_HanyuPinyin_" : "_punctuation_Standard_", "_punctuation_"}) {
+  for (const std::string& prefix : {"_punctuation_Standard_", "_punctuation_"}) {
     std::string reading = prefix + std::string(1, key);
     if (lm_->hasUnigrams(reading)) {
       endReading();

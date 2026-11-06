@@ -78,7 +78,6 @@ enum class Setting {
   kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
   kCandidatePosition,   // candidates for the word: 0 after the cursor (Windows), 1 before it (macOS)
   kNextDoubtful,        // picking a candidate moves on to the next doubtful word
-  kKeyboardLayout,      // 0 Daqian Zhuyin, 1 Hanyu Pinyin
 };
 
 class Settings {
@@ -221,7 +220,7 @@ class Controller {
   bool shiftAlone_ = false;
   bool cursorMoved_ = false;  // arrows moved the cursor since the last typed key
   std::string shown_;  // the composition as last shown, pending reading included
-  bool adjacentKeys_ = false, rememberChoices_ = false, pinyin_ = false;  // the settings composer_ was made with
+  bool adjacentKeys_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
   std::string englishRun_;

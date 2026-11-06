@@ -218,23 +218,6 @@ int main(int argc, char** argv) {
   type(learning, "xu,4g6");
   assert(learning.text() == "獵食");
 
-  // Hanyu Pinyin: a letter that cannot go on starts the next syllable, taking the open
-  // syllable's last letter when that is what lets it start (ke|neng); ' separates.
-  Composer pinyin(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, -INFINITY, nullptr,
-                  Composer::kCharWeight, true);
-  const std::pair<const char*, const char*> typed[] = {{"nihao", "你好"},    {"keneng", "可能"}, {"wo3men", "我們"},
-                                                       {"zhongguo", "中國"}, {"yinian", "一年"}, {"fang'an", "方案"},
-                                                       {"wm", "我們"}};
-  for (const auto& [keys, text] : typed) {
-    pinyin.clear();
-    type(pinyin, keys);
-    assert(pinyin.text() == text);
-  }
-  pinyin.clear();
-  assert(pinyin.typeReadingKey('i') == Composer::KeyResult::kInvalid);  // no syllable starts with i
-  type(pinyin, "ni3");
-  assert(pinyin.segments().size() == 1 && pinyin.segments()[0].reading == "ㄋㄧˇ");
-
   std::printf("ComposerTest passed\n");
   return 0;
 }
