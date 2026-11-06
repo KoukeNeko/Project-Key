@@ -10,6 +10,22 @@ BUILD=build
 MCB=$BUILD/mcbopomofo
 MCB_COMMIT=$(tr -d '[:space:]' < ../../MCBOPOMOFO_COMMIT)
 
+cxxlib() {
+  case $(readelf -d "$1" 2>/dev/null | grep NEEDED) in
+    *libc++.so*) echo libc++ ;;
+    *libstdc++.so*) echo libstdc++ ;;
+  esac
+}
+FCITX_CORE=$(pkg-config --variable=libdir Fcitx5Core 2>/dev/null)/libFcitx5Core.so
+FCITX_CXXLIB=$(cxxlib "$FCITX_CORE")
+if [ "$FCITX_CXXLIB" = libc++ ]; then
+  if [ -z "${CXX:-}" ]; then
+    command -v clang++ >/dev/null || { echo "Fcitx5 is built with libc++: install clang, or set CXX to a compiler with libc++" >&2; exit 1; }
+    CXX=clang++
+  fi
+  export CXX CXXFLAGS="-stdlib=libc++ ${CXXFLAGS:-}" LDFLAGS="-stdlib=libc++ ${LDFLAGS:-}"
+fi
+
 if [ ! -d "$MCB/.git" ]; then
   git init -q "$MCB"
   git -C "$MCB" remote add origin https://github.com/openvanilla/McBopomofo
@@ -23,4 +39,8 @@ cmake --build $BUILD
 for test in ComposerTest ControllerTest; do
   "$BUILD/$test" "$MCB/Source/Data/data.txt"
 done
+ADDON_CXXLIB=$(cxxlib $BUILD/projectkey.so)
+if [ -n "$FCITX_CXXLIB" ] && [ "$ADDON_CXXLIB" != "$FCITX_CXXLIB" ]; then
+  echo "warning: Fcitx5 uses $FCITX_CXXLIB but projectkey.so uses $ADDON_CXXLIB: Fcitx5 won't be able to load it" >&2
+fi
 echo "built $BUILD/projectkey.so"
