@@ -67,6 +67,7 @@ zwp_input_method_v2* Proxy(fcitx::wayland::ZwpInputMethodV2* im) {
 // the default queue, which Fcitx5 dispatches, so the globals arrive with its events.
 struct Globals {
   wl_display* display = nullptr;
+  fcitx::FocusGroup* group = nullptr;  // the input contexts on this connection
   wl_registry* registry = nullptr;
   wl_compositor* compositor = nullptr;
   uint32_t compositorVersion = 0;
@@ -82,7 +83,7 @@ class WaylandScreen final : public Screen {
 
   bool reaches(const fcitx::InputContext& ic) const override {
     zwp_input_method_v2* im = inputMethod(const_cast<fcitx::InputContext&>(ic));
-    return im && globals(im);
+    return im && globals(ic);
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
   // The compositor knows the caret; frames start from it.
@@ -99,18 +100,21 @@ class WaylandScreen final : public Screen {
     if (ic.frontendName() != "wayland_v2") return nullptr;
     return Proxy(waylandim_->call<fcitx::IWaylandIMModule::getInputMethodV2>(&ic));
   }
-  // The globals on im's connection, once both have arrived.
-  const Globals* globals(zwp_input_method_v2* im) const {
-    auto found = connections_.find(wl_proxy_get_display(reinterpret_cast<wl_proxy*>(im)));
-    if (found == connections_.end() || !found->second.compositor || !found->second.shm) return nullptr;
-    return &found->second;
+  // The globals on ic's connection, once both have arrived. Fcitx5 gives each
+  // connection its own focus group, so the group finds it (libwayland only tells
+  // a proxy's display from 1.23, newer than Ubuntu 24.04's).
+  const Globals* globals(const fcitx::InputContext& ic) const {
+    for (const auto& [display, globals] : connections_) {
+      if (globals.group == ic.focusGroup()) return globals.compositor && globals.shm ? &globals : nullptr;
+    }
+    return nullptr;
   }
 
  private:
   friend class WaylandWindow;
   static const wl_registry_listener kRegistryListener;
 
-  void connect(wl_display* display);
+  void connect(wl_display* display, fcitx::FocusGroup* group);
   void disconnect(wl_display* display);
 
   fcitx::AddonInstance* waylandim_;
@@ -196,7 +200,7 @@ const wl_registry_listener WaylandScreen::kRegistryListener = {
 WaylandScreen::WaylandScreen(fcitx::AddonInstance* wayland, fcitx::AddonInstance* waylandim) : waylandim_(waylandim) {
   // Called at once for the connections Fcitx5 already has.
   created_ = wayland->call<fcitx::IWaylandModule::addConnectionCreatedCallback>(
-      [this](const std::string&, wl_display* display, fcitx::FocusGroup*) { connect(display); });
+      [this](const std::string&, wl_display* display, fcitx::FocusGroup* group) { connect(display, group); });
   closed_ = wayland->call<fcitx::IWaylandModule::addConnectionClosedCallback>(
       [this](const std::string&, wl_display* display) { disconnect(display); });
 }
@@ -211,10 +215,11 @@ std::unique_ptr<Window> WaylandScreen::createWindow(std::function<void()> expose
   return std::make_unique<WaylandWindow>(*this, std::move(exposed), std::move(moved));
 }
 
-void WaylandScreen::connect(wl_display* display) {
+void WaylandScreen::connect(wl_display* display, fcitx::FocusGroup* group) {
   if (connections_.contains(display)) return;
   Globals& globals = connections_[display];  // a node: its address stays for the listener
   globals.display = display;
+  globals.group = group;
   globals.registry = wl_display_get_registry(display);
   wl_registry_add_listener(globals.registry, &kRegistryListener, &globals);
   wl_display_flush(display);
@@ -278,7 +283,7 @@ const zwp_input_popup_surface_v2_listener WaylandWindow::kPopupListener = {
 
 void WaylandWindow::map(fcitx::InputContext& ic) {
   zwp_input_method_v2* im = screen_.inputMethod(ic);
-  const Globals* globals = im ? screen_.globals(im) : nullptr;
+  const Globals* globals = im ? screen_.globals(ic) : nullptr;
   if (!globals) return;
   if (globals != globals_) {
     release();
