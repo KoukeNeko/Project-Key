@@ -27,8 +27,10 @@ constexpr float kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRigh
 constexpr float kHintGap = 6;
 // 中／英 badge.
 constexpr float kBadgeSide = 30, kBadgePadding = 11;
-// Motion: the selection slides, the grid grows and folds; the badge fades.
+// Motion: the selection slides, the grid grows and folds; the badge fades, and so do the
+// candidate and hint windows as they open and close.
 constexpr int kSlideMs = 120, kResizeMs = 160, kBadgeFadeInMs = 120, kBadgeHoldMs = 800, kBadgeFadeOutMs = 250;
+constexpr int kWindowFadeMs = 120;
 
 // sRGB colors, 0xRRGGBB, from the prototype's dark theme. In their own
 // namespace so macOS can name its NSColors after them.

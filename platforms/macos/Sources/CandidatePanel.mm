@@ -38,7 +38,8 @@ NSColor *const kEdge = Hex(0x000000, 0.5);
 // macOS corners; the other metrics are PanelMetrics.h's, shared with Windows and Linux.
 constexpr CGFloat kRadius = 14, kPillRadius = 8;
 NSString *const kReplacedArrow = @" → ";
-constexpr NSTimeInterval kSlideDuration = kSlideMs / 1000.0, kResizeDuration = kResizeMs / 1000.0;
+constexpr NSTimeInterval kSlideDuration = kSlideMs / 1000.0, kResizeDuration = kResizeMs / 1000.0,
+                         kWindowFadeDuration = kWindowFadeMs / 1000.0;
 
 BOOL ReducesMotion() {
   return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
@@ -414,6 +415,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   NSPanel *_panel;
   PKCandidateView *_view;
   NSRect _target;  // where the last show put the window, before any resize animation ends
+  BOOL _hiding;     // fading out; a show before it ends fades back in
+  NSUInteger _fades;  // counts fades, so a fade-out that ends after a show does not order the window out
 }
 
 + (instancetype)shared {
@@ -473,13 +476,53 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   [_panel setFrame:_target display:NO];
   [_panel invalidateShadow];
   _view.needsDisplay = YES;
+  [self orderFront];
+}
+
+- (void)orderFront {
+  BOOL appearing = !self.isVisible;
+  _hiding = NO;
+  if (!appearing) {
+    [_panel orderFront:nil];
+    return;
+  }
+  _fades++;
+  if (ReducesMotion()) {
+    _panel.alphaValue = 1;
+    [_panel orderFront:nil];
+    return;
+  }
+  if (!_panel.visible) _panel.alphaValue = 0;  // else it is fading out, and turns back from where it is
   [_panel orderFront:nil];
+  [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+    context.duration = kWindowFadeDuration;
+    self->_panel.animator.alphaValue = 1;
+  }];
+}
+
+// What the window is showing, apart from the words: the typing row or the choice, the proof row, the keycap.
+static NSString *Layout(PKPanelContent *content) {
+  if (!content) return @"";
+  return [NSString stringWithFormat:@"%d%d%d%d", content.rows != nil, content.rows && content.selectedRow >= 0,
+                                    content.showsProof, content.keyHint != nil];
 }
 
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect {
   [self useCurrentAppearance];
-  // Changes within one list move: the highlight slides and the window resizes.
-  BOOL animate = _panel.visible && _view.content.rows && content.rows && !ReducesMotion();
+  // Changes within one list move: the highlight slides and the window resizes. A change of
+  // layout (typing to choosing, the proof row coming or going) also crossfades the content,
+  // which is laid out for the final size at once.
+  BOOL shown = self.isVisible;
+  BOOL relayout = shown && ![Layout(_view.content) isEqualToString:Layout(content)] && !ReducesMotion();
+  BOOL animate = (shown && _view.content.rows && content.rows && !ReducesMotion()) || relayout;
+  if (relayout) {
+    _view.wantsLayer = YES;
+    CATransition *fade = [CATransition animation];
+    fade.type = kCATransitionFade;
+    fade.duration = kResizeDuration;
+    fade.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+    [_view.layer addAnimation:fade forKey:@"layout"];
+  }
   _view.content = content;
   NSSize size = [_view fittingSize];
   NSScreen *screen = NSScreen.mainScreen;
@@ -507,11 +550,23 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     [_panel invalidateShadow];
   }
   _view.needsDisplay = YES;
-  [_panel orderFront:nil];
+  [self orderFront];
 }
 
 - (void)hide {
-  [_panel orderOut:nil];
+  if (!self.isVisible) return;
+  _hiding = YES;
+  NSUInteger fade = ++_fades;
+  if (ReducesMotion()) {
+    [_panel orderOut:nil];
+    return;
+  }
+  [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+    context.duration = kWindowFadeDuration;
+    self->_panel.animator.alphaValue = 0;
+  } completionHandler:^{
+    if (self->_fades == fade) [self->_panel orderOut:nil];
+  }];
 }
 
 - (NSRect)frame {
@@ -519,7 +574,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (BOOL)isVisible {
-  return _panel.visible;
+  return _panel.visible && !_hiding;
 }
 
 - (PKPanelContent *)content {
