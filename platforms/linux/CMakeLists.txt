@@ -61,6 +61,8 @@ install(FILES projectkey-settings.desktop DESTINATION "${CMAKE_INSTALL_DATADIR}/
 # The icon (tools/icon/make-icons.ps1), for the input method and the settings launcher. Desktops read
 # icons through hicolor's cache, so refresh it as a package's trigger would.
 install(FILES fcitx-projectkey.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
+# The Fcitx5 theme in the candidate window's look, for Fcitx5's own panel (Wayland, other input methods).
+install(DIRECTORY theme/ DESTINATION "${FCITX_INSTALL_PKGDATADIR}/themes/projectkey")
 install(CODE "execute_process(COMMAND gtk-update-icon-cache -q -t -f \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor\" ERROR_QUIET)")
 configure_file(projectkey-addon.conf.in projectkey-addon.conf @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-addon.conf" RENAME projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/addon")

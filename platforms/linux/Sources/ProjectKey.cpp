@@ -257,11 +257,13 @@ class Session : public fcitx::InputContextProperty, public Client {
       reading();
     }
     if (!content.keyHint.empty()) aux.append("  [" + content.keyHint + "]");
+    // The page label ends the top line: Fcitx5 puts its second line (aux down) between it and the candidates.
+    if (!content.pageLabel.empty()) aux.append((aux.empty() ? "" : "   ") + content.pageLabel);
     panel.setAuxUp(aux);
+    panel.setAuxDown(fcitx::Text());
 
     if (content.rows.empty()) {
       panel.setCandidateList(nullptr);
-      panel.setAuxDown(fcitx::Text());
     } else {
       // The row shown while typing (selectedRow -1) has no digits: those keys type Zhuyin.
       bool typing = content.selectedRow < 0;
@@ -277,7 +279,6 @@ class Session : public fcitx::InputContextProperty, public Client {
       list->setLabels(labels);
       if (!typing) list->setGlobalCursorIndex(content.selection);
       panel.setCandidateList(std::move(list));
-      panel.setAuxDown(fcitx::Text(content.pageLabel));
     }
     ic_.updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
   }
