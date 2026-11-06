@@ -3,7 +3,10 @@
 # KDE and LXQt, the GTK (libadwaita) window on GNOME and other GTK desktops,
 # and the Qt one when the GTK window was not built.
 dir=$(dirname "$(readlink -f "$0")")
-case ":$XDG_CURRENT_DESKTOP:" in
+# Started by a Fcitx5 that did not come with the session (by hand, from a script or
+# over SSH), there is no desktop in the environment; the session's systemd has it.
+desktop=${XDG_CURRENT_DESKTOP:-$(systemctl --user show-environment 2>/dev/null | sed -n 's/^XDG_CURRENT_DESKTOP=//p')}
+case ":$desktop:" in
   *:KDE:* | *:LXQt:*) ;;
   *) [ -x "$dir/projectkey-settings-gtk" ] && exec "$dir/projectkey-settings-gtk" "$@" ;;
 esac

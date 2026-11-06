@@ -13,12 +13,26 @@ find_package(Fcitx5Core REQUIRED)
 find_package(Fcitx5Utils REQUIRED)
 find_package(Fcitx5ModuleDBus REQUIRED)
 find_package(Fcitx5ModuleWayland REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Widgets DBus Network)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ENCHANT REQUIRED IMPORTED_TARGET enchant-2)
 pkg_check_modules(PANEL REQUIRED IMPORTED_TARGET xcb cairo cairo-xcb pangocairo wayland-client)
 find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
 include(GNUInstallDirs)
+
+# The KDE settings window in the Qt that KDE's own look (the Breeze style and KDE's platform
+# theme) is installed for: Qt 6 on Plasma 6, Qt 5 on Plasma 5 (Ubuntu 24.04), where a Qt 6
+# window would fall back to Fusion. Distributions keep Qt's plugins in <libdir>/qt5|qt6/plugins.
+set(PROJECTKEY_QT "" CACHE STRING "Qt for the KDE settings window: 5 or 6 (default: the one KDE's look is installed for)")
+if(NOT PROJECTKEY_QT)
+  set(PROJECTKEY_QT 6)
+  set(THEMES "${CMAKE_INSTALL_FULL_LIBDIR}")
+  if(EXISTS "${THEMES}/qt5/plugins/platformthemes/KDEPlasmaPlatformTheme.so" AND
+     NOT EXISTS "${THEMES}/qt6/plugins/platformthemes/KDEPlasmaPlatformTheme6.so")
+    set(PROJECTKEY_QT 5)
+  endif()
+endif()
+find_package(Qt${PROJECTKEY_QT} REQUIRED COMPONENTS Widgets DBus Network)
+message(STATUS "KDE settings window: Qt ${PROJECTKEY_QT}")
 
 set(MCBOPOMOFO "" CACHE PATH "McBopomofo checkout")
 set(CORE "${CMAKE_CURRENT_SOURCE_DIR}/../../core/engine")
@@ -57,7 +71,7 @@ set_target_properties(projectkey PROPERTIES PREFIX "")
 # The settings window, opened from the Fcitx5 menu or the app launcher through the
 # projectkey-settings script: Qt on KDE, GTK (libadwaita) on GNOME when it is built.
 add_executable(projectkey-settings-qt Settings/Qt.cpp)
-target_link_libraries(projectkey-settings-qt PRIVATE Qt6::Widgets Qt6::DBus Qt6::Network)
+target_link_libraries(projectkey-settings-qt PRIVATE Qt${PROJECTKEY_QT}::Widgets Qt${PROJECTKEY_QT}::DBus Qt${PROJECTKEY_QT}::Network)
 target_compile_definitions(projectkey-settings-qt PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}")
 pkg_check_modules(ADWAITA IMPORTED_TARGET libadwaita-1 libsoup-3.0 json-glib-1.0)
 if(ADWAITA_FOUND)

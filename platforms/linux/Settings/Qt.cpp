@@ -1,4 +1,5 @@
-// Project Key's settings window for KDE (Qt): the rows in Rows.h, applied as they
+// Project Key's settings window for KDE (Qt 5 or 6, whichever KDE's look is
+// installed for; see CMakeLists.txt): the rows in Rows.h, applied as they
 // change, as on macOS and Windows. The values go through Fcitx5's controller on
 // D-Bus to the addon (Sources/ProjectKey.cpp), which saves them, so this window,
 // the GTK one (Gtk.cpp) and Fcitx5's own configuration page edit the same settings.
@@ -155,20 +156,36 @@ int main(int argc, char** argv) {
     layout->addWidget(message);
   }
 
-  auto group = [layout](const QString& title) {
-    auto* box = new QGroupBox(title);
-    auto* form = new QFormLayout(box);
-    form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
-    layout->addWidget(box);
+  // One form, as KDE's own settings pages lay theirs out: labels ending in 「：」 to the
+  // left of their controls, check boxes in the controls' column, a bold heading over
+  // each section and a line between sections.
+  auto* form = new QFormLayout;
+  form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+  form->setFormAlignment(Qt::AlignHCenter | Qt::AlignTop);
+  layout->addLayout(form);
+  layout->addStretch();
+  auto group = [form](const QString& title) {
+    if (form->rowCount() > 0) {
+      auto* line = new QFrame;
+      line->setFrameShape(QFrame::HLine);
+      line->setFrameShadow(QFrame::Sunken);
+      form->addRow(line);
+    }
+    auto* heading = new QLabel(title);
+    QFont font = heading->font();
+    font.setBold(true);
+    heading->setFont(font);
+    form->addRow(heading);
     return form;
   };
+  auto label = [](const char* title) { return QString(title) + "："; };
   auto note = [](const QString& text) {
     auto* label = new QLabel(text);
     label->setForegroundRole(QPalette::PlaceholderText);
     return label;
   };
   for (const Group& section : Groups()) {
-    QFormLayout* form = group(section.title);
+    group(section.title);
     for (const Row& row : section.rows) {
       QString key = row.key;
       if (row.kind == Row::kToggle) {
@@ -181,7 +198,7 @@ int main(int argc, char** argv) {
           box->setChecked(!on);
           Unsaved(box);
         });
-        form->addRow(box);
+        form->addRow(QString(), box);
       } else if (row.kind == Row::kChoice) {
         QStringList values, shown;
         for (const char* value : row.values) values << value;
@@ -190,7 +207,9 @@ int main(int argc, char** argv) {
         combo->addItems(shown);
         combo->setCurrentIndex(std::max(0, static_cast<int>(values.indexOf(Text(config.value(key))))));
         combo->setEnabled(available);
-        QObject::connect(combo, &QComboBox::currentIndexChanged, [&controller, key, values, combo, saved = combo->currentIndex()](int index) mutable {
+        // qOverload: Qt 5 also has a QString overload of the signal.
+        QObject::connect(combo, qOverload<int>(&QComboBox::currentIndexChanged),
+                         [&controller, key, values, combo, saved = combo->currentIndex()](int index) mutable {
           if (index < 0) return;
           if (WriteConfig(controller, key, values[index])) {
             saved = index;
@@ -200,7 +219,7 @@ int main(int argc, char** argv) {
           combo->setCurrentIndex(saved);
           Unsaved(combo);
         });
-        form->addRow(row.title, combo);
+        form->addRow(label(row.title), combo);
       } else {
         auto* clear = new QPushButton("清除");
         clear->setEnabled(available);
@@ -209,22 +228,22 @@ int main(int argc, char** argv) {
           QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ClearChoices");
           clear->setEnabled(false);
         });
-        form->addRow(row.title, clear);
+        form->addRow(label(row.title), clear);
       }
-      if (row.detail) form->addRow(note(row.detail));
+      if (row.detail) form->addRow(QString(), note(row.detail));
     }
   }
   QFormLayout* about = group("關於");
   auto* version = new QLabel(PROJECTKEY_VERSION);
   version->setTextInteractionFlags(Qt::TextSelectableByMouse);
-  about->addRow("版本", version);
+  about->addRow("版本：", version);
   auto* update = new QLabel("檢查中…");
   update->setOpenExternalLinks(true);
-  about->addRow("更新", update);
-  about->addRow("授權", new QLabel("MIT"));
+  about->addRow("更新：", update);
+  about->addRow("授權：", new QLabel("MIT"));
   auto* engine = new QLabel(QString("<a href=\"%1\">McBopomofo</a>").arg(kEngineUrl));
   engine->setOpenExternalLinks(true);
-  about->addRow("引擎與詞庫", engine);
+  about->addRow("引擎與詞庫：", engine);
 
   QNetworkAccessManager network;
   CheckForUpdate(network, update);
