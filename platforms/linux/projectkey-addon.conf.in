@@ -7,3 +7,7 @@ Library=projectkey
 Type=SharedLibrary
 OnDemand=True
 Configurable=True
+
+# The D-Bus object the settings window clears the remembered choices through.
+[Addon/OptionalDependencies]
+0=dbus
