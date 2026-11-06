@@ -335,6 +335,23 @@ int main(int argc, char** argv) {
   settings.remove(Setting::kCandidatePosition);
   before = client.committed.size();
 
+  // A Zhuyin wider than the first row's last column starts the next row instead of leaving that
+  // column empty (ㄐㄧˋㄓㄨˋ after one-column words). Columns as on macOS, where one holds two characters.
+  auto columnsOf = [](const std::string& candidate) {
+    int characters = 0;
+    for (unsigned char c : candidate) characters += (c & 0xc0) != 0x80;
+    return std::max(1, (characters + 1) / 2);
+  };
+  env.columnsSpannedBy = columnsOf;
+  Type(controller, "ru45j4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  int columns = 0;
+  for (const std::string& candidate : client.panel.rows[0]) columns += columnsOf(candidate);
+  assert(columns == kGridColumns && client.panel.rows[1][0] == "ㄐㄧˋㄓㄨˋ");
+  EscapeAll(controller, client);
+  env.columnsSpannedBy = Span;
+
   // Down expands the rows into a grid; Up walks back up, folds the grid on
   // its first row, and closes the candidates after that.
   Type(controller, "rup wu0 ");

@@ -695,8 +695,8 @@ void Controller::startChoosingAt(size_t start) {
   std::vector<std::string> candidates = composer_->candidates(*segment);
   if (candidates.empty()) return;
   // The syllables' Zhuyin itself, as the system keyboards offer it: last in the first row when
-  // all six columns hold one candidate each (iOS), otherwise right after the first row, which
-  // keeps the candidates' digits.
+  // all six columns hold one candidate each (iOS) and it fits that column, otherwise right after
+  // the first row, which keeps the candidates' digits and leaves no column empty.
   readingIndex_ = -1;
   if (segment->reading.rfind("_", 0) != 0) {  // punctuation readings start with _
     std::string zhuyin;
@@ -704,7 +704,8 @@ void Controller::startChoosingAt(size_t start) {
       if (c != '-' && c != Composer::kAnyTone) zhuyin += c;  // the grid's separator
     }
     if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
-      readingIndex_ = std::min(static_cast<int>(firstRowSize(candidates)), kGridColumns - 1);
+      int firstRow = static_cast<int>(firstRowSize(candidates));
+      readingIndex_ = firstRow < kGridColumns || span(zhuyin) > 1 ? firstRow : kGridColumns - 1;
       candidates.insert(candidates.begin() + readingIndex_, zhuyin);
     }
   }
