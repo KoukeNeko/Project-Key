@@ -124,6 +124,12 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "usage: %s <data.txt>\n", argv[0]);
     return 2;
   }
+  // UTF-16 positions to UTF-8 bytes: ASCII 1 byte, 國 3 bytes, an emoji 4 bytes and 2 units.
+  const std::string mixed = "a國😀b";
+  assert(Utf8Bytes(mixed, 0) == 0 && Utf8Bytes(mixed, 1) == 1 && Utf8Bytes(mixed, 2) == 4);
+  assert(Utf8Bytes(mixed, 4) == 8 && Utf8Bytes(mixed, 5) == 9 && Utf8Bytes(mixed, 99) == mixed.size());
+  assert(Utf8Bytes(mixed, Utf16Length(mixed)) == mixed.size());
+
   MemorySettings settings;
   Environment env;
   env.lm = std::make_shared<Lexicon>();

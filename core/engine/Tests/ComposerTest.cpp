@@ -1,4 +1,5 @@
 // Usage: ComposerTest <path to data.txt>
+#undef NDEBUG  // the checks are asserts; Release builds (CMake on Linux) would drop them
 #include <algorithm>
 #include <cassert>
 #include <cmath>

@@ -20,10 +20,6 @@
 
 namespace ProjectKey {
 
-// Bytes of `text` that hold its first `units` UTF-16 code units: the engine
-// counts in UTF-16, as TSF does, and Fcitx5 and Pango in UTF-8 bytes.
-size_t BytesFor(const std::string& text, uint32_t units);
-
 class Panel {
  public:
   // settings gives the appearance: Setting::kAppearance 1 blurs what is behind the windows.
