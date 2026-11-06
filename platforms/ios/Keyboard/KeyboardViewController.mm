@@ -430,7 +430,7 @@ UIColor *PressedColor(BOOL function) {
 
 - (BOOL)choosing {
   const auto &panel = _controller->panel();
-  return panel && !panel->rows.empty();
+  return panel && !panel->rows.empty() && panel->selectedRow >= 0;  // the row shown while typing is no choice
 }
 
 // Like Gboard, the bar lists candidates as soon as a syllable is complete.

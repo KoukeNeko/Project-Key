@@ -263,17 +263,19 @@ class Session : public fcitx::InputContextProperty, public Client {
       panel.setCandidateList(nullptr);
       panel.setAuxDown(fcitx::Text());
     } else {
-      const std::vector<std::string>& row = content.rows[content.selectedRow];
+      // The row shown while typing (selectedRow -1) has no digits: those keys type Zhuyin.
+      bool typing = content.selectedRow < 0;
+      const std::vector<std::string>& row = content.rows[typing ? 0 : content.selectedRow];
       auto list = std::make_unique<fcitx::CommonCandidateList>();
       list->setLayoutHint(fcitx::CandidateLayoutHint::Horizontal);
       list->setPageSize(static_cast<int>(row.size()));
       std::vector<std::string> labels;
       for (size_t i = 0; i < row.size(); i++) {
-        labels.push_back(std::to_string(i + 1) + " ");
+        labels.push_back(typing ? "" : std::to_string(i + 1) + " ");
         list->append<Word>(this, row, static_cast<int>(i));
       }
       list->setLabels(labels);
-      list->setGlobalCursorIndex(content.selection);
+      if (!typing) list->setGlobalCursorIndex(content.selection);
       panel.setCandidateList(std::move(list));
       panel.setAuxDown(fcitx::Text(content.pageLabel));
     }
