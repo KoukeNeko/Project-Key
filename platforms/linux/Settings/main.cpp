@@ -19,6 +19,8 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPushButton>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QVBoxLayout>
 #include <QVersionNumber>
 
@@ -68,10 +70,55 @@ void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
   });
 }
 
+// Whether the desktop asks apps for dark colors (the freedesktop portal's
+// color-scheme: 1 is dark), which KDE and GNOME both set.
+bool PrefersDark() {
+  QDBusMessage reply = QDBusInterface("org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop",
+                                      "org.freedesktop.portal.Settings")
+                           .call("Read", QString("org.freedesktop.appearance"), QString("color-scheme"));
+  if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) return false;
+  QVariant value = reply.arguments().first();
+  while (value.canConvert<QDBusVariant>()) value = value.value<QDBusVariant>().variant();  // a variant in a variant
+  return value.toUInt() == 1;
+}
+
+// Dark colors when the desktop is dark. Qt 6 follows the desktop through its
+// platform theme, but Plasma 5 (Ubuntu 24.04) has that theme only for Qt 5,
+// so here the window takes KDE's colors from kdeglobals itself, or Fusion's
+// dark colors elsewhere. Read at startup only.
+void ApplyDarkPalette() {
+  if (!PrefersDark()) return;
+  QString kdeglobals = QStandardPaths::locate(QStandardPaths::GenericConfigLocation, "kdeglobals");
+  QSettings kde(kdeglobals, QSettings::IniFormat);
+  // A KDE color is "r,g,b", which QSettings reads as a list.
+  auto color = [&kde, &kdeglobals](const QString& key, QColor fallback) {
+    QStringList rgb = kdeglobals.isEmpty() ? QStringList() : kde.value(key).toStringList();
+    return rgb.size() == 3 ? QColor(rgb[0].toInt(), rgb[1].toInt(), rgb[2].toInt()) : fallback;
+  };
+  QColor window = color("Colors:Window/BackgroundNormal", QColor(0x2a2e32));
+  QColor button = color("Colors:Button/BackgroundNormal", QColor(0x31363b));
+  QPalette palette(button, window);  // derives the bevel shades
+  palette.setColor(QPalette::WindowText, color("Colors:Window/ForegroundNormal", QColor(0xfcfcfc)));
+  palette.setColor(QPalette::Base, color("Colors:View/BackgroundNormal", QColor(0x1b1e20)));
+  palette.setColor(QPalette::AlternateBase, color("Colors:View/BackgroundAlternate", QColor(0x232629)));
+  palette.setColor(QPalette::Text, color("Colors:View/ForegroundNormal", QColor(0xfcfcfc)));
+  palette.setColor(QPalette::ButtonText, color("Colors:Button/ForegroundNormal", QColor(0xfcfcfc)));
+  palette.setColor(QPalette::Highlight, color("Colors:Selection/BackgroundNormal", QColor(0x3daee9)));
+  palette.setColor(QPalette::HighlightedText, color("Colors:Selection/ForegroundNormal", QColor(0xfcfcfc)));
+  palette.setColor(QPalette::Link, color("Colors:View/ForegroundLink", QColor(0x1d99f3)));
+  QColor inactive = color("Colors:View/ForegroundInactive", QColor(0xa1a9b1));
+  palette.setColor(QPalette::PlaceholderText, inactive);
+  for (QPalette::ColorRole role : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText}) {
+    palette.setColor(QPalette::Disabled, role, inactive);
+  }
+  QApplication::setPalette(palette);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   QApplication app(argc, argv);
+  ApplyDarkPalette();
   QApplication::setApplicationName("Project Key 設定");
   QApplication::setDesktopFileName("projectkey-settings");
   QApplication::setWindowIcon(QIcon::fromTheme("input-keyboard"));
