@@ -121,7 +121,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 @end
 
 @implementation PKCandidateView {
-  NSFont *_proofFont, *_candidateFont, *_labelFont, *_pageFont;
+  NSFont *_proofFont, *_candidateFont, *_typingFont, *_labelFont, *_pageFont;
   NSRect _pillFrom, _pillTo;  // the highlight slides from one to the other
   NSTimeInterval _slideStart;
   NSTimer *_slideTimer;
@@ -131,6 +131,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   if ((self = [super initWithFrame:frame])) {
     _proofFont = TextFont(14);
     _candidateFont = CandidateFont();
+    _typingFont = TextFont(_candidateFont.pointSize * kTypingTextScale);
     _labelFont = LabelFont();
     _pageFont = [NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightRegular];
   }
@@ -172,7 +173,11 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     if (self.content.replacedText) key += [self widthOf:[self.content.replacedText stringByAppendingString:kReplacedArrow] font:_proofFont];
     width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + key + kProofRight);
   }
-  if (self.content.rows) {
+  if (self.content.rows && self.content.selectedRow < 0) {  // the row shown while typing
+    CGFloat row = kRowLeft + kRowRight;
+    for (NSString *candidate in self.content.rows.firstObject) row += 2 * kTypingCellSide + [self widthOf:candidate font:_typingFont];
+    width = MAX(width, row);
+  } else if (self.content.rows) {
     // As wide as the fullest visible row, so a short single row stays compact.
     NSInteger columns = 0;
     for (NSArray<NSString *> *row in self.content.rows) {
@@ -369,6 +374,14 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 - (void)drawCandidatesAt:(CGFloat)top width:(CGFloat)width {
   CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
+  if (self.content.selectedRow < 0) {  // the row shown while typing: no digits, no selection
+    CGFloat x = kRowLeft, textTop = TextTop(_typingFont, top + kRowTop + kCellTop, kCellLine);
+    for (NSString *candidate in self.content.rows.firstObject) {
+      [candidate drawAtPoint:NSMakePoint(x + kTypingCellSide, textTop) withAttributes:Attributes(_typingFont, self.mutedColor)];
+      x += 2 * kTypingCellSide + [self widthOf:candidate font:_typingFont];
+    }
+    return;
+  }
   NSRect pill = self.shownSelectionRect;
   if (!NSIsEmptyRect(pill)) {
     [kAccent setFill];
@@ -409,6 +422,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 @implementation PKCandidatePanel {
   NSPanel *_panel;
   PKCandidateView *_view;
+  NSRect _target;  // where the last show put the window, before any resize animation ends
 }
 
 + (instancetype)shared {
@@ -418,6 +432,15 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     shared = [[PKCandidatePanel alloc] init];
   });
   return shared;
+}
+
++ (instancetype)hint {
+  static PKCandidatePanel *hint;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    hint = [[PKCandidatePanel alloc] init];
+  });
+  return hint;
 }
 
 - (instancetype)init {
@@ -439,13 +462,31 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return self;
 }
 
-- (void)show:(PKPanelContent *)content below:(NSRect)lineRect {
+- (void)useCurrentAppearance {
   BOOL glass = UsesGlass();
   if (glass != _view.glass || !_panel.contentView) {
     _view.glass = glass;
     [_view removeFromSuperview];
     _panel.contentView = Container(_view, glass, kRadius);
   }
+}
+
+- (void)show:(PKPanelContent *)content beside:(PKCandidatePanel *)panel {
+  [self useCurrentAppearance];
+  _view.content = content;
+  NSSize size = [_view fittingSize];
+  NSRect next = panel->_target;
+  // The candidate window is above the text when its proof row is below.
+  CGFloat y = panel->_view.proofBelow ? NSMaxY(next) + kHintGap : NSMinY(next) - kHintGap - size.height;
+  _target = NSMakeRect(NSMinX(next), y, size.width, size.height);
+  [_panel setFrame:_target display:NO];
+  [_panel invalidateShadow];
+  _view.needsDisplay = YES;
+  [_panel orderFront:nil];
+}
+
+- (void)show:(PKPanelContent *)content below:(NSRect)lineRect {
+  [self useCurrentAppearance];
   // Changes within one list move: the highlight slides and the window resizes.
   BOOL animate = _panel.visible && _view.content.rows && content.rows && !ReducesMotion();
   _view.content = content;
@@ -459,6 +500,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   _view.proofBelow = NSMinY(frame) < NSMinY(visible);
   if (_view.proofBelow) frame.origin.y = NSMaxY(lineRect) + kGapToText;
   frame.origin.x = MAX(NSMinX(visible), MIN(NSMinX(frame), NSMaxX(visible) - size.width));
+  _target = frame;
   [PKModeIndicator.shared avoid:frame];  // both sit under the caret
   [_view moveSelectionAnimated:animate];
   if (animate && !NSEqualSizes(_panel.frame.size, frame.size)) {

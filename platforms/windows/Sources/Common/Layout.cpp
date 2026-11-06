@@ -16,6 +16,7 @@ Fonts::Fonts() {
   }
   proof_ = makeFormat(kTextFont, kProofSize, DWRITE_FONT_WEIGHT_NORMAL);
   candidate_ = makeFormat(kTextFont, kCandidateSize, DWRITE_FONT_WEIGHT_NORMAL);
+  typing_ = makeFormat(kTextFont, kCandidateSize * kTypingTextScale, DWRITE_FONT_WEIGHT_NORMAL);
   label_ = makeFormat(kMonoFont, kLabelSize, DWRITE_FONT_WEIGHT_MEDIUM);
   page_ = makeFormat(kMonoFont, kPageSize, DWRITE_FONT_WEIGHT_MEDIUM);
   key_ = makeFormat(kKeyFont, kKeySize, DWRITE_FONT_WEIGHT_MEDIUM);

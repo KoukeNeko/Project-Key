@@ -205,7 +205,11 @@ D2D1_SIZE_F CandidateWindow::fittingSize() const {
     if (!content_->replacedText.empty()) key += fonts_.widthOf(Widen(content_->replacedText) + kReplacedArrow, fonts_.proof());
     width = std::max(width, kProofLeft + fonts_.widthOf(Widen(sentence), fonts_.proof()) + key + kProofRight);
   }
-  if (!content_->rows.empty()) {
+  if (!content_->rows.empty() && content_->selectedRow < 0) {  // the row shown while typing
+    float row = kRowLeft + kRowRight;
+    for (const std::string& candidate : content_->rows[0]) row += 2 * kTypingCellSide + fonts_.widthOf(Widen(candidate), fonts_.typing());
+    width = std::max(width, row);
+  } else if (!content_->rows.empty()) {
     // As wide as the fullest visible row, so a short single row stays compact.
     int columns = 0;
     for (const auto& row : content_->rows) {
@@ -465,6 +469,15 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
   auto white = Brush(target, D2D1::ColorF(1, 1, 1, 1));
   auto onLabel = Brush(target, D2D1::ColorF(1, 1, 1, 0.72f));
   auto muted = Brush(target, Color(kMuted));
+  if (content_->selectedRow < 0) {  // the row shown while typing: no digits, no selection
+    float x = kRowLeft;
+    for (const std::string& candidate : content_->rows[0]) {
+      Line word = Measure(fonts_, Widen(candidate), fonts_.typing());
+      DrawLine(target, word, x + kTypingCellSide, top + kRowTop + kCellTop, kCellLine, muted.Get());
+      x += 2 * kTypingCellSide + word.width;
+    }
+    return;
+  }
   float labelWidth = fonts_.widthOf(L"6", fonts_.label());
   for (size_t r = 0; r < content_->rows.size(); r++) {
     float cellTop = top + kRowTop + r * (cellHeight + kCellGap);

@@ -60,6 +60,24 @@ int main(int argc, const char *argv[]) {
       content.keyHint = @"⇥";
       content.replacedText = @"ji3cl3";
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"hint.png"] atomically:YES];
+      // Typing a syllable without a tone: the guess marked in the sentence, the other words below.
+      content.segments = @[ @"好像", @"有", @"衝突" ];
+      content.activeSegment = 2;
+      content.caret = 5;
+      content.keyHint = nil;
+      content.replacedText = nil;
+      content.rows = @[ @[ @"傳統", @"春天", @"常態", @"出土", @"出頭" ] ];
+      content.selectedRow = -1;
+      content.selection = -1;
+      content.pageLabel = nil;
+      [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"typing.png"] atomically:YES];
+      content.segments = @[ @"ja" ];
+      content.activeSegment = -1;
+      content.caret = 2;
+      content.keyHint = @"⇥";
+      content.replacedText = @"我ㄇ";
+      content.rows = @[ @[ @"我們", @"我沒", @"外面", @"文明" ] ];
+      [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"typing-hint.png"] atomically:YES];
       NSView *form = [PKSettingsForm makeViewWithClearChoices:^{
       }];
       NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, form.fittingSize.width, form.fittingSize.height)

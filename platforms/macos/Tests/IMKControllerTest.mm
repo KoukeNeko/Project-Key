@@ -273,18 +273,19 @@ int main() {
     // and Tab puts the English in place of the composition and switches to 英.
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     Type(controller, client, @"hello");
-    PKPanelContent *english = PKCandidatePanel.shared.content;
-    assert(PKCandidatePanel.shared.visible && [english.keyHint isEqualToString:@"⇥"]);
+    // The last syllable is still open: the hint has its own window beside the candidate window.
+    PKPanelContent *english = PKCandidatePanel.hint.content;
+    assert(PKCandidatePanel.hint.visible && PKCandidatePanel.shared.visible && [english.keyHint isEqualToString:@"⇥"]);
     assert([english.segments.firstObject isEqualToString:@"hello"] && [english.replacedText isEqualToString:client.marked]);
     assert([controller handleEvent:Key(@"\t", kVK_Tab) client:client]);
-    assert([client.committed hasSuffix:@"hello"] && client.marked.length == 0);
+    assert([client.committed hasSuffix:@"hello"] && client.marked.length == 0 && !PKCandidatePanel.hint.visible);
     assert(![controller handleEvent:Key(@"r") client:client]);  // now in 英
     [controller handleEvent:Shift(YES) client:client];
     [controller handleEvent:Shift(NO) client:client];
     // Turned off in settings: no preview.
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"ZhuyinToEnglish"];
     Type(controller, client, @"hello");
-    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
+    assert(!PKCandidatePanel.hint.visible && (!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil));
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ZhuyinToEnglish"];
     // Real Zhuyin is left alone, even when it spells something: "su " is ㄋㄧ as well as "su".
