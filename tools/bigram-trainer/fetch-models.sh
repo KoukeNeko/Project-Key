@@ -1,7 +1,15 @@
 #!/bin/sh
 # Downloads the published dictionary and context models (MODELS-NOTICE.txt) into .cache/,
 # where the platform builds pick them up, and checks them against models.sha256.
-# They are published once per training run as the GitHub release $TAG (README.md).
+# They are published once per training run as the GitHub release $TAG. To ship newly trained ones:
+# 1. Run train.sh.
+# 2. Publish them as a pre-release under a new date tag, so the settings window's update check
+#    (GitHub's latest release) never finds it:
+#    gh release create models-YYYY-MM-DD --prerelease --latest=false --title "Models YYYY-MM-DD" \
+#      .cache/data.txt .cache/bigram.bin .cache/chars.bin MODELS-NOTICE.txt
+# 3. Set TAG below to the new tag, update the checksums with
+#    (cd .cache && shasum -a 256 data.txt bigram.bin chars.bin) > models.sha256
+#    and commit both.
 set -eu
 cd "$(dirname "$0")"
 TAG=models-2026-11-06

@@ -12,4 +12,4 @@ store "What's New" to keep; the cask, the formula and the manifest are written b
 To release: set the version in `platforms/macos/Resources/Info.plist`,
 `platforms/windows/Sources/TextService/ProjectKey.rc` and `platforms/linux/CMakeLists.txt`, add `release-notes/vX.Y.Z.md`, commit, then push the tag `vX.Y.Z`. The builds bundle the
 dictionary and context models that `tools/bigram-trainer/fetch-models.sh` pins; to ship newly trained ones, publish
-them first as `tools/bigram-trainer/README.md` describes.
+them first as `tools/bigram-trainer/fetch-models.sh` describes.

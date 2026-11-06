@@ -84,7 +84,7 @@ platforms/macos/build.sh            # 再建置一次，把模型放進 App
 
 不想自行訓練時，`tools/bigram-trainer/fetch-models.sh` 下載發行版使用的同一組檔案。
 
-選字的評測方法與結果在 [tools/corpus-evaluator](tools/corpus-evaluator/README.md)。
+選字的評測工具在 [tools/corpus-evaluator](tools/corpus-evaluator/)。
 
 ## 授權
 

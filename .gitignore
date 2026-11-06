@@ -1,2 +1,4 @@
 .DS_Store
 __pycache__/
+# The tools' notes and evaluation results stay local.
+tools/**/*.md
