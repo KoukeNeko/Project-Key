@@ -9,22 +9,24 @@ Fcitx5 注音輸入法，大千鍵盤，按鍵與 [macOS 版](../macos/README.md
 | 引擎要做的事 | Fcitx5 上的做法 |
 |---|---|
 | 組字區 | preedit，可疑字以外的段落加底線，選字中的段落反白 |
-| 候選字窗、中／英標記 | Project Key 自己畫的 X11 視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同 |
+| 候選字窗、中／英標記 | Project Key 自己畫的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同：X11 上是 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上是輸入法的 popup（`Sources/WaylandScreen.cpp`） |
 | 前文（Tab 英文轉注音、組字接著游標前的字選字） | surrounding text；App 不提供時 Tab 照常輸入，選字當成句首 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
-「候選視窗外觀」有深色與模糊（預設）兩種。模糊用 KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），模糊視窗後方的內容再疊一層深色；KWin 的模糊特效關著或用別的視窗管理員時，模糊會改成深色。中／英標記跟著用同一種外觀。有合成器時視窗是圓角，沒有時是直角。Wayland 下或 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題。
+「候選視窗外觀」有深色與模糊（預設）兩種。模糊用 KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），模糊視窗後方的內容再疊一層深色；KWin 的模糊特效關著或用別的視窗管理員時，模糊會改成深色。中／英標記跟著用同一種外觀。有合成器時視窗是圓角，沒有時是直角。
 
-安裝時附上 Fcitx5 主題「Project Key」（`theme/`，裝在 `/usr/share/fcitx5/themes/projectkey`）：深色、圓角、選取的字用強調色，邊距與候選字窗相同。在 Fcitx5 設定的「附加元件 → 經典使用者介面 → 主題」選它，Wayland 下的候選面板外觀就和其他平台一致（GNOME 上這個面板由 App 自己畫，同樣讀 Fcitx5 主題）；它也會套用到其他 Fcitx5 輸入法。主題的圖片由 `tools/icon/make-icons.ps1` 產生。
+Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連到 Fcitx5 時，候選字窗與中／英標記是畫在 Fcitx5 的 Wayland 連線上的 input popup，由合成器放在游標下方，下方放不下時放在上方；Wayland 下沒有模糊，「模糊」外觀會改成深色。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）或 KWin 的輸入法（input-method-v1）連線時，以及 X11 上 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題。
+
+安裝時附上 Fcitx5 主題「Project Key」（`theme/`，裝在 `/usr/share/fcitx5/themes/projectkey`）：深色、圓角、選取的字用強調色，邊距與候選字窗相同。在 Fcitx5 設定的「附加元件 → 經典使用者介面 → 主題」選它，用到 Fcitx5 候選面板時外觀就和其他平台一致（GNOME 上這個面板由 App 自己畫，同樣讀 Fcitx5 主題）；它也會套用到其他 Fcitx5 輸入法。主題的圖片由 `tools/icon/make-icons.ps1` 產生。
 
 Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「單按 Shift 切換中英」開著時，Shift 由 Project Key 處理，切的是中／英而不是輸入法。關掉這項設定，Shift 就回到 Fcitx5。
 
 ## 建置與安裝
 
-需要 CMake、Ninja、C++20 編譯器、Python 3（產生詞庫），以及 Fcitx5、Enchant、Cairo、Pango 與 Qt 6 的開發檔；GNOME 版設定視窗另需 libadwaita、libsoup 3 與 json-glib。Debian／Ubuntu：
+需要 CMake、Ninja、C++20 編譯器、Python 3（產生詞庫），以及 Fcitx5、Enchant、Cairo、Pango、Wayland（含 wayland-scanner）與 Qt 6 的開發檔；GNOME 版設定視窗另需 libadwaita、libsoup 3 與 json-glib。Debian／Ubuntu：
 
 ```sh
-sudo apt install cmake ninja-build g++ python3 git libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev hunspell-en-us fonts-noto-cjk
+sudo apt install cmake ninja-build g++ python3 git libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev libwayland-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev hunspell-en-us fonts-noto-cjk
 platforms/linux/build.sh                       # 下載並編譯引擎、產生詞庫、跑測試，輸出到 build
 sudo cmake --install platforms/linux/build    # 安裝到 /usr
 ```
