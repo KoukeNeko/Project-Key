@@ -29,6 +29,7 @@
 #include <fcitx/userinterfacemanager.h>
 
 #include <algorithm>
+#include <cctype>
 #include <memory>
 #include <optional>
 #include <string>
@@ -147,7 +148,11 @@ class Spelling {
     for (size_t start = 0; start <= text.size();) {
       size_t end = std::min(text.find(' ', start), text.size());
       if (end > start) {
-        if (enchant_dict_check(dict_, text.data() + start, static_cast<ssize_t>(end - start)) != 0) return false;
+        // Hunspell knows abbreviations in capitals only (CD, OK); macOS's checker takes cd and ok too.
+        std::string word = text.substr(start, end - start), upper = word;
+        for (char& c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        auto known = [this](const std::string& w) { return enchant_dict_check(dict_, w.data(), static_cast<ssize_t>(w.size())) == 0; };
+        if (!known(word) && !known(upper)) return false;
         any = true;
       }
       start = end + 1;
@@ -225,6 +230,30 @@ class Session : public fcitx::InputContextProperty, public Client {
       panel_.show(ic_, content, anchor());
       return;
     }
+    shown_ = content;
+    showInFcitx(content);
+  }
+
+  // The Tab hint beside Project Key's window. Fcitx5's panel has one top line, so
+  // there the hint takes it over the candidates shown, as without a hint window.
+  void showHint(const PanelContent& hint) override {
+    if (ownPanel()) {
+      panel_.showHint(ic_, hint);
+      return;
+    }
+    PanelContent merged = hint;
+    if (shown_) {
+      merged.rows = shown_->rows;
+      merged.selectedRow = shown_->selectedRow;
+      merged.selection = shown_->selection;
+      merged.pageLabel = shown_->pageLabel;
+    }
+    showInFcitx(merged);
+  }
+  // In Fcitx5's panel the next showPanel or hidePanel, which always follows, replaces the hint.
+  void hideHint() override { panel_.hideHint(); }
+
+  void showInFcitx(const PanelContent& content) {
     fcitx::InputPanel& panel = ic_.inputPanel();
     fcitx::Text aux;
     if (!content.replacedText.empty()) {
@@ -305,6 +334,7 @@ class Session : public fcitx::InputContextProperty, public Client {
 
   void hidePanel() override {
     panel_.hide(ic_);
+    shown_.reset();
     fcitx::InputPanel& panel = ic_.inputPanel();
     panel.setAuxUp(fcitx::Text());
     panel.setAuxDown(fcitx::Text());
@@ -398,6 +428,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   fcitx::Instance* instance_;
   Panel& panel_;
   fcitx::InputContext& ic_;
+  std::optional<PanelContent> shown_;  // in Fcitx5's panel, for a hint to join
   std::optional<fcitx::Rect> start_;  // the caret when the composition began
 
  public:
@@ -445,6 +476,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
     environment_.userModel = NewUserModel();
     environment_.settings = &settings_;
     environment_.isEnglish = [this](const std::string& text) { return spelling_.isEnglish(text); };
+    environment_.hintWindow = true;  // beside the candidate window, as on macOS and Windows (Session::showHint)
     environment_.columnsSpannedBy = panel_.ok() ? std::function<int(const std::string&)>([this](const std::string& candidate) {
       return panel_.span(candidate);
     })

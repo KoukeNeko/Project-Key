@@ -50,6 +50,17 @@ void RoundedRect(cairo_t* cr, double left, double top, double right, double bott
   cairo_close_path(cr);
 }
 
+// A window's background: dark with a 1px edge, rounded where a compositor shows
+// the corners; over a blur, a dark tint, as over Acrylic on Windows.
+void DrawBackground(cairo_t* cr, float width, float height, bool rounded, bool blurred) {
+  RoundedRect(cr, 0.5, 0.5, width - 0.5, height - 0.5, rounded ? kWindowRadius : 0);
+  SetColor(cr, kBackground, blurred ? kAcrylicTint : 1);
+  cairo_fill_preserve(cr);
+  SetColor(cr, kLine, blurred ? 0.6f : 1);
+  cairo_set_line_width(cr, 1);
+  cairo_stroke(cr);
+}
+
 // One line of text laid out with a font, and where to draw it.
 struct Line {
   PangoLayout* layout = nullptr;
@@ -103,6 +114,7 @@ Panel::~Panel() {
   panelTimer_.reset();
   badgeTimer_.reset();
   panel_.reset();
+  hint_.reset();
   badge_.reset();
   for (PangoFontDescription* font : {proofFont_, candidateFont_, typingFont_, labelFont_, pageFont_, keyFont_, badgeFont_}) {
     if (font) pango_font_description_free(font);
@@ -177,20 +189,21 @@ float Panel::rowTop() const {
   return proofBelow_ ? 0 : proofHeight() + (both ? 1 : 0);
 }
 
-float Panel::keyWidth() const {
-  return std::max(kKeyHeight, width(content_->keyHint, keyFont_) + 2 * kKeyPadding);
+float Panel::keyWidth(const PanelContent& c) const {
+  return std::max(kKeyHeight, width(c.keyHint, keyFont_) + 2 * kKeyPadding);
+}
+
+float Panel::proofWidth(const PanelContent& c) const {
+  std::string sentence;
+  for (const std::string& segment : c.segments) sentence += segment;
+  sentence += c.pendingReading;
+  float key = c.keyHint.empty() ? 0 : kKeyGap + keyWidth(c);
+  if (!c.replacedText.empty()) key += width(c.replacedText + kReplacedArrow, proofFont_);
+  return kProofLeft + width(sentence, proofFont_) + key + kProofRight;
 }
 
 float Panel::fittingWidth() const {
-  float result = 0;
-  if (content_->showsProof) {
-    std::string sentence;
-    for (const std::string& segment : content_->segments) sentence += segment;
-    sentence += content_->pendingReading;
-    float key = content_->keyHint.empty() ? 0 : kKeyGap + keyWidth();
-    if (!content_->replacedText.empty()) key += width(content_->replacedText + kReplacedArrow, proofFont_);
-    result = kProofLeft + width(sentence, proofFont_) + key + kProofRight;
-  }
+  float result = content_->showsProof ? proofWidth(*content_) : 0;
   if (!content_->rows.empty() && content_->selectedRow < 0) {  // the row shown while typing
     float row = kRowLeft + kRowRight;
     for (const std::string& candidate : content_->rows[0]) row += 2 * kTypingCellSide + width(candidate, typingFont_);
@@ -287,6 +300,10 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
     avoidPanel();
     paintBadge();
   }
+  if (hint_ && hint_->mapped) {  // beside the panel, which may have moved or grown
+    placeHint();
+    paintHint();
+  }
   if (sliding_ || resizing_) startTimer(panelTimer_, &Panel::tickPanel);
   screen_->sync();
 }
@@ -316,6 +333,58 @@ void Panel::hide(const fcitx::InputContext& ic) {
   panel_->unmap();
   content_.reset();
   owner_ = nullptr;
+  hideHint();
+}
+
+// MARK: Tab hint
+
+void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
+  if (!ok() || !panel_ || !panel_->mapped || &ic != owner_) return;
+  if (!hint_) hint_ = screen_->createWindow([this] { paintHint(); }, [this] { paintHint(); });
+  if (!hint_->mapped) hint_->setBlur(blurs());
+  hintContent_ = hint;
+  placeHint();
+  hint_->map(ic);
+  paintHint();
+  screen_->sync();
+}
+
+void Panel::hideHint() {
+  if (!hint_) return;
+  hint_->unmap();
+  hintContent_.reset();
+}
+
+// Its left edge on the panel's, on the panel's side away from the text: below
+// it under the text, above it over the text.
+// shortcut: on Wayland the compositor turns each popup by its own height, so a hint the panel's
+// side cannot fit can open on the other; place both from one popup if that shows.
+void Panel::placeHint() {
+  if (!hintContent_) return;
+  const Frame& next = resizing_ ? frameTo_ : panel_->frame;
+  int width = static_cast<int>(std::ceil(proofWidth(*hintContent_) * scale_));
+  int height = static_cast<int>(std::ceil((kProofPad + kProofLine + kProofPad) * scale_));
+  int gap = static_cast<int>(std::lround(kHintGap * scale_));
+  int top = proofBelow_ ? next.y - gap - height : next.y + next.height + gap;
+  hint_->place({next.x, top, width, height});
+}
+
+void Panel::paintHint() {
+  if (!hintContent_ || !hint_->mapped) return;
+  cairo_t* cr = hint_->beginPaint();
+  if (!cr) return;
+  bool blurred = hint_->blurred;
+  cairo_push_group(cr);
+  setFontOptions(blurred);
+  pango_cairo_update_context(cr, context_);
+  cairo_scale(cr, scale_, scale_);
+  float width = hint_->frame.width / scale_, height = hint_->frame.height / scale_;
+  DrawBackground(cr, width, height, rounded_, blurred);
+  drawProof(cr, *hintContent_, 0, width);
+  cairo_pop_group_to_source(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+  cairo_paint(cr);
+  hint_->endPaint(cr);
 }
 
 void Panel::paintPanel() {
@@ -329,16 +398,8 @@ void Panel::paintPanel() {
   cairo_scale(cr, scale_, scale_);
   float width = panel_->frame.width / scale_, height = panel_->frame.height / scale_;
 
-  // The window: the dark background with a 1px edge, rounded where a compositor
-  // shows the corners; over a blur, a dark tint, as over Acrylic on Windows.
-  float radius = rounded_ ? kWindowRadius : 0;
+  DrawBackground(cr, width, height, rounded_, blurred);
   float lineAlpha = blurred ? 0.6f : 1;
-  RoundedRect(cr, 0.5, 0.5, width - 0.5, height - 0.5, radius);
-  SetColor(cr, kBackground, blurred ? kAcrylicTint : 1);
-  cairo_fill_preserve(cr);
-  SetColor(cr, kLine, lineAlpha);
-  cairo_set_line_width(cr, 1);
-  cairo_stroke(cr);
 
   bool both = content_->showsProof && !content_->rows.empty();
   // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
@@ -349,7 +410,7 @@ void Panel::paintPanel() {
     cairo_rectangle(cr, 0, y, width, 1);
     cairo_fill(cr);
   }
-  if (content_->showsProof) drawProof(cr, proofTop, width);
+  if (content_->showsProof) drawProof(cr, *content_, proofTop, width);
   if (!content_->rows.empty()) {
     // While the window grows above the text, rows laid out for the final size
     // would run over the pinned proof row; keep them above it.
@@ -369,14 +430,14 @@ void Panel::paintPanel() {
   panel_->endPaint(cr);
 }
 
-void Panel::drawProof(cairo_t* cr, float top, float windowWidth) {
+void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windowWidth) {
   float x = kProofLeft;
   // The line stays centered; marks sit in the space below it, so they come and
   // go without moving the text.
   float lineTop = top + kProofPad;
   float markTop = lineTop + kProofLine + kMarkGap;
-  if (!content_->keyHint.empty()) {
-    float w = keyWidth();
+  if (!c.keyHint.empty()) {
+    float w = keyWidth(c);
     float right = windowWidth - kProofRight;
     float capTop = lineTop + (kProofLine - kKeyHeight) / 2, capBottom = capTop + kKeyHeight;
     // A key: a face with a hairline edge, raised on a darker lip along its bottom.
@@ -391,12 +452,12 @@ void Panel::drawProof(cairo_t* cr, float top, float windowWidth) {
     SetColor(cr, kMuted, 0.35f);
     cairo_set_line_width(cr, 0.5);
     cairo_stroke(cr);
-    Line key(layout(content_->keyHint, keyFont_));
+    Line key(layout(c.keyHint, keyFont_));
     SetColor(cr, kText);
     key.draw(cr, right - w + (w - key.width) / 2, capTop, kKeyHeight);
   }
-  if (!content_->replacedText.empty()) {
-    Line replaced(layout(content_->replacedText, proofFont_));
+  if (!c.replacedText.empty()) {
+    Line replaced(layout(c.replacedText, proofFont_));
     PangoAttrList* attributes = pango_attr_list_new();
     pango_attr_list_insert(attributes, pango_attr_strikethrough_new(TRUE));
     pango_layout_set_attributes(replaced.layout, attributes);
@@ -409,31 +470,31 @@ void Panel::drawProof(cairo_t* cr, float top, float windowWidth) {
     x += arrow.width;
   }
   uint32_t length = 0;
-  for (const std::string& segment : content_->segments) length += Utf16Length(segment);
-  const bool hint = !content_->keyHint.empty();
+  for (const std::string& segment : c.segments) length += Utf16Length(segment);
+  const bool hint = !c.keyHint.empty();
   // The pending reading, or a caret line when there is none, sits at the cursor.
   auto drawCursor = [&](float& at) {
-    if (!content_->pendingReading.empty()) {
-      Line line(layout(content_->pendingReading, proofFont_));
+    if (!c.pendingReading.empty()) {
+      Line line(layout(c.pendingReading, proofFont_));
       SetColor(cr, kMuted);
       line.draw(cr, at, lineTop, kProofLine);
       at += line.width;
-    } else if (content_->caret < length && content_->activeSegment < 0) {
+    } else if (c.caret < length && c.activeSegment < 0) {
       SetColor(cr, kAccentSoft);
       cairo_rectangle(cr, at, lineTop + 1, 1, kProofLine - 2);
       cairo_fill(cr);
     }
   };
-  if (content_->caret == 0) drawCursor(x);
+  if (c.caret == 0) drawCursor(x);
   uint32_t start = 0;
-  for (size_t i = 0; i < content_->segments.size(); i++) {
-    const std::string& segment = content_->segments[i];
+  for (size_t i = 0; i < c.segments.size(); i++) {
+    const std::string& segment = c.segments[i];
     uint32_t segmentLength = Utf16Length(segment);
-    bool active = static_cast<int>(i) == content_->activeSegment;
+    bool active = static_cast<int>(i) == c.activeSegment;
     // A conversion preview shows its result in full text color.
     uint32_t color = active ? kAccentSoft : hint ? kText : kMuted;
     float left = x;
-    uint32_t split = content_->caret > start && content_->caret < start + segmentLength ? content_->caret - start : 0;
+    uint32_t split = c.caret > start && c.caret < start + segmentLength ? c.caret - start : 0;
     auto drawText = [&](const std::string& text) {
       Line line(layout(text, proofFont_));
       SetColor(cr, color);
@@ -448,14 +509,14 @@ void Panel::drawProof(cairo_t* cr, float top, float windowWidth) {
     } else {
       drawText(segment);
     }
-    bool doubtful = i < content_->doubtful.size() && content_->doubtful[i];
+    bool doubtful = i < c.doubtful.size() && c.doubtful[i];
     if (active || doubtful) {
       SetColor(cr, kAccentSoft, active ? 1 : kDoubtMarkAlpha);
       RoundedRect(cr, left + kMarkInset, markTop, x - kMarkInset, markTop + kMarkHeight, 1);
       cairo_fill(cr);
     }
     start += segmentLength;
-    if (content_->caret == start && start > 0) drawCursor(x);
+    if (c.caret == start && start > 0) drawCursor(x);
   }
 }
 

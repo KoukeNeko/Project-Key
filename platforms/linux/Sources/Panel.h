@@ -43,6 +43,10 @@ class Panel {
   void follow(fcitx::InputContext& ic, const fcitx::Rect& anchor);
   void showBadge(fcitx::InputContext& ic, const std::string& label, const fcitx::Rect& anchor);
   void hideBadge();
+  // The Tab hint in a window of its own beside the candidate window, away from
+  // the text (Environment::hintWindow); after show, which it is placed from.
+  void showHint(fcitx::InputContext& ic, const PanelContent& hint);
+  void hideHint();
 
  private:
   struct Rect {
@@ -63,12 +67,17 @@ class Panel {
   float proofHeight() const;
   float rowHeight() const;
   float rowTop() const;
-  float keyWidth() const;
+  float keyWidth(const PanelContent& content) const;
+  float proofWidth(const PanelContent& content) const;
   float fittingWidth() const;
   Rect selectionRect() const;
   Rect shownSelectionRect() const;
-  void drawProof(cairo_t* cr, float top, float width);
+  void drawProof(cairo_t* cr, const PanelContent& content, float top, float width);
   void drawCandidates(cairo_t* cr, float top, float width);
+
+  // Tab hint.
+  void placeHint();
+  void paintHint();
 
   // Badge.
   void placeBadge(const fcitx::Rect& anchor);
@@ -100,6 +109,9 @@ class Panel {
   uint64_t slideStart_ = 0, resizeStart_ = 0;
   bool sliding_ = false, resizing_ = false;
   std::unique_ptr<fcitx::EventSourceTime> panelTimer_;
+
+  std::unique_ptr<Window> hint_;
+  std::optional<PanelContent> hintContent_;
 
   std::unique_ptr<Window> badge_;
   std::string badgeLabel_;
