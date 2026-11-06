@@ -1,3 +1,5 @@
 # Shell scripts run on macOS and Linux keep LF line endings in every checkout.
 *.sh text eol=lf
 platforms/linux/projectkey-settings text eol=lf
+# Read by fetch-models.sh, also under Git Bash on Windows, whose sha256sum takes a CR as part of the name.
+tools/bigram-trainer/models.sha256 text eol=lf
