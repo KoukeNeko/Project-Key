@@ -41,7 +41,7 @@ void Estimate(std::vector<uint64_t>& keys, uint64_t minCount, std::vector<CharMo
     }
     // The backoff weight is what the discounts free, D * distinct / total. The dropped n-grams'
     // share goes nowhere: giving it to the backoff too lets unseen continuations (選次 after 候選)
-    // score high enough that a one-key slip (選字) no longer wins.
+    // score close to seen ones (選字).
     // A context that keeps nothing backs off entirely, as one never seen does.
     if (kept.size() > before) contexts.push_back({context, static_cast<float>(kDiscount * distinct / total)});
     i = j;

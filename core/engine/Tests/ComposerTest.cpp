@@ -126,7 +126,7 @@ int main(int argc, char** argv) {
   assert(composer.text() == "今天");
   // Without 簡拼, a lone symbol is no syllable and each key edits the open syllable:
   // ㄨ then ㄇ is ㄇㄨ, ㄅ then ㄆ is ㄆ, and ㄋㄧ then ㄏ is ㄏㄧ.
-  Composer plain(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore,
+  Composer plain(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight,
                  nullptr, Composer::kCharWeight, nullptr, /*abbreviated=*/false);
   type(plain, "ja");
   assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄇㄨ");
@@ -168,87 +168,70 @@ int main(int argc, char** argv) {
   assert(contextual.text() == "第一列時");
   std::remove(path.c_str());
 
-  // Adjacent keys: ㄧㄡˇ (u.3) is one key off ㄧㄝˇ (u,3); with context that
-  // knows 這個 也 不 (McBopomofo has no phrase 不錯), the slip comes out as 也.
-  std::string slipPath = tempPath("ComposerTest-slip.bin");
-  // Ids: 0 這個, 1 也, 2 不.
-  assert(ProjectKey::Bigram::save(slipPath, {"這個", "也", "不"}, {{0ull << 32 | 1, -0.1f}, {1ull << 32 | 2, -0.1f}}));
-  auto slipModel = std::make_shared<ProjectKey::Bigram>();
-  assert(slipModel->load(slipPath));
-  Composer slipping(lm, slipModel);
-  type(slipping, "5k4ek7u.31j4hji4");
-  assert(slipping.text() == "這個也不錯");
-  Composer exact(lm, slipModel, nullptr, 0.3, 0.5, -INFINITY);
-  type(exact, "5k4ek7u.31j4hji4");
-  assert(exact.text() != "這個也不錯");
-  // The rows above and below count too: ㄧㄠˇ (ul3) has ㄠ right above ㄝ.
-  Composer above(lm, slipModel);
-  type(above, "5k4ek7ul31j4hji4");
-  assert(above.text() == "這個也不錯");
   // A key that makes no syllable with a lone symbol starts the next syllable, so first
   // symbols spell 可以 (ㄎㄧ).
-  Composer unknown(lm, slipModel);
+  Composer unknown(lm);
   type(unknown, "du");
   assert(unknown.text() == "可以" && unknown.readingCount() == 2);
-  // After a syllable typed with a tone, such a key that one slip explains stays in the
-  // syllable: ㄍㄛ˙ (ei7) is ㄍㄜ˙ (ek7) one key off, not ㄍ and ㄛ˙.
-  Composer toned(lm, slipModel);
-  type(toned, "5k4ei7");
-  assert(toned.text() == "這個" && toned.readingCount() == 2);
-  // Text before the caret: after 這個 already in the document, the slip still reads as 也.
-  Composer after(lm, slipModel);
-  after.setTextBefore("他說這個");
-  type(after, "u.31j4hji4");
-  assert(after.text() == "也不錯");
-  Composer alone(lm, slipModel);
-  type(alone, "u.31j4hji4");
-  assert(alone.text() != "也不錯");
+
+  // Text before the caret: a model that knows only 第一 then 列 reads ㄌㄧㄝˋ ㄕˊ as 列 and
+  // a character after 第一 already in the document, and as 獵食 without it.
+  std::string contextPath = tempPath("ComposerTest-context.bin");
+  assert(ProjectKey::Bigram::save(contextPath, {"第一", "列"}, {{0ull << 32 | 1, -0.5f}}));
+  auto contextModel = std::make_shared<ProjectKey::Bigram>();
+  assert(contextModel->load(contextPath));
+  Composer after(lm, contextModel);
+  after.setTextBefore("他說第一");
+  type(after, "xu,4g6");
+  assert(after.text().starts_with("列"));
+  Composer alone(lm, contextModel);
+  type(alone, "xu,4g6");
+  assert(alone.text() == "獵食");
   // Punctuation in the composition starts a phrase, as punctuation before it does: a model
-  // that has seen phrases start with 也 reads the slip as 也 after 這個，.
+  // that knows only phrases starting with 列 reads ㄌㄧㄝˋ ㄕˊ as 列 and a character after 第一，.
   std::string startPath = tempPath("ComposerTest-start.bin");
-  // Ids: 0 the phrase boundary, 1 也, 2 不.
-  assert(ProjectKey::Bigram::save(startPath, {ProjectKey::Bigram::kBoundary, "也", "不"},
-                                  {{0ull << 32 | 1, -0.1f}, {1ull << 32 | 2, -0.1f}}));
+  // Ids: 0 the phrase boundary, 1 列.
+  assert(ProjectKey::Bigram::save(startPath, {ProjectKey::Bigram::kBoundary, "列"}, {{0ull << 32 | 1, -0.5f}}));
   auto startModel = std::make_shared<ProjectKey::Bigram>();
   assert(startModel->load(startPath));
   Composer punctuated(lm, startModel);
-  type(punctuated, "5k4ek7");
+  type(punctuated, "2u4u ");
   assert(punctuated.insertPunctuation('<'));
-  type(punctuated, "u.31j4hji4");
-  assert(punctuated.text() == "這個，也不錯");
+  type(punctuated, "xu,4g6");
+  assert(punctuated.text().starts_with("第一，列"));
   std::remove(startPath.c_str());
 
-  // The character model: no word pair knows 候選 then 字, but its characters 選字 are
-  // common and 選次 is not, so ㄘˋ (h4) after 候選 reads as the slip ㄗˋ (y4).
+  // The character model: no word pair knows 候選 then ㄗˋ (y4), which reads as 字 alone; a
+  // character model where 選 is mostly followed by 自 makes it 自.
   std::string charsPath = tempPath("ComposerTest-chars.bin");
   using Record = ProjectKey::CharModel::Record;
   auto code = [](const char* utf8) { return static_cast<uint64_t>(ProjectKey::CharModel::CodePoints(utf8)[0]); };
   ProjectKey::CharModel::Tables tables;
-  for (const char* c : {"候", "字", "次", "選"}) tables.unigrams.push_back({code(c), 0.01f});
+  for (const char* c : {"候", "自", "選"}) tables.unigrams.push_back({code(c), 0.01f});
   std::sort(tables.unigrams.begin(), tables.unigrams.end(), [](const Record& a, const Record& b) { return a.key < b.key; });
   tables.bigramContexts = {{code("選"), 0.1f}};
-  tables.bigrams = {{code("選") << ProjectKey::CharModel::kBits | code("字"), 0.8f}};
+  tables.bigrams = {{code("選") << ProjectKey::CharModel::kBits | code("自"), 0.8f}};
   assert(ProjectKey::CharModel::save(charsPath, tables));
   auto chars = std::make_shared<ProjectKey::CharModel>();
   assert(chars->load(charsPath));
-  Composer withChars(lm, slipModel, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore, chars, 1);
-  type(withChars, "c.4vm03h4");
-  assert(withChars.text() == "候選字");
-  Composer withoutChars(lm, slipModel);
-  type(withoutChars, "c.4vm03h4");
-  assert(withoutChars.text() == "候選次");
+  Composer withChars(lm, contextModel, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, chars, 1);
+  type(withChars, "c.4vm03y4");
+  assert(withChars.text() == "候選自");
+  Composer withoutChars(lm, contextModel);
+  type(withoutChars, "c.4vm03y4");
+  assert(withoutChars.text() == "候選字");
   std::remove(charsPath.c_str());
-  std::remove(slipPath.c_str());
+  std::remove(contextPath.c_str());
 
   // What the user typed: with no context or character model, 程式 learned from committed
   // text beats the dictionary's 城市.
   auto personal = std::make_shared<ProjectKey::PersonalModel>();
-  Composer unlearned(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore,
+  Composer unlearned(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight,
                      nullptr, Composer::kCharWeight, personal);
   type(unlearned, "ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3");
   assert(unlearned.text().find("的程式") == std::string::npos);
   for (int i = 0; i < 50; i++) personal->learn("我們把舊的程式重構成模組。");
-  Composer learned(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore,
+  Composer learned(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight,
                    nullptr, Composer::kCharWeight, personal);
   type(learned, "ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3");
   assert(learned.text().find("的程式") != std::string::npos);

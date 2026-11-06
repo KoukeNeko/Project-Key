@@ -4,7 +4,6 @@
 
 NSString *const PKProofPreviewKey = @"ProofPreview";
 NSString *const PKChoosingProofKey = @"ChoosingProof";
-NSString *const PKAdjacentKeysKey = @"AdjacentKeys";
 NSString *const PKAbbreviatedKey = @"Abbreviated";
 NSString *const PKRememberChoicesKey = @"RememberChoices";
 NSString *const PKShiftToggleKey = @"ShiftToggle";
@@ -18,7 +17,6 @@ NSString *const PKNextDoubtfulKey = @"NextDoubtful";
 
 + (void)registerDefaults {
   [NSUserDefaults.standardUserDefaults registerDefaults:@{
-    PKAdjacentKeysKey : @YES,
     PKAbbreviatedKey : @NO,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,

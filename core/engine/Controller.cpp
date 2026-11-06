@@ -1,7 +1,6 @@
 #include "Controller.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 
 #include "Utf8.h"
@@ -102,7 +101,6 @@ const char* Settings::Name(Setting setting) {
     case Setting::kChoosingProof: return "ChoosingProof";
     case Setting::kProofPreviewLastOn: return "ProofPreviewLastOn";
     case Setting::kChoosingProofLastOn: return "ChoosingProofLastOn";
-    case Setting::kAdjacentKeys: return "AdjacentKeys";
     case Setting::kAbbreviated: return "Abbreviated";
     case Setting::kRememberChoices: return "RememberChoices";
     case Setting::kShiftToggle: return "ShiftToggle";
@@ -123,17 +121,13 @@ Controller::Controller(Environment& environment, Client& client) : env_(environm
 // Settings take effect on the next composition.
 void Controller::makeComposer() {
   if (!composer_) replacing_ = 0;
-  bool adjacentKeys = env_.settings->flag(Setting::kAdjacentKeys);
   bool abbreviated = env_.settings->flag(Setting::kAbbreviated);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
-  if (composer_ && adjacentKeys == adjacentKeys_ && abbreviated == abbreviated_ && rememberChoices == rememberChoices_) return;
-  adjacentKeys_ = adjacentKeys;
+  if (composer_ && abbreviated == abbreviated_ && rememberChoices == rememberChoices_) return;
   abbreviated_ = abbreviated;
   rememberChoices_ = rememberChoices;
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
-                                         Composer::kContextWeight, Composer::kTrigramWeight,
-                                         adjacentKeys ? Composer::kAdjacentKeyScore : -INFINITY, env_.chars,
-                                         Composer::kCharWeight, rememberChoices ? env_.personal : nullptr, abbreviated);
+                                         Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight, rememberChoices ? env_.personal : nullptr, abbreviated);
 }
 
 void ClearChoices(Environment& env) {

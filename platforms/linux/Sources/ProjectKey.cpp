@@ -70,7 +70,6 @@ FCITX_CONFIGURATION(
     fcitx::OptionWithAnnotation<Appearance, AppearanceI18NAnnotation> appearance{
         this, "Appearance", "候選視窗外觀", static_cast<Appearance>(Settings::DefaultValue(Setting::kAppearance))};
     fcitx::Option<bool> nextDoubtful{this, "NextDoubtful", "選完跳到下一個可疑處", DefaultFlag(Setting::kNextDoubtful)};
-    fcitx::Option<bool> adjacentKeys{this, "AdjacentKeys", "鄰鍵修正", DefaultFlag(Setting::kAdjacentKeys)};
     fcitx::Option<bool> abbreviated{this, "Abbreviated", "簡拼", DefaultFlag(Setting::kAbbreviated)};
     fcitx::Option<bool> rememberChoices{this, "RememberChoices", "記住選過的字", DefaultFlag(Setting::kRememberChoices)};
     fcitx::OptionWithAnnotation<ProofMode, ProofModeI18NAnnotation> proofPreview{
@@ -95,7 +94,6 @@ class ConfigSettings : public Settings {
       case Setting::kChoosingProof: return static_cast<int>(*config_.choosingProof);
       case Setting::kProofPreviewLastOn: return LastOn(*config_.proofPreviewLastOn);
       case Setting::kChoosingProofLastOn: return LastOn(*config_.choosingProofLastOn);
-      case Setting::kAdjacentKeys: return *config_.adjacentKeys;
       case Setting::kAbbreviated: return *config_.abbreviated;
       case Setting::kRememberChoices: return *config_.rememberChoices;
       case Setting::kShiftToggle: return *config_.shiftToggle;

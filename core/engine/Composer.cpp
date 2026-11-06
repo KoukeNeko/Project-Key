@@ -137,85 +137,6 @@ class TonelessModel : public LanguageModel {
   std::unordered_map<std::string, std::vector<Unigram>> cache_;
 };
 
-// The dictionary, plus for each syllable the readings typed one key off: a key
-// swapped for its left or right neighbor on the Daqian keyboard. Those words
-// score `penalty` lower, so context has to pick them.
-class AdjacentKeyModel : public LanguageModel {
- public:
-  AdjacentKeyModel(std::shared_ptr<LanguageModel> lm, double penalty) : lm_(std::move(lm)), penalty_(penalty) {}
-
-  std::vector<Unigram> getUnigrams(const std::string& reading) override {
-    std::vector<Unigram> unigrams = lm_->getUnigrams(reading);
-    if (reading.empty() || reading[0] == '_') return unigrams;  // punctuation
-    std::vector<std::string> syllables;
-    for (size_t start = 0;;) {
-      size_t end = reading.find(kSeparator, start);
-      syllables.push_back(reading.substr(start, end - start));
-      if (end == std::string::npos) break;
-      start = end + 1;
-    }
-    for (size_t i = 0; i < syllables.size(); i++) {
-      // Without a tone a syllable already matches widely; slips on top would mostly add noise.
-      if (syllables[i].back() == Composer::kAnyTone) continue;
-      for (const std::string& variant : variantsOf(syllables[i])) {
-        std::vector<std::string> typed = syllables;
-        typed[i] = variant;
-        std::string joined = typed[0];
-        for (size_t k = 1; k < typed.size(); k++) joined += kSeparator + typed[k];
-        for (const Unigram& unigram : lm_->getUnigrams(joined)) {
-          auto same = [&](const Unigram& u) { return u.value() == unigram.value(); };
-          if (std::find_if(unigrams.begin(), unigrams.end(), same) == unigrams.end()) {
-            unigrams.emplace_back(unigram.value(), unigram.score() + penalty_, unigram.rawValue());
-          }
-        }
-      }
-    }
-    std::stable_sort(unigrams.begin(), unigrams.end(), [](const Unigram& a, const Unigram& b) { return a.score() > b.score(); });
-    return unigrams;
-  }
-
-  bool hasUnigrams(const std::string& reading) override { return lm_->hasUnigrams(reading); }
-
- private:
-  const std::vector<std::string>& variantsOf(const std::string& syllable) {
-    auto cached = variants_.find(syllable);
-    if (cached != variants_.end()) return cached->second;
-    // Each row sits half a key right of the one above, so key c touches c and
-    // c+1 in the row above and c-1 and c in the row below.
-    static const std::string kRows[] = {"1234567890-", "qwertyuiop", "asdfghjkl;", "zxcvbnm,./"};
-    constexpr int kRowCount = 4;
-    const BopomofoKeyboardLayout* layout = BopomofoKeyboardLayout::StandardLayout();
-    std::string keys = layout->keySequenceFromSyllable(BopomofoSyllable::FromComposedString(syllable));
-    std::vector<std::string> variants;
-    for (size_t i = 0; i < keys.size(); i++) {
-      for (int r = 0; r < kRowCount; r++) {
-        int c = static_cast<int>(kRows[r].find(keys[i]));
-        if (c < 0) continue;
-        const int spots[][2] = {{r, c - 1}, {r, c + 1}, {r - 1, c}, {r - 1, c + 1}, {r + 1, c - 1}, {r + 1, c}};
-        for (const auto& [row, column] : spots) {
-          if (row < 0 || row >= kRowCount || column < 0 || column >= static_cast<int>(kRows[row].size())) continue;
-          std::string typed = keys;
-          typed[i] = kRows[row][column];
-          std::string variant = layout->syllableFromKeySequence(typed).composedString();
-          if (variant != syllable && lm_->hasUnigrams(variant) &&
-              std::find(variants.begin(), variants.end(), variant) == variants.end()) {
-            variants.push_back(variant);
-          }
-        }
-      }
-    }
-    return variants_.emplace(syllable, std::move(variants)).first->second;
-  }
-
-  std::shared_ptr<LanguageModel> lm_;
-  double penalty_;
-  std::unordered_map<std::string, std::vector<std::string>> variants_;
-};
-
-std::shared_ptr<LanguageModel> GridModel(std::shared_ptr<LanguageModel> lm, double penalty) {
-  if (penalty == -INFINITY) return lm;
-  return std::make_shared<AdjacentKeyModel>(std::move(lm), penalty);
-}
 
 }  // namespace
 
@@ -235,7 +156,7 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
-                   double trigramWeight, double adjacentKeyScore, std::shared_ptr<const CharModel> chars,
+                   double trigramWeight, std::shared_ptr<const CharModel> chars,
                    double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated)
     : lm_(lm),
       dictionary_(std::make_shared<TonelessModel>(lm, abbreviated)),
@@ -246,20 +167,14 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
       charWeight_(charWeight),
       personal_(std::move(personal)),
       userModel_(std::move(userModel)),
-      // Without context nothing can tell a slip from what was typed.
-      adjacentKeyScore_(bigram_ ? adjacentKeyScore : -INFINITY),
       abbreviated_(abbreviated),
-      gridModel_(GridModel(dictionary_, adjacentKeyScore_)),
-      grid_(gridModel_),
+      grid_(dictionary_),
       reading_(BopomofoKeyboardLayout::StandardLayout()) {}
 
 Composer::KeyResult Composer::typeReadingKey(char key) {
   if (!reading_.isValidKey(key)) return KeyResult::kInvalid;
   bool shown = readingShown_;
-  if (readingShown_ && startsSyllable(key)) {
-    endReading();
-    toned_ = false;
-  }
+  if (readingShown_ && startsSyllable(key)) endReading();
   Formosa::Mandarin::BopomofoReadingBuffer untoned = reading_;
   hideReading();
   reading_.combineKey(key);
@@ -282,10 +197,7 @@ Composer::KeyResult Composer::completeWithFirstTone() {
 Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned) {
   std::string syllable = reading_.syllable().composedString();
   reading_.clear();
-  // The grid's model decides: with adjacent keys on, a syllable the dictionary lacks
-  // still goes in when a slip of one key explains it.
   bool inserted = grid_.insertReading(syllable);
-  if (inserted) toned_ = true;
   if (!inserted) {
     reading_ = untoned;
     showReading();
@@ -297,9 +209,7 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
 
 // With a whole syllable open and no tone typed, whether `key` begins the next syllable:
 // it goes in the place of a symbol already there or before one (the order is
-// consonant, medial, vowel), or it makes a syllable the dictionary lacks. Once this
-// composition has a syllable typed with a tone, such a syllable is more likely a slip
-// (ㄍㄛ for ㄍㄜ) than first symbols, so it stays one when a key one off explains it.
+// consonant, medial, vowel), or it makes a syllable the dictionary lacks.
 bool Composer::startsSyllable(char key) const {
   if (!abbreviated_) return false;
   BopomofoSyllable typed = BopomofoKeyboardLayout::StandardLayout()->syllableFromKeySequence(std::string(1, key));
@@ -308,12 +218,7 @@ bool Composer::startsSyllable(char key) const {
   BopomofoSyllable open = reading_.syllable();
   if (lastPlace(typed) <= lastPlace(open)) return true;
   std::string joined = (open + typed).composedString();
-  if (dictionary_->hasUnigrams(joined + kAnyTone)) return false;
-  if (!toned_ || adjacentKeyScore_ == -INFINITY) return true;
-  for (const char* tone : {"", "ˊ", "ˇ", "ˋ", "˙"}) {
-    if (!gridModel_->getUnigrams(joined + tone).empty()) return false;
-  }
-  return true;
+  return !dictionary_->hasUnigrams(joined + kAnyTone);
 }
 
 // Puts the open syllable in the grid, toneless, when the dictionary has it, so its word shows.
@@ -419,7 +324,6 @@ void Composer::setTextBefore(const std::string& text) {
 }
 
 void Composer::clear() {
-  toned_ = false;
   hanBefore_.clear();
   endReading();
   grid_.clear();
@@ -460,7 +364,6 @@ void Composer::walk() {
     std::string value;
     uint32_t id;
     double unigramScore;
-    double penalty;  // adjacentKeyScore_ for a word of a reading one key off, else 0
     std::vector<State> states;
     std::vector<uint32_t> chars;  // code points, with a character model
   };
@@ -514,23 +417,6 @@ void Composer::walk() {
     }
     return charWeight_ * total;
   };
-  // Words the typed reading itself has; the others came from an adjacent key, which only
-  // varies syllables typed with a tone (a reading with fewer kAnyTone than syllables).
-  auto slipsIn = [&](const std::string& reading) {
-    return adjacentKeyScore_ != -INFINITY &&
-           std::count(reading.begin(), reading.end(), kAnyTone) <= std::count(reading.begin(), reading.end(), kSeparator);
-  };
-  auto typedWords = [&](const std::string& reading) {
-    std::vector<std::string> typed;
-    if (slipsIn(reading)) {
-      for (const auto& unigram : dictionary_->getUnigrams(reading)) typed.push_back(unigram.value());
-    }
-    return typed;
-  };
-  // A word from an adjacent key pays adjacentKeyScore_, on the whole word, context included.
-  auto penaltyOf = [&](const std::string& reading, const std::vector<std::string>& typed, const std::string& value) {
-    return slipsIn(reading) && std::find(typed.begin(), typed.end(), value) == typed.end() ? adjacentKeyScore_ : 0.0;
-  };
   std::vector<Choice> choices;
   std::vector<std::vector<int>> endingAt(n + 1);
   for (size_t start = 0; start < n; start++) {
@@ -538,37 +424,24 @@ void Composer::walk() {
       const ReadingGrid::NodePtr& node = spans[start].nodeOf(length);
       if (!node) continue;
       const std::string& reading = node->reading();
-      bool slips = slipsIn(reading);
       // Punctuation ends a phrase, as in the text the models learned from, and scores as the
       // composition's end does; the words after it start a phrase, as after punctuation
       // before the composition (setTextBefore).
       bool punctuation = reading[0] == '_';
-      std::vector<std::string> typed = typedWords(reading);
       auto add = [&](std::string value, double unigramScore) {
         endingAt[start + length].push_back(static_cast<int>(choices.size()));
         uint32_t id = punctuation ? boundary : idOf(value);
-        // The penalty moves from the dictionary score to the whole word.
-        double penalty = penaltyOf(reading, typed, value);
         std::vector<uint32_t> chars = !scoresChars() ? std::vector<uint32_t>{}
                                       : punctuation  ? kEndChars
                                                      : CharModel::CodePoints(value);
         if (punctuation) unigramScore = kEndScore;
-        choices.push_back({start, length, node, std::move(value), id, unigramScore - penalty, penalty, {}, std::move(chars)});
+        choices.push_back({start, length, node, std::move(value), id, unigramScore, {}, std::move(chars)});
       };
       if (node->isOverridden() || (!bigram_ && !userModel_ && !personal_)) {
         add(node->value(), node->score());
       } else {
         const auto& unigrams = node->unigrams();
-        // Up to kWordsPerNode of the typed reading's words and as many from adjacent keys.
-        size_t typedCount = 0, slipCount = 0;
-        for (const auto& unigram : unigrams) {
-          bool isTyped = !slips || typed.empty() || std::find(typed.begin(), typed.end(), unigram.value()) != typed.end();
-          size_t& count = isTyped ? typedCount : slipCount;
-          if (count < kWordsPerNode) {
-            count++;
-            add(unigram.value(), unigram.score());
-          }
-        }
+        for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()); k++) add(unigrams[k].value(), unigrams[k].score());
       }
     }
   }
@@ -585,7 +458,7 @@ void Composer::walk() {
   for (Choice& choice : choices) {
     if (choice.start == 0) {
       double first = learned(-1, choice) ? 0
-                                         : choice.penalty + score(kNoWord, opening, choice.id, choice.unigramScore) +
+                                         : score(kNoWord, opening, choice.id, choice.unigramScore) +
                                                charScore(nullptr, openingChars, choice.chars);
       choice.states.push_back({-1, first, -1});
       continue;
@@ -599,7 +472,7 @@ void Composer::walk() {
         uint32_t first = beforeLast >= 0 ? choices[beforeLast].id : opening;
         double total = before.states[k].best;
         if (!certain) {
-          total += choice.penalty + score(first, before.id, choice.id, choice.unigramScore) +
+          total += score(first, before.id, choice.id, choice.unigramScore) +
                    charScore(beforeLast >= 0 ? &choices[beforeLast].chars : &openingChars, before.chars, choice.chars);
         }
         if (total > state.best) {
@@ -660,16 +533,13 @@ void Composer::walk() {
     };
     bool doubtful = false;
     if (!choice.node->isOverridden() && !learned(i > 0 ? path[i - 1] : -1, choice)) {
-      double chosen = local(choice.id, choice.unigramScore, choice.chars) + choice.penalty;
+      double chosen = local(choice.id, choice.unigramScore, choice.chars);
       const auto& unigrams = choice.node->unigrams();
-      const std::vector<std::string> typed = typedWords(choice.node->reading());
       for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()) && !doubtful; k++) {
         if (unigrams[k].value() != choice.value) {
           const std::string& value = unigrams[k].value();
           std::vector<uint32_t> chars = scoresChars() ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
-          // Scored as the walk scores it: the penalty out of the unigram, onto the whole word.
-          double penalty = penaltyOf(choice.node->reading(), typed, value);
-          doubtful = chosen - (local(idOf(value), unigrams[k].score() - penalty, chars) + penalty) < kDoubtfulScoreGap;
+          doubtful = chosen - local(idOf(value), unigrams[k].score(), chars) < kDoubtfulScoreGap;
         }
       }
     }

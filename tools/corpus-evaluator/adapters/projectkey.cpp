@@ -1,7 +1,7 @@
 // Engine adapter for Project Key's macOS composer: McBopomofo's grid and
 // dictionary, plus the context model when one is given, and the character model
 // when chars.bin is beside it.
-// Usage: projectkey <data.txt> [bigram.bin] [context weight] [trigram weight] [adjacent key score] [character weight]
+// Usage: projectkey <data.txt> [bigram.bin] [context weight] [trigram weight] [character weight]
 // A line may start with the text before the caret and a tab. With PK_CANDIDATES
 // set, each output line also carries, tab-separated, every segment's candidates
 // of the same length, '|' between them and '/' between segments, the engine's
@@ -19,7 +19,7 @@
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "usage: " << argv[0] << " <data.txt> [bigram.bin] [context weight] [trigram weight] [adjacent key score] [character weight]\n";
+    std::cerr << "usage: " << argv[0] << " <data.txt> [bigram.bin] [context weight] [trigram weight] [character weight]\n";
     return 2;
   }
   auto model = std::make_shared<ProjectKey::Lexicon>();
@@ -53,8 +53,7 @@ int main(int argc, char** argv) {
     for (std::string sentence; std::getline(text, sentence);) personal->learn(sentence);
   }
   ProjectKey::Composer composer(model, bigram, nullptr, argc >= 4 ? std::stod(argv[3]) : ProjectKey::Composer::kContextWeight, argc >= 5 ? std::stod(argv[4]) : ProjectKey::Composer::kTrigramWeight,
-                                argc >= 6 ? std::stod(argv[5]) : ProjectKey::Composer::kAdjacentKeyScore, chars,
-                                argc >= 7 ? std::stod(argv[6]) : ProjectKey::Composer::kCharWeight, personal);
+                                chars, argc >= 6 ? std::stod(argv[5]) : ProjectKey::Composer::kCharWeight, personal);
 
   std::string line;
   while (std::getline(std::cin, line)) {

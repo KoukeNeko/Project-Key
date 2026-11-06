@@ -45,7 +45,7 @@ xcrun devicectl device install app --device <裝置 UDID> build/derived/Build/Pr
 
 ## 與桌面版的差異
 
-- 上下文排序與鄰鍵修正需要 `tools/bigram-trainer` 訓練出的 `bigram.bin` 與 `chars.bin`；有時 `build.sh` 一併放入，以記憶體映射讀取，不占鍵盤擴充的記憶體上限。沒有時只用詞庫（`data.txt`，沒有時用 McBopomofo 的），鄰鍵修正也不啟用。
+- 上下文排序需要 `tools/bigram-trainer` 訓練出的 `bigram.bin` 與 `chars.bin`；有時 `build.sh` 一併放入，以記憶體映射讀取，不占鍵盤擴充的記憶體上限。沒有時只用詞庫（`data.txt`，沒有時用 McBopomofo 的）。
 - 沒有英文模式與 Tab 轉換，切換英文用系統的地球鍵。
 - 沒有設定畫面；選過的字只記在記憶體，鍵盤程式被系統結束後清空。從送出的文字學到的字串次數存在鍵盤擴充自己的容器（`Library/Application Support/personal.txt`），每次送出後寫入；沒有清除按鈕，刪除 App 才會清掉。
 

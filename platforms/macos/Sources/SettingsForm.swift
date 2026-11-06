@@ -3,7 +3,6 @@ import AppKit
 import SwiftUI
 
 struct SettingsForm: View {
-  @AppStorage(PKAdjacentKeysKey) private var adjacentKeys = true
   @AppStorage(PKAbbreviatedKey) private var abbreviated = false
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
@@ -27,7 +26,6 @@ struct SettingsForm: View {
           Text("游標前（macOS）").tag(1)
         }
         Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
-        Toggle("鄰鍵修正", isOn: $adjacentKeys)
         Toggle("簡拼", isOn: $abbreviated)
         Toggle("記住選過的字", isOn: $rememberChoices)
         LabeledContent("選字紀錄") {
