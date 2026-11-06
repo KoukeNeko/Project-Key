@@ -1,13 +1,11 @@
 #include "Panel.h"
 
-#include <cairo-xcb.h>
+#include <fcitx/instance.h>
 #include <pango/pangocairo.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <cstring>
-#include <vector>
 
 #include "PanelMetrics.h"
 
@@ -19,7 +17,7 @@ using namespace Metrics;
 using namespace Metrics::Colors;
 
 // Windows' corners, fonts and sizes (platforms/windows/Sources/Common/Layout.h).
-constexpr float kWindowRadius = 8, kPillRadius = 4;
+constexpr float kPillRadius = 4;
 constexpr float kProofSize = 14, kCandidateSize = 19, kLabelSize = 12, kPageSize = 11, kKeySize = 11, kBadgeSize = 15;
 constexpr char kTextFont[] = "Noto Sans CJK TC";
 constexpr char kMonoFont[] = "Noto Sans Mono, DejaVu Sans Mono, monospace";
@@ -81,69 +79,13 @@ PangoFontDescription* Font(const char* family, float size, PangoWeight weight) {
   return font;
 }
 
-xcb_atom_t Atom(xcb_connection_t* connection, const std::string& name) {
-  xcb_intern_atom_reply_t* reply =
-      xcb_intern_atom_reply(connection, xcb_intern_atom(connection, 0, name.size(), name.c_str()), nullptr);
-  xcb_atom_t atom = reply ? reply->atom : XCB_ATOM_NONE;
-  free(reply);
-  return atom;
-}
-
-// Xft.dpi from the X resources, as desktops set it for HiDPI screens.
-float DpiScale(xcb_connection_t* connection, xcb_screen_t* screen) {
-  xcb_get_property_reply_t* reply = xcb_get_property_reply(
-      connection, xcb_get_property(connection, 0, screen->root, XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, 1 << 16), nullptr);
-  float scale = 1;
-  if (reply) {
-    std::string resources(static_cast<const char*>(xcb_get_property_value(reply)), xcb_get_property_value_length(reply));
-    size_t at = resources.find("Xft.dpi:");
-    if (at != std::string::npos) {
-      double dpi = std::strtod(resources.c_str() + at + 8, nullptr);
-      if (dpi >= 48) scale = static_cast<float>(dpi / 96);
-    }
-    free(reply);
-  }
-  return scale;
-}
-
 }  // namespace
 
-Panel::Panel(fcitx::EventLoop& loop, const Settings& settings) : settings_(settings), loop_(loop) {
-  if (std::getenv("WAYLAND_DISPLAY")) return;  // X windows cannot be placed at a Wayland app's caret
-  int screenNumber = 0;
-  connection_ = xcb_connect(nullptr, &screenNumber);
-  if (xcb_connection_has_error(connection_)) {
-    xcb_disconnect(connection_);
-    connection_ = nullptr;
-    return;
-  }
-  xcb_screen_iterator_t screens = xcb_setup_roots_iterator(xcb_get_setup(connection_));
-  for (int i = 0; i < screenNumber && screens.rem; i++) xcb_screen_next(&screens);
-  screen_ = screens.data;
-
-  // A 32-bit visual lets a compositor show the rounded corners; the root visual otherwise.
-  for (auto depths = xcb_screen_allowed_depths_iterator(screen_); depths.rem; xcb_depth_next(&depths)) {
-    for (auto visuals = xcb_depth_visuals_iterator(depths.data); visuals.rem; xcb_visualtype_next(&visuals)) {
-      if (depths.data->depth == 32 && visuals.data->_class == XCB_VISUAL_CLASS_TRUE_COLOR && !argb_) {
-        visual_ = visuals.data;
-        depth_ = 32;
-        argb_ = true;
-      }
-      if (!visual_ && visuals.data->visual_id == screen_->root_visual) {
-        visual_ = visuals.data;
-        depth_ = screen_->root_depth;
-      }
-    }
-  }
-  if (argb_) {
-    colormap_ = xcb_generate_id(connection_);
-    xcb_create_colormap(connection_, XCB_COLORMAP_ALLOC_NONE, colormap_, screen_->root, visual_->visual_id);
-  } else {
-    colormap_ = screen_->default_colormap;
-  }
-  compositorAtom_ = Atom(connection_, "_NET_WM_CM_S" + std::to_string(screenNumber));
-  blurAtom_ = Atom(connection_, "_KDE_NET_WM_BLUR_BEHIND_REGION");
-  scale_ = DpiScale(connection_, screen_);
+Panel::Panel(fcitx::Instance* instance, const Settings& settings) : settings_(settings), loop_(instance->eventLoop()) {
+  // X windows cannot be placed at a Wayland app's caret; input method popups can.
+  screen_ = std::getenv("WAYLAND_DISPLAY") ? OpenWaylandScreen(instance) : OpenX11Screen(loop_);
+  if (!screen_) return;
+  scale_ = screen_->scale();
 
   context_ = pango_font_map_create_context(pango_cairo_font_map_get_default());
   proofFont_ = Font(kTextFont, kProofSize, PANGO_WEIGHT_NORMAL);
@@ -154,26 +96,17 @@ Panel::Panel(fcitx::EventLoop& loop, const Settings& settings) : settings_(setti
   badgeFont_ = Font(kTextFont, kBadgeSize, PANGO_WEIGHT_MEDIUM);
   // Every column fits a two-character word.
   columnWidth_ = kCellSide + width("6", labelFont_) + kLabelGap + width("國國", candidateFont_) + kCellSide;
-
-  io_ = loop_.addIOEvent(xcb_get_file_descriptor(connection_), fcitx::IOEventFlag::In, [this](fcitx::EventSourceIO*, int, fcitx::IOEventFlags) {
-    dispatch();
-    return true;
-  });
-  xcb_flush(connection_);
 }
 
 Panel::~Panel() {
   panelTimer_.reset();
   badgeTimer_.reset();
-  io_.reset();
-  for (Window* window : {&panel_, &badge_}) {
-    if (window->surface) cairo_surface_destroy(window->surface);
-  }
+  panel_.reset();
+  badge_.reset();
   for (PangoFontDescription* font : {proofFont_, candidateFont_, labelFont_, pageFont_, keyFont_, badgeFont_}) {
     if (font) pango_font_description_free(font);
   }
   if (context_) g_object_unref(context_);
-  if (connection_) xcb_disconnect(connection_);
 }
 
 PangoLayout* Panel::layout(const std::string& text, PangoFontDescription* font) const {
@@ -195,102 +128,8 @@ int Panel::span(const std::string& candidate) const {
 
 // MARK: Windows
 
-void Panel::createWindow(Window& window) {
-  window.id = xcb_generate_id(connection_);
-  uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
-  uint32_t values[] = {0, 0, 1, XCB_EVENT_MASK_EXPOSURE, colormap_};
-  xcb_create_window(connection_, depth_, window.id, screen_->root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, visual_->visual_id, mask,
-                    values);
-  // Compositors treat it as a popup: no decoration, focus or taskbar entry.
-  xcb_atom_t type = Atom(connection_, "_NET_WM_WINDOW_TYPE"), popup = Atom(connection_, "_NET_WM_WINDOW_TYPE_POPUP_MENU");
-  xcb_change_property(connection_, XCB_PROP_MODE_REPLACE, window.id, type, XCB_ATOM_ATOM, 32, 1, &popup);
-  window.surface = cairo_xcb_surface_create(connection_, window.id, visual_, 1, 1);
-  window.width = window.height = 1;
-}
-
-void Panel::place(Window& window, int x, int y, int width, int height) {
-  width = std::max(width, 1);
-  height = std::max(height, 1);
-  uint32_t values[] = {static_cast<uint32_t>(x), static_cast<uint32_t>(y), static_cast<uint32_t>(width), static_cast<uint32_t>(height),
-                       XCB_STACK_MODE_ABOVE};
-  xcb_configure_window(connection_, window.id,
-                       XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT |
-                           XCB_CONFIG_WINDOW_STACK_MODE,
-                       values);
-  bool resized = width != window.width || height != window.height;
-  if (resized) cairo_xcb_surface_set_size(window.surface, width, height);
-  window.x = x;
-  window.y = y;
-  window.width = width;
-  window.height = height;
-  if (resized && window.blurred) setBlur(window, true);
-}
-
-void Panel::map(Window& window) {
-  if (window.mapped) return;
-  xcb_map_window(connection_, window.id);
-  window.mapped = true;
-}
-
-void Panel::unmap(Window& window) {
-  if (!window.mapped) return;
-  xcb_unmap_window(connection_, window.id);
-  window.mapped = false;
-  xcb_flush(connection_);
-}
-
-void Panel::dispatch() {
-  while (xcb_generic_event_t* event = xcb_poll_for_event(connection_)) {
-    if ((event->response_type & ~0x80) == XCB_EXPOSE) {
-      xcb_window_t window = reinterpret_cast<xcb_expose_event_t*>(event)->window;
-      if (window == panel_.id) paintPanel();
-      if (window == badge_.id) paintBadge();
-    }
-    free(event);
-  }
-}
-
-bool Panel::composited() {
-  if (!argb_) return false;
-  xcb_get_selection_owner_reply_t* reply =
-      xcb_get_selection_owner_reply(connection_, xcb_get_selection_owner(connection_, compositorAtom_), nullptr);
-  bool owned = reply && reply->owner != XCB_NONE;
-  free(reply);
-  return owned;
-}
-
 bool Panel::blurs() {
-  if (settings_.get(Setting::kAppearance) == 0 || !composited()) return false;
-  // KWin's blur effect, while it is on, sets this property on the root window.
-  xcb_get_property_reply_t* reply =
-      xcb_get_property_reply(connection_, xcb_get_property(connection_, 0, screen_->root, blurAtom_, XCB_GET_PROPERTY_TYPE_ANY, 0, 0), nullptr);
-  bool offered = reply && reply->type != XCB_NONE;
-  free(reply);
-  return offered;
-}
-
-// The region KWin blurs: the window's rounded rectangle, one row of pixels at
-// a time through the corners, so no blur shows outside them.
-void Panel::setBlur(Window& window, bool on) {
-  window.blurred = on;
-  if (!on) {
-    xcb_delete_property(connection_, window.id, blurAtom_);
-    return;
-  }
-  int radius = static_cast<int>(std::lround(kWindowRadius * scale_));
-  radius = std::min({radius, window.width / 2, window.height / 2});
-  std::vector<uint32_t> rects;
-  auto add = [&](int x, int y, int w, int h) {
-    rects.insert(rects.end(), {static_cast<uint32_t>(x), static_cast<uint32_t>(y), static_cast<uint32_t>(w), static_cast<uint32_t>(h)});
-  };
-  for (int y = 0; y < radius; y++) {
-    double dy = radius - y - 0.5;
-    int inset = static_cast<int>(std::lround(radius - std::sqrt(radius * radius - dy * dy)));
-    add(inset, y, window.width - 2 * inset, 1);
-    add(inset, window.height - 1 - y, window.width - 2 * inset, 1);
-  }
-  add(0, radius, window.width, window.height - 2 * radius);
-  xcb_change_property(connection_, XCB_PROP_MODE_REPLACE, window.id, blurAtom_, XCB_ATOM_CARDINAL, 32, rects.size(), rects.data());
+  return settings_.get(Setting::kAppearance) != 0 && screen_->blurs();
 }
 
 // Over a blur the text sits on a translucent window, where subpixel
@@ -389,31 +228,37 @@ Panel::Rect Panel::shownSelectionRect() const {
           mix(pillFrom_.bottom, pillTo_.bottom)};
 }
 
-void Panel::show(const void* owner, const PanelContent& content, const fcitx::Rect& anchor) {
+void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fcitx::Rect& anchor) {
   if (!ok()) return;
-  if (!panel_.id) createWindow(panel_);
-  bool wasVisible = panel_.mapped;
+  if (!panel_) {
+    // On Wayland the compositor can move the window above the text once it sees its size.
+    panel_ = screen_->createWindow([this] { paintPanel(); },
+                                   [this] {
+                                     if (owner_ && content_ && panel_->mapped) show(*owner_, PanelContent(*content_), anchor_);
+                                   });
+  }
+  bool wasVisible = panel_->mapped;
   // Changes within one list move: the highlight slides and the window resizes.
   bool animate = wasVisible && content_ && !content_->rows.empty() && !content.rows.empty();
   Rect from = shownSelectionRect();
-  owner_ = owner;
+  owner_ = &ic;
+  anchor_ = anchor;
   content_ = content;
   if (!wasVisible) {
-    rounded_ = composited();
-    setBlur(panel_, blurs());
+    rounded_ = screen_->composited();
+    panel_->setBlur(blurs());
   }
 
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
   int width = static_cast<int>(std::ceil(fittingWidth() * scale_));
   int height = static_cast<int>(std::ceil((proofHeight() + separator + rowHeight()) * scale_));
   int gap = static_cast<int>(std::lround(kGapToText * scale_));
-  // shortcut: the whole X screen is the work area, so a panel can overlap a dock or straddle monitors; use RandR and _NET_WORKAREA if that shows.
-  int screenWidth = screen_->width_in_pixels, screenHeight = screen_->height_in_pixels;
-  int left = anchor.left() - static_cast<int>(std::lround(kAnchorInset * scale_));
-  int top = anchor.bottom() + gap;
-  proofBelow_ = top + height > screenHeight;
-  if (proofBelow_) top = anchor.top() - gap - height;
-  left = std::max(0, std::min(left, screenWidth - width));
+  fcitx::Rect caret = screen_->caret(anchor);
+  int left = caret.left() - static_cast<int>(std::lround(kAnchorInset * scale_));
+  int top = caret.bottom() + gap;
+  proofBelow_ = panel_->above() || top + height > screen_->height();
+  if (proofBelow_) top = caret.top() - gap - height;
+  left = std::max(0, std::min(left, screen_->width() - width));
 
   Rect to = selectionRect();
   sliding_ = animate && !from.empty() && !to.empty() && !(from == to);
@@ -423,26 +268,26 @@ void Panel::show(const void* owner, const PanelContent& content, const fcitx::Re
   }
   pillTo_ = to;
 
-  resizing_ = animate && (panel_.width != width || panel_.height != height);
+  resizing_ = animate && (panel_->frame.width != width || panel_->frame.height != height);
   if (resizing_) {
-    frameFrom_ = panel_;
-    frameTo_.x = left;
-    frameTo_.y = top;
-    frameTo_.width = width;
-    frameTo_.height = height;
+    frameFrom_ = panel_->frame;
+    frameTo_ = {left, top, width, height};
     resizeStart_ = NowMs();
   } else {
-    place(panel_, left, top, width, height);
+    panel_->place({left, top, width, height});
   }
-  map(panel_);
+  panel_->map(ic);
   paintPanel();
-  if (badge_.mapped) avoidPanel();  // the badge and the panel both sit under the caret
+  if (badge_ && badge_->mapped) {  // the badge and the panel both sit under the caret
+    avoidPanel();
+    paintBadge();
+  }
   if (sliding_ || resizing_) startTimer(panelTimer_, &Panel::tickPanel);
-  dispatch();
+  screen_->sync();
 }
 
 bool Panel::tickPanel() {
-  if (!panel_.mapped) return false;
+  if (!panel_->mapped) return false;
   uint64_t now = NowMs();
   if (sliding_ && now - slideStart_ >= static_cast<uint64_t>(kSlideMs)) sliding_ = false;
   if (resizing_) {
@@ -452,37 +297,39 @@ bool Panel::tickPanel() {
     int left = mix(frameFrom_.x, frameTo_.x), top = mix(frameFrom_.y, frameTo_.y);
     int right = mix(frameFrom_.x + frameFrom_.width, frameTo_.x + frameTo_.width);
     int bottom = mix(frameFrom_.y + frameFrom_.height, frameTo_.y + frameTo_.height);
-    place(panel_, left, top, right - left, bottom - top);
+    panel_->place({left, top, right - left, bottom - top});
     if (t >= 1) resizing_ = false;
   }
   paintPanel();
   return sliding_ || resizing_;
 }
 
-void Panel::hide(const void* owner) {
-  if (!ok() || owner != owner_) return;
+void Panel::hide(const fcitx::InputContext& ic) {
+  if (!panel_ || &ic != owner_) return;
   if (panelTimer_) panelTimer_->setEnabled(false);
   sliding_ = resizing_ = false;
-  unmap(panel_);
+  panel_->unmap();
   content_.reset();
   owner_ = nullptr;
 }
 
 void Panel::paintPanel() {
-  if (!content_ || !panel_.mapped) return;
-  cairo_t* cr = cairo_create(panel_.surface);
+  if (!content_ || !panel_->mapped) return;
+  cairo_t* cr = panel_->beginPaint();
+  if (!cr) return;
+  bool blurred = panel_->blurred;
   cairo_push_group(cr);
-  setFontOptions(panel_.blurred);
+  setFontOptions(blurred);
   pango_cairo_update_context(cr, context_);
   cairo_scale(cr, scale_, scale_);
-  float width = panel_.width / scale_, height = panel_.height / scale_;
+  float width = panel_->frame.width / scale_, height = panel_->frame.height / scale_;
 
   // The window: the dark background with a 1px edge, rounded where a compositor
   // shows the corners; over a blur, a dark tint, as over Acrylic on Windows.
   float radius = rounded_ ? kWindowRadius : 0;
-  float lineAlpha = panel_.blurred ? 0.6f : 1;
+  float lineAlpha = blurred ? 0.6f : 1;
   RoundedRect(cr, 0.5, 0.5, width - 0.5, height - 0.5, radius);
-  SetColor(cr, kBackground, panel_.blurred ? kAcrylicTint : 1);
+  SetColor(cr, kBackground, blurred ? kAcrylicTint : 1);
   cairo_fill_preserve(cr);
   SetColor(cr, kLine, lineAlpha);
   cairo_set_line_width(cr, 1);
@@ -514,9 +361,7 @@ void Panel::paintPanel() {
   cairo_pop_group_to_source(cr);
   cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
   cairo_paint(cr);
-  cairo_destroy(cr);
-  cairo_surface_flush(panel_.surface);
-  xcb_flush(connection_);
+  panel_->endPaint(cr);
 }
 
 void Panel::drawProof(cairo_t* cr, float top, float windowWidth) {
@@ -654,63 +499,76 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
   }
 }
 
-void Panel::follow(const void* owner, const fcitx::Rect& anchor) {
+void Panel::follow(fcitx::InputContext& ic, const fcitx::Rect& anchor) {
   if (!ok()) return;
-  if (badge_.mapped) placeBadge(anchor);
-  if (owner == owner_ && content_ && panel_.mapped) show(owner, PanelContent(*content_), anchor);
+  if (badge_ && badge_->mapped) {
+    placeBadge(anchor);
+    paintBadge();
+  }
+  if (&ic == owner_ && content_ && panel_->mapped) show(ic, PanelContent(*content_), anchor);
 }
 
 // MARK: Badge
 
-void Panel::showBadge(const std::string& label, const fcitx::Rect& anchor) {
+void Panel::showBadge(fcitx::InputContext& ic, const std::string& label, const fcitx::Rect& anchor) {
   if (!ok()) return;
-  if (!badge_.id) createWindow(badge_);
+  if (!badge_) {
+    badge_ = screen_->createWindow([this] { paintBadge(); },
+                                   [this] {
+                                     if (!badge_->mapped) return;
+                                     placeBadge(badgeAnchor_);
+                                     paintBadge();
+                                   });
+  }
   badgeLabel_ = label;
   placeBadge(anchor);
   badgeStart_ = NowMs();
   // Without a compositor a window cannot fade or round its corners: it shows square at full strength.
-  badgeFades_ = composited();
+  badgeFades_ = screen_->composited();
   badgeAlpha_ = badgeFades_ ? 0 : 1;
-  setBlur(badge_, blurs());  // the same appearance as the panel
-  map(badge_);
+  badge_->setBlur(blurs());  // the same appearance as the panel
+  badge_->map(ic);
   paintBadge();
   startTimer(badgeTimer_, &Panel::tickBadge);
-  dispatch();
+  screen_->sync();
 }
 
 // Under the caret, above it at the screen's end, beside the panel when they overlap.
 void Panel::placeBadge(const fcitx::Rect& anchor) {
+  badgeAnchor_ = anchor;
   int width = static_cast<int>(std::ceil(std::max(kBadgeSide, this->width(badgeLabel_, badgeFont_) + 2 * kBadgePadding) * scale_));
   int height = static_cast<int>(std::ceil(kBadgeSide * scale_));
   int gap = static_cast<int>(std::lround(kGapToText * scale_));
-  int x = anchor.left(), y = anchor.bottom() + gap;
-  if (y + height > screen_->height_in_pixels) y = anchor.top() - gap - height;
-  place(badge_, x, y, width, height);
+  fcitx::Rect caret = screen_->caret(anchor);
+  int x = caret.left(), y = caret.bottom() + gap;
+  if (badge_->above() || y + height > screen_->height()) y = caret.top() - gap - height;
+  badge_->place({x, y, width, height});
   avoidPanel();
 }
 
 // Both hang from the caret, so their tops already line up: the badge moves to
 // the panel's right, or its left when the screen ends.
 void Panel::avoidPanel() {
-  if (!badge_.id || !panel_.mapped) return;
-  const Window& p = resizing_ ? frameTo_ : panel_;
-  bool overlap = badge_.x < p.x + p.width && p.x < badge_.x + badge_.width && badge_.y < p.y + p.height && p.y < badge_.y + badge_.height;
+  if (!badge_ || !panel_ || !panel_->mapped) return;
+  const Frame& p = resizing_ ? frameTo_ : panel_->frame;
+  const Frame& b = badge_->frame;
+  bool overlap = b.x < p.x + p.width && p.x < b.x + b.width && b.y < p.y + p.height && p.y < b.y + b.height;
   if (!overlap) return;
   int gap = static_cast<int>(std::lround(kGapToText * scale_));
   int x = p.x + p.width + gap;
-  if (x + badge_.width > screen_->width_in_pixels) x = p.x - gap - badge_.width;
-  place(badge_, x, badge_.y, badge_.width, badge_.height);
+  if (x + b.width > screen_->width()) x = p.x - gap - b.width;
+  badge_->place({x, b.y, b.width, b.height});
 }
 
 void Panel::hideBadge() {
-  if (!ok()) return;
+  if (!badge_) return;
   if (badgeTimer_) badgeTimer_->setEnabled(false);
-  unmap(badge_);
+  badge_->unmap();
 }
 
 // 120ms in, 800ms held, 250ms out.
 bool Panel::tickBadge() {
-  if (!badge_.mapped) return false;
+  if (!badge_->mapped) return false;
   float elapsed = static_cast<float>(NowMs() - badgeStart_);
   if (elapsed >= kBadgeFadeInMs + kBadgeHoldMs + kBadgeFadeOutMs) {
     hideBadge();
@@ -725,15 +583,16 @@ bool Panel::tickBadge() {
 }
 
 void Panel::paintBadge() {
-  if (!badge_.mapped) return;
-  cairo_t* cr = cairo_create(badge_.surface);
+  if (!badge_ || !badge_->mapped) return;
+  cairo_t* cr = badge_->beginPaint();
+  if (!cr) return;
   cairo_push_group(cr);
-  setFontOptions(badge_.blurred);
+  setFontOptions(badge_->blurred);
   pango_cairo_update_context(cr, context_);
   cairo_scale(cr, scale_, scale_);
-  float width = badge_.width / scale_;
+  float width = badge_->frame.width / scale_;
   RoundedRect(cr, 0.25, 0.25, width - 0.25, kBadgeSide - 0.25, badgeFades_ ? kWindowRadius : 0);
-  SetColor(cr, kBackground, badge_.blurred ? kAcrylicTint : 1);
+  SetColor(cr, kBackground, badge_->blurred ? kAcrylicTint : 1);
   cairo_fill_preserve(cr);
   cairo_set_source_rgba(cr, 0, 0, 0, 0.5);
   cairo_set_line_width(cr, 0.5);
@@ -744,9 +603,7 @@ void Panel::paintBadge() {
   cairo_pop_group_to_source(cr);
   cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
   cairo_paint_with_alpha(cr, badgeAlpha_);
-  cairo_destroy(cr);
-  cairo_surface_flush(badge_.surface);
-  xcb_flush(connection_);
+  badge_->endPaint(cr);
 }
 
 }  // namespace ProjectKey

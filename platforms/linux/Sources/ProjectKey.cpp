@@ -1,8 +1,9 @@
 // The Fcitx5 addon: each input context gets a Controller (core/engine), whose
-// composition becomes the preedit. On X11 its candidates, proof row and 中／英
-// badge go into Project Key's own windows (Panel.cpp), which look like the
-// macOS and Windows ones; elsewhere, or where the app gives no screen position
-// for its caret, they go into Fcitx5's input panel and follow its theme.
+// composition becomes the preedit. Its candidates, proof row and 中／英 badge go
+// into Project Key's own windows (Panel.cpp), which look like the macOS and
+// Windows ones: on X11, and on Wayland for apps that reach Fcitx5 through the
+// compositor's input method (Wayland's text input). Where they cannot go at the
+// caret, they go into Fcitx5's input panel and follow its theme.
 #include <dbus_public.h>
 #include <enchant.h>
 #include <fcitx-config/configuration.h>
@@ -167,13 +168,12 @@ class Session : public fcitx::InputContextProperty, public Client {
  public:
   Session(Environment& environment, fcitx::Instance* instance, Panel& panel, fcitx::InputContext& ic)
       : instance_(instance), panel_(panel), ic_(ic), controller(environment, *this) {}
-  ~Session() override { panel_.hide(this); }
+  ~Session() override { panel_.hide(ic_); }
 
-  // Project Key's window needs the caret on screen; a relative rect is only within the app's window.
-  bool ownPanel() const { return panel_.ok() && !ic_.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect); }
+  bool ownPanel() const { return panel_.shows(ic_); }
   // The app moved the caret, as it does after each preedit change.
   void caretMoved() {
-    if (ownPanel()) panel_.follow(this, anchor());
+    if (ownPanel()) panel_.follow(ic_, anchor());
   }
   // Where the composition starts, as on the other platforms, so the panel
   // stays put while it grows; the caret when there is none or it wrapped.
@@ -221,7 +221,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   // into the candidate list, and the page label below it.
   void showPanel(const PanelContent& content) override {
     if (ownPanel()) {
-      panel_.show(this, content, anchor());
+      panel_.show(ic_, content, anchor());
       return;
     }
     fcitx::InputPanel& panel = ic_.inputPanel();
@@ -284,7 +284,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   }
 
   void hidePanel() override {
-    panel_.hide(this);
+    panel_.hide(ic_);
     fcitx::InputPanel& panel = ic_.inputPanel();
     panel.setAuxUp(fcitx::Text());
     panel.setAuxDown(fcitx::Text());
@@ -296,7 +296,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   // for the badge; it shows the engine's subMode, which reads the same mode.
   void showIndicator(const std::string& label) override {
     if (ownPanel()) {
-      panel_.showBadge(label, anchor());
+      panel_.showBadge(ic_, label, anchor());
       return;
     }
     instance_->showInputMethodInformation(&ic_);
@@ -374,7 +374,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
 
  public:
   explicit Engine(fcitx::Instance* instance)
-      : instance_(instance), settings_(config_), panel_(instance->eventLoop(), settings_), factory_([this](fcitx::InputContext& ic) {
+      : instance_(instance), settings_(config_), panel_(instance, settings_), factory_([this](fcitx::InputContext& ic) {
           return new Session(environment_, instance_, panel_, ic);
         }) {
     fcitx::readAsIni(config_, kConfigPath);

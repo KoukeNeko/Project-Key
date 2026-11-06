@@ -8,6 +8,9 @@ Type=SharedLibrary
 OnDemand=True
 Configurable=True
 
-# The D-Bus object the settings window clears the remembered choices through.
+# The D-Bus object the settings window clears the remembered choices through,
+# and Fcitx5's Wayland connections, where the candidate window is an input method popup.
 [Addon/OptionalDependencies]
 0=dbus
+1=wayland
+2=waylandim
