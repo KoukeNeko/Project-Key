@@ -23,6 +23,8 @@ class CandidateWindow {
   ~CandidateWindow();
   // anchor is the composition's first line in screen coordinates.
   void show(const PanelContent& content, const RECT& anchor, HWND owner, int appearance);
+  // The Tab hint's own window: next to `panel`, on the side away from the text.
+  void showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance);
   void hide();
   bool visible() const { return hwnd_ && IsWindowVisible(hwnd_); }
   RECT frame() const;
@@ -51,6 +53,7 @@ class CandidateWindow {
   Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
   std::optional<PanelContent> content_;
   bool proofBelow_ = false;  // window above the text: proof row last, next to the text
+  RECT placed_{};            // where the last show put the window, before any resize animation ends
   int appearance_ = 0;
   bool material() const { return appearance_ != 0; }  // a system material shows through
   float scale_ = 1;

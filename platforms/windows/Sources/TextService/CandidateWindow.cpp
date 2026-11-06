@@ -276,6 +276,7 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   frame.left = std::max(work.left, std::min(frame.left, work.right - width));
   frame.right = frame.left + width;
   frame.bottom = frame.top + height;
+  placed_ = frame;
   badge_.avoid(frame);  // both sit under the caret
 
   D2D1_RECT_F to = selectionRect();
@@ -304,6 +305,32 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
   if (sliding_ || resizing_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+}
+
+void CandidateWindow::showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance) {
+  if (!ensureWindow()) return;
+  if (appearance != appearance_) applyAppearance(appearance);
+  bool wasVisible = visible();
+  content_ = content;
+  proofBelow_ = false;
+  pillTo_ = {};
+  D2D1_SIZE_F size = fittingSize();
+  scale_ = DpiOf(owner) / 96.f;
+  int width = static_cast<int>(std::ceil(size.width * scale_)), height = static_cast<int>(std::ceil(size.height * scale_));
+  int gap = static_cast<int>(std::lround(kHintGap * scale_));
+  const RECT& next = panel.placed_;
+  placed_.left = next.left;
+  placed_.top = panel.proofBelow_ ? next.top - gap - height : next.bottom + gap;
+  placed_.right = placed_.left + width;
+  placed_.bottom = placed_.top + height;
+  SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
+  SetWindowPos(hwnd_, HWND_TOPMOST, placed_.left, placed_.top, width, height, SWP_NOACTIVATE);
+  if (!wasVisible) {
+    ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+    if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
+  }
+  InvalidateRect(hwnd_, nullptr, FALSE);
+  UpdateWindow(hwnd_);
 }
 
 void CandidateWindow::tick() {
