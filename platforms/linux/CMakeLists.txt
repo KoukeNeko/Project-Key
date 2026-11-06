@@ -1,6 +1,6 @@
 # The Fcitx5 input method: an addon that drives the shared engine
 # (core/engine) and shows its candidates in its own X11 window (Sources/Panel.cpp),
-# and the Qt settings window (Settings/main.cpp).
+# and the settings windows (Settings/).
 # build.sh fetches McBopomofo (MIT) into .build/mcbopomofo and points MCBOPOMOFO here.
 cmake_minimum_required(VERSION 3.16)
 project(fcitx5-projectkey VERSION 0.2.2 LANGUAGES CXX)
@@ -39,13 +39,24 @@ target_compile_definitions(projectkey PRIVATE PROJECTKEY_DATA_DIR="${DATA_DIR}" 
   PROJECTKEY_SETTINGS="${CMAKE_INSTALL_FULL_BINDIR}/projectkey-settings")
 set_target_properties(projectkey PROPERTIES PREFIX "")
 
-# The settings window, opened from the Fcitx5 menu or the app launcher.
-add_executable(projectkey-settings Settings/main.cpp)
-target_link_libraries(projectkey-settings PRIVATE Qt6::Widgets Qt6::DBus Qt6::Network)
-target_compile_definitions(projectkey-settings PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}")
+# The settings window, opened from the Fcitx5 menu or the app launcher through the
+# projectkey-settings script: Qt on KDE, GTK (libadwaita) on GNOME when it is built.
+add_executable(projectkey-settings-qt Settings/Qt.cpp)
+target_link_libraries(projectkey-settings-qt PRIVATE Qt6::Widgets Qt6::DBus Qt6::Network)
+target_compile_definitions(projectkey-settings-qt PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}")
+pkg_check_modules(ADWAITA IMPORTED_TARGET libadwaita-1 libsoup-3.0 json-glib-1.0)
+if(ADWAITA_FOUND)
+  add_executable(projectkey-settings-gtk Settings/Gtk.cpp)
+  target_link_libraries(projectkey-settings-gtk PRIVATE PkgConfig::ADWAITA)
+  target_compile_definitions(projectkey-settings-gtk PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}")
+  install(TARGETS projectkey-settings-gtk DESTINATION "${CMAKE_INSTALL_BINDIR}")
+else()
+  message(STATUS "libadwaita, libsoup 3 or json-glib missing: building only the Qt settings window")
+endif()
 
 install(TARGETS projectkey DESTINATION "${FCITX_INSTALL_LIBDIR}/fcitx5")
-install(TARGETS projectkey-settings DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(TARGETS projectkey-settings-qt DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(PROGRAMS projectkey-settings DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(FILES projectkey-settings.desktop DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 configure_file(projectkey-addon.conf.in projectkey-addon.conf @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-addon.conf" RENAME projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/addon")
