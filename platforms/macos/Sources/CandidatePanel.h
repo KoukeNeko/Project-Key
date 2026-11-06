@@ -34,6 +34,9 @@ extern const NSInteger PKGridColumns;
 + (NSInteger)columnsSpannedBy:(NSString *)candidate;
 // lineRect is the composition's first line in screen coordinates.
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect;
+// The Tab hint's own window, and placing it beside `panel` on the side away from the text.
++ (instancetype)hint;
+- (void)show:(PKPanelContent *)content beside:(PKCandidatePanel *)panel;
 - (void)hide;
 @property(nonatomic, readonly, getter=isVisible) BOOL visible;
 @property(nonatomic, readonly, nullable) PKPanelContent *content;

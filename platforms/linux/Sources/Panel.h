@@ -85,7 +85,7 @@ class Panel {
   float scale_ = 1;
 
   PangoContext* context_ = nullptr;
-  PangoFontDescription *proofFont_ = nullptr, *candidateFont_ = nullptr, *labelFont_ = nullptr, *pageFont_ = nullptr,
+  PangoFontDescription *proofFont_ = nullptr, *candidateFont_ = nullptr, *typingFont_ = nullptr, *labelFont_ = nullptr, *pageFont_ = nullptr,
                        *keyFont_ = nullptr, *badgeFont_ = nullptr;
   float columnWidth_ = 0;
 

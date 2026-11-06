@@ -205,7 +205,11 @@ D2D1_SIZE_F CandidateWindow::fittingSize() const {
     if (!content_->replacedText.empty()) key += fonts_.widthOf(Widen(content_->replacedText) + kReplacedArrow, fonts_.proof());
     width = std::max(width, kProofLeft + fonts_.widthOf(Widen(sentence), fonts_.proof()) + key + kProofRight);
   }
-  if (!content_->rows.empty()) {
+  if (!content_->rows.empty() && content_->selectedRow < 0) {  // the row shown while typing
+    float row = kRowLeft + kRowRight;
+    for (const std::string& candidate : content_->rows[0]) row += 2 * kTypingCellSide + fonts_.widthOf(Widen(candidate), fonts_.typing());
+    width = std::max(width, row);
+  } else if (!content_->rows.empty()) {
     // As wide as the fullest visible row, so a short single row stays compact.
     int columns = 0;
     for (const auto& row : content_->rows) {
@@ -272,6 +276,7 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   frame.left = std::max(work.left, std::min(frame.left, work.right - width));
   frame.right = frame.left + width;
   frame.bottom = frame.top + height;
+  placed_ = frame;
   badge_.avoid(frame);  // both sit under the caret
 
   D2D1_RECT_F to = selectionRect();
@@ -300,6 +305,32 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
   if (sliding_ || resizing_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+}
+
+void CandidateWindow::showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance) {
+  if (!ensureWindow()) return;
+  if (appearance != appearance_) applyAppearance(appearance);
+  bool wasVisible = visible();
+  content_ = content;
+  proofBelow_ = false;
+  pillTo_ = {};
+  D2D1_SIZE_F size = fittingSize();
+  scale_ = DpiOf(owner) / 96.f;
+  int width = static_cast<int>(std::ceil(size.width * scale_)), height = static_cast<int>(std::ceil(size.height * scale_));
+  int gap = static_cast<int>(std::lround(kHintGap * scale_));
+  const RECT& next = panel.placed_;
+  placed_.left = next.left;
+  placed_.top = panel.proofBelow_ ? next.top - gap - height : next.bottom + gap;
+  placed_.right = placed_.left + width;
+  placed_.bottom = placed_.top + height;
+  SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
+  SetWindowPos(hwnd_, HWND_TOPMOST, placed_.left, placed_.top, width, height, SWP_NOACTIVATE);
+  if (!wasVisible) {
+    ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+    if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
+  }
+  InvalidateRect(hwnd_, nullptr, FALSE);
+  UpdateWindow(hwnd_);
 }
 
 void CandidateWindow::tick() {
@@ -465,6 +496,15 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
   auto white = Brush(target, D2D1::ColorF(1, 1, 1, 1));
   auto onLabel = Brush(target, D2D1::ColorF(1, 1, 1, 0.72f));
   auto muted = Brush(target, Color(kMuted));
+  if (content_->selectedRow < 0) {  // the row shown while typing: no digits, no selection
+    float x = kRowLeft;
+    for (const std::string& candidate : content_->rows[0]) {
+      Line word = Measure(fonts_, Widen(candidate), fonts_.typing());
+      DrawLine(target, word, x + kTypingCellSide, top + kRowTop + kCellTop, kCellLine, muted.Get());
+      x += 2 * kTypingCellSide + word.width;
+    }
+    return;
+  }
   float labelWidth = fonts_.widthOf(L"6", fonts_.label());
   for (size_t r = 0; r < content_->rows.size(); r++) {
     float cellTop = top + kRowTop + r * (cellHeight + kCellGap);

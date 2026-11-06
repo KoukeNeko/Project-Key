@@ -90,6 +90,7 @@ Panel::Panel(fcitx::Instance* instance, const Settings& settings) : settings_(se
   context_ = pango_font_map_create_context(pango_cairo_font_map_get_default());
   proofFont_ = Font(kTextFont, kProofSize, PANGO_WEIGHT_NORMAL);
   candidateFont_ = Font(kTextFont, kCandidateSize, PANGO_WEIGHT_NORMAL);
+  typingFont_ = Font(kTextFont, kCandidateSize * kTypingTextScale, PANGO_WEIGHT_NORMAL);
   labelFont_ = Font(kMonoFont, kLabelSize, PANGO_WEIGHT_MEDIUM);
   pageFont_ = Font(kMonoFont, kPageSize, PANGO_WEIGHT_MEDIUM);
   keyFont_ = Font(kKeyFont, kKeySize, PANGO_WEIGHT_MEDIUM);
@@ -103,7 +104,7 @@ Panel::~Panel() {
   badgeTimer_.reset();
   panel_.reset();
   badge_.reset();
-  for (PangoFontDescription* font : {proofFont_, candidateFont_, labelFont_, pageFont_, keyFont_, badgeFont_}) {
+  for (PangoFontDescription* font : {proofFont_, candidateFont_, typingFont_, labelFont_, pageFont_, keyFont_, badgeFont_}) {
     if (font) pango_font_description_free(font);
   }
   if (context_) g_object_unref(context_);
@@ -190,7 +191,11 @@ float Panel::fittingWidth() const {
     if (!content_->replacedText.empty()) key += width(content_->replacedText + kReplacedArrow, proofFont_);
     result = kProofLeft + width(sentence, proofFont_) + key + kProofRight;
   }
-  if (!content_->rows.empty()) {
+  if (!content_->rows.empty() && content_->selectedRow < 0) {  // the row shown while typing
+    float row = kRowLeft + kRowRight;
+    for (const std::string& candidate : content_->rows[0]) row += 2 * kTypingCellSide + width(candidate, typingFont_);
+    result = std::max(result, row);
+  } else if (!content_->rows.empty()) {
     // As wide as the fullest visible row, so a short single row stays compact.
     int columns = 0;
     for (const auto& row : content_->rows) {
@@ -461,6 +466,16 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
     SetColor(cr, kAccent);
     RoundedRect(cr, pill.left, pill.top, pill.right, pill.bottom, kPillRadius);
     cairo_fill(cr);
+  }
+  if (content_->selectedRow < 0) {  // the row shown while typing: no digits, no selection
+    SetColor(cr, kMuted);
+    float x = kRowLeft;
+    for (const std::string& candidate : content_->rows[0]) {
+      Line word(layout(candidate, typingFont_));
+      word.draw(cr, x + kTypingCellSide, top + kRowTop + kCellTop, kCellLine);
+      x += 2 * kTypingCellSide + word.width;
+    }
+    return;
   }
   float labelWidth = width("6", labelFont_);
   for (size_t r = 0; r < content_->rows.size(); r++) {

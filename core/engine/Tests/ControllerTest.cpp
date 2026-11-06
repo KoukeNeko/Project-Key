@@ -47,6 +47,9 @@ class FakeClient : public Client {
     panelVisible = true;
   }
   void hidePanel() override { panelVisible = false; }
+  std::optional<PanelContent> hint;  // the Tab hint's own window
+  void showHint(const PanelContent& content) override { hint = content; }
+  void hideHint() override { hint.reset(); }
   void showIndicator(const std::string& label) override { indicator = label; }
   void beep() override {}
   std::string textBeforeCaret() override { return committed; }
@@ -137,7 +140,7 @@ int main(int argc, char** argv) {
   assert(env.lm->isDataModelLoaded());
   env.userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
   env.settings = &settings;
-  env.isEnglish = [](const std::string& text) { return text == "hello" || text == "hello world"; };
+  env.isEnglish = [](const std::string& text) { return text == "hello" || text == "hello world" || text == "ja"; };
   env.columnsSpannedBy = Span;
   FakeClient client;
   Controller controller(env, client);
@@ -176,19 +179,36 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(HasSuffix(client.committed, "你ㄏㄠ") && client.marked.empty());
 
-  // The open syllable shows as its Zhuyin, the closed one before it as its word.
-  // The guess (你好) leads a row of candidates without digits, and Down opens those.
+  // The open syllable shows as its Zhuyin, the closed one before it as its word. The guess
+  // (你好) is marked in the proof row; a row without digits holds the other words there,
+  // and Down opens all of them.
   Type(controller, "sucl");
   assert(client.marked == "你ㄏㄠ");
-  assert(client.panelVisible && client.panel.selectedRow == -1 && client.panel.rows.size() == 1);
-  assert(client.panel.rows[0][0] == "你好");
+  const PanelContent& typing = client.panel;
+  assert(client.panelVisible && typing.showsProof && typing.segments[typing.activeSegment] == "你好");
+  assert(typing.selectedRow == -1 && typing.rows.size() == 1 && !typing.rows[0].empty());
+  assert(std::find(typing.rows[0].begin(), typing.rows[0].end(), "你好") == typing.rows[0].end());
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
   assert(client.panel.selectedRow == 0 && client.marked == "你好");
   EscapeAll(controller, client);
-  // First symbols: ㄨㄇ shows 我ㄇ, and 我們 first among the candidates.
+  // First symbols: ㄨㄇ shows 我ㄇ. Tab would make the keys English (ja), which the proof
+  // row shows instead, so the guess 我們 leads the row.
   Type(controller, "ja");
-  assert(client.marked == "我ㄇ" && client.panel.rows[0][0] == "我們");
+  assert(client.marked == "我ㄇ" && typing.replacedText == "我ㄇ" && typing.segments[0] == "ja");
+  assert(typing.selectedRow == -1 && typing.rows[0][0] == "我們");
+  // Looking at the candidates and coming back changes nothing, so the hint is still there.
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && client.panel.selectedRow == 0);
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
+  assert(typing.replacedText == "我ㄇ" && typing.segments[0] == "ja");
   EscapeAll(controller, client);
+  // Where the hint has a window of its own, the panel keeps the guess in its proof row.
+  env.hintWindow = true;
+  Type(controller, "ja");
+  assert(client.hint && client.hint->replacedText == "我ㄇ" && client.hint->segments[0] == "ja");
+  assert(typing.segments[typing.activeSegment] == "我們" && typing.rows[0][0] != "我們");
+  EscapeAll(controller, client);
+  assert(!client.hint);
+  env.hintWindow = false;
   // Down offers candidates while a syllable without a tone is still open; its Zhuyin has no
   // tone mark. Back from the candidates, the syllable is still open: ㄠ makes it ㄋㄧㄠ.
   Type(controller, "su");

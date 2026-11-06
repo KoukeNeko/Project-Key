@@ -115,6 +115,7 @@ class TextService : public ITfTextInputProcessorEx,
   EngineClient engine_;
   ModeBadge badge_;
   CandidateWindow candidates_{badge_};
+  CandidateWindow hint_{badge_};  // the Tab hint, beside the candidates (Op::kShowHint)
   LangBarButton* langBar_ = nullptr;
   bool englishMode_ = false;
   int appearance_ = 0;

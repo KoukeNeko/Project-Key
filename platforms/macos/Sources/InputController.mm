@@ -22,6 +22,37 @@ NSString *OptionalString(const std::string &s) {
   return s.empty() ? nil : String(s);
 }
 
+PKPanelContent *Content(const ProjectKey::PanelContent &panel) {
+  PKPanelContent *content = [[PKPanelContent alloc] init];
+  NSMutableArray<NSString *> *segments = [NSMutableArray array];
+  NSMutableIndexSet *doubtful = [NSMutableIndexSet indexSet];
+  for (size_t i = 0; i < panel.segments.size(); i++) {
+    [segments addObject:String(panel.segments[i])];
+    if (i < panel.doubtful.size() && panel.doubtful[i]) [doubtful addIndex:i];
+  }
+  content.segments = segments;
+  content.doubtful = doubtful;
+  content.activeSegment = panel.activeSegment;
+  content.pendingReading = String(panel.pendingReading);
+  content.caret = panel.caret;
+  content.showsProof = panel.showsProof;
+  content.keyHint = OptionalString(panel.keyHint);
+  content.replacedText = OptionalString(panel.replacedText);
+  if (!panel.rows.empty()) {
+    NSMutableArray<NSArray<NSString *> *> *rows = [NSMutableArray array];
+    for (const auto &row : panel.rows) {
+      NSMutableArray<NSString *> *cells = [NSMutableArray array];
+      for (const std::string &cell : row) [cells addObject:String(cell)];
+      [rows addObject:cells];
+    }
+    content.rows = rows;
+  }
+  content.selectedRow = panel.selectedRow;
+  content.selection = panel.selection;
+  content.pageLabel = OptionalString(panel.pageLabel);
+  return content;
+}
+
 // Choices the user made, shared by every input session. Kept in memory only,
 // with McBopomofo's capacity and 1.5-hour half-life.
 McBopomofo::UserOverrideModel NewUserModel() {
@@ -83,6 +114,7 @@ ProjectKey::Environment &SharedEnvironment() {
     };
     env->tabKeycap = "⇥";
     env->appTypesUnhandledKeys = true;
+    env->hintWindow = true;
     return env;
   }();
   return *environment;
@@ -129,37 +161,13 @@ class ClientAdapter : public ProjectKey::Client {
       hidePanel();
       return;
     }
-    PKPanelContent *content = [[PKPanelContent alloc] init];
-    NSMutableArray<NSString *> *segments = [NSMutableArray array];
-    NSMutableIndexSet *doubtful = [NSMutableIndexSet indexSet];
-    for (size_t i = 0; i < panel.segments.size(); i++) {
-      [segments addObject:String(panel.segments[i])];
-      if (i < panel.doubtful.size() && panel.doubtful[i]) [doubtful addIndex:i];
-    }
-    content.segments = segments;
-    content.doubtful = doubtful;
-    content.activeSegment = panel.activeSegment;
-    content.pendingReading = String(panel.pendingReading);
-    content.caret = panel.caret;
-    content.showsProof = panel.showsProof;
-    content.keyHint = OptionalString(panel.keyHint);
-    content.replacedText = OptionalString(panel.replacedText);
-    if (!panel.rows.empty()) {
-      NSMutableArray<NSArray<NSString *> *> *rows = [NSMutableArray array];
-      for (const auto &row : panel.rows) {
-        NSMutableArray<NSString *> *cells = [NSMutableArray array];
-        for (const std::string &cell : row) [cells addObject:String(cell)];
-        [rows addObject:cells];
-      }
-      content.rows = rows;
-    }
-    content.selectedRow = panel.selectedRow;
-    content.selection = panel.selection;
-    content.pageLabel = OptionalString(panel.pageLabel);
-    [PKCandidatePanel.shared show:content below:lineRect()];
+    [PKCandidatePanel.shared show:Content(panel) below:lineRect()];
   }
 
   void hidePanel() override { [PKCandidatePanel.shared hide]; }
+
+  void showHint(const ProjectKey::PanelContent &hint) override { [PKCandidatePanel.hint show:Content(hint) beside:PKCandidatePanel.shared]; }
+  void hideHint() override { [PKCandidatePanel.hint hide]; }
 
   void showIndicator(const std::string &label) override { [PKModeIndicator.shared show:String(label) below:lineRect()]; }
 

@@ -65,6 +65,13 @@ class Recorder : public Client {
     add(std::move(o));
   }
   void hidePanel() override { add({Protocol::Op::kHidePanel}); }
+  void showHint(const PanelContent& content) override {
+    Protocol::Operation o;
+    o.op = Protocol::Op::kShowHint;
+    o.panel = content;
+    add(std::move(o));
+  }
+  void hideHint() override { add({Protocol::Op::kHideHint}); }
   void showIndicator(const std::string& label) override { add({Protocol::Op::kIndicator, label}); }
   void beep() override { add({Protocol::Op::kBeep}); }
   std::string textBeforeCaret() override { return context; }
@@ -211,6 +218,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   gEnvironment.userModel = std::make_shared<McBopomofo::UserOverrideModel>(NewUserModel());
   gEnvironment.settings = &gSettings;
   gEnvironment.isEnglish = IsEnglish;
+  gEnvironment.hintWindow = true;
   gFonts = std::make_unique<Layout::Fonts>();
   gEnvironment.columnsSpannedBy = [](const std::string& candidate) { return gFonts->ok() ? gFonts->span(Widen(candidate)) : 1; };
   ComPtr<ISpellCheckerFactory> spelling;

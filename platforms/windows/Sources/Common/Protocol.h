@@ -12,7 +12,9 @@
 
 namespace ProjectKey::Protocol {
 
-constexpr uint32_t kVersion = 1;
+// 2: kShowHint, kHideHint. A text service and server of different versions refuse
+// each other's messages rather than misread them.
+constexpr uint32_t kVersion = 2;
 
 enum class Request : uint8_t {
   kKeyDown = 1,       // KeyEvent
@@ -35,6 +37,8 @@ enum class Op : uint8_t {
   kHidePanel = 4,
   kIndicator = 5,
   kBeep = 6,
+  kShowHint = 7,  // the Tab hint's own window, beside the candidate window
+  kHideHint = 8,
 };
 
 class Writer {
@@ -204,7 +208,7 @@ struct Operation {
   Op op = Op::kBeep;
   std::string text;          // kInsertText, kIndicator
   Composition composition;   // kSetComposition
-  PanelContent panel;        // kShowPanel
+  PanelContent panel;        // kShowPanel, kShowHint
 };
 
 // Whether the key was taken, the state the text service shows, and what to do.
@@ -228,7 +232,8 @@ inline std::string WriteReply(const Reply& reply) {
       case Op::kInsertText:
       case Op::kIndicator: w.str(o.text); break;
       case Op::kSetComposition: WriteComposition(w, o.composition); break;
-      case Op::kShowPanel: WritePanel(w, o.panel); break;
+      case Op::kShowPanel:
+      case Op::kShowHint: WritePanel(w, o.panel); break;
       default: break;
     }
   }
@@ -249,7 +254,8 @@ inline bool ReadReply(const std::string& bytes, Reply& reply) {
       case Op::kInsertText:
       case Op::kIndicator: o.text = r.str(); break;
       case Op::kSetComposition: o.composition = ReadComposition(r); break;
-      case Op::kShowPanel: o.panel = ReadPanel(r); break;
+      case Op::kShowPanel:
+      case Op::kShowHint: o.panel = ReadPanel(r); break;
       default: break;
     }
     reply.operations.push_back(std::move(o));
