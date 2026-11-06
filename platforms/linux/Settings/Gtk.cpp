@@ -7,6 +7,7 @@
 #include <json-glib/json-glib.h>
 #include <libsoup/soup.h>
 
+#include <cstdlib>
 #include <map>
 #include <string>
 #include <vector>

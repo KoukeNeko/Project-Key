@@ -21,6 +21,9 @@ include(GNUInstallDirs)
 set(MCBOPOMOFO "" CACHE PATH "McBopomofo checkout")
 set(CORE "${CMAKE_CURRENT_SOURCE_DIR}/../../core/engine")
 add_subdirectory("${MCBOPOMOFO}/Source/Engine" mcbopomofo EXCLUDE_FROM_ALL)
+# Workaround on McBopomofoLMLib over libcxx
+# See: https://github.com/openvanilla/McBopomofo/pull/932
+target_compile_options(McBopomofoLMLib PRIVATE "SHELL:-include iterator")
 
 # The engine shared with macOS, Windows and iOS.
 add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/CharModel.cpp" "${CORE}/Controller.cpp")
