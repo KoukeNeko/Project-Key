@@ -20,9 +20,8 @@ constexpr float kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, 
 constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;
 constexpr float kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
 constexpr float kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
-// The row shown while typing (selectedRow -1): no digits, cells as wide as their words,
-// 9px a side, in the muted color at 0.85 of the candidate font size.
-constexpr float kTypingCellSide = 9, kTypingTextScale = 0.85f;
+// The row shown while typing (selectedRow -1) keeps the grid's cells, without digits:
+// each word centered in its cell, in the muted color.
 // The Tab hint's own window (Environment::hintWindow), this far from the candidate
 // window, on the side away from the text.
 constexpr float kHintGap = 6;

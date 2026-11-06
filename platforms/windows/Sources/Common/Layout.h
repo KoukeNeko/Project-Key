@@ -32,11 +32,10 @@ constexpr float kAcrylicTint = 0.6f;  // the dark background's opacity over Acry
 class Fonts {
  public:
   Fonts();
-  bool ok() const { return proof_ && candidate_ && typing_ && label_ && page_ && key_ && badge_; }
+  bool ok() const { return proof_ && candidate_ && label_ && page_ && key_ && badge_; }
   IDWriteFactory* factory() const { return factory_.Get(); }
   IDWriteTextFormat* proof() const { return proof_.Get(); }
   IDWriteTextFormat* candidate() const { return candidate_.Get(); }
-  IDWriteTextFormat* typing() const { return typing_.Get(); }  // the row shown while typing
   IDWriteTextFormat* label() const { return label_.Get(); }
   IDWriteTextFormat* page() const { return page_.Get(); }
   IDWriteTextFormat* key() const { return key_.Get(); }
@@ -54,7 +53,7 @@ class Fonts {
  private:
   Microsoft::WRL::ComPtr<IDWriteTextFormat> makeFormat(const wchar_t* family, float size, DWRITE_FONT_WEIGHT weight) const;
   Microsoft::WRL::ComPtr<IDWriteFactory> factory_;
-  Microsoft::WRL::ComPtr<IDWriteTextFormat> proof_, candidate_, typing_, label_, page_, key_, badge_;
+  Microsoft::WRL::ComPtr<IDWriteTextFormat> proof_, candidate_, label_, page_, key_, badge_;
   float columnWidth_ = 0;
 };
 

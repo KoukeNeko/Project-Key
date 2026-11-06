@@ -121,7 +121,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 @end
 
 @implementation PKCandidateView {
-  NSFont *_proofFont, *_candidateFont, *_typingFont, *_labelFont, *_pageFont;
+  NSFont *_proofFont, *_candidateFont, *_labelFont, *_pageFont;
   NSRect _pillFrom, _pillTo;  // the highlight slides from one to the other
   NSTimeInterval _slideStart;
   NSTimer *_slideTimer;
@@ -131,7 +131,6 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   if ((self = [super initWithFrame:frame])) {
     _proofFont = TextFont(14);
     _candidateFont = CandidateFont();
-    _typingFont = TextFont(_candidateFont.pointSize * kTypingTextScale);
     _labelFont = LabelFont();
     _pageFont = [NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightRegular];
   }
@@ -173,11 +172,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     if (self.content.replacedText) key += [self widthOf:[self.content.replacedText stringByAppendingString:kReplacedArrow] font:_proofFont];
     width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + key + kProofRight);
   }
-  if (self.content.rows && self.content.selectedRow < 0) {  // the row shown while typing
-    CGFloat row = kRowLeft + kRowRight;
-    for (NSString *candidate in self.content.rows.firstObject) row += 2 * kTypingCellSide + [self widthOf:candidate font:_typingFont];
-    width = MAX(width, row);
-  } else if (self.content.rows) {
+  if (self.content.rows) {
     // As wide as the fullest visible row, so a short single row stays compact.
     NSInteger columns = 0;
     for (NSArray<NSString *> *row in self.content.rows) {
@@ -374,14 +369,6 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 - (void)drawCandidatesAt:(CGFloat)top width:(CGFloat)width {
   CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
-  if (self.content.selectedRow < 0) {  // the row shown while typing: no digits, no selection
-    CGFloat x = kRowLeft, textTop = TextTop(_typingFont, top + kRowTop + kCellTop, kCellLine);
-    for (NSString *candidate in self.content.rows.firstObject) {
-      [candidate drawAtPoint:NSMakePoint(x + kTypingCellSide, textTop) withAttributes:Attributes(_typingFont, self.mutedColor)];
-      x += 2 * kTypingCellSide + [self widthOf:candidate font:_typingFont];
-    }
-    return;
-  }
   NSRect pill = self.shownSelectionRect;
   if (!NSIsEmptyRect(pill)) {
     [kAccent setFill];
@@ -405,7 +392,10 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
             withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : self.mutedColor)];
       }
       CGFloat textX = x + kCellSide + [self widthOf:@"6" font:_labelFont] + kLabelGap;
-      [row[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, on ? NSColor.whiteColor : self.textColor)];
+      BOOL typing = self.content.selectedRow < 0;  // no digits: the word centered in its cell
+      if (typing) textX = x + (span * ColumnWidth() + (span - 1) * kCellGap - [self widthOf:row[i] font:_candidateFont]) / 2;
+      NSColor *color = on ? NSColor.whiteColor : typing ? self.mutedColor : self.textColor;
+      [row[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, color)];
     }
   }
   CGFloat cellTop = top + kRowTop;  // the page label sits on the first row
