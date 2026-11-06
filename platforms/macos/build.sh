@@ -62,5 +62,9 @@ TRAINED=../../tools/bigram-trainer/.cache
 if [ -f "$TRAINED/data.txt" ]; then cp "$TRAINED/data.txt" "$APP/Contents/Resources/"; fi
 if [ -f "$TRAINED/bigram.bin" ]; then cp "$TRAINED/bigram.bin" "$APP/Contents/Resources/"; else echo "no $TRAINED/bigram.bin: building without context ranking"; fi
 if [ -f "$TRAINED/chars.bin" ]; then cp "$TRAINED/chars.bin" "$APP/Contents/Resources/"; fi
+# Their licenses and sources go with them.
+if [ -f "$TRAINED/data.txt" ] || [ -f "$TRAINED/bigram.bin" ]; then
+  cp ../../tools/bigram-trainer/MODELS-NOTICE.txt ../../tools/bigram-trainer/LICENSE-LGPL-2.1.txt "$APP/Contents/Resources/"
+fi
 codesign --force --sign - "$APP"
 echo "built $APP"

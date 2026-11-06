@@ -36,6 +36,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### 發行版隨附的詞庫與上下文模型
+
+發行版（macOS、Windows 與 Homebrew 的 Linux formula）隨附 `tools/bigram-trainer` 訓練出的三個資料檔，建置時由 `tools/bigram-trainer/fetch-models.sh` 從 GitHub 發行檔下載並以 `models.sha256` 核對。它們與程式分開授權，安裝在同一個資料夾，旁邊附上來源與授權說明 [`MODELS-NOTICE.txt`](tools/bigram-trainer/MODELS-NOTICE.txt) 與 LGPL 條文 [`LICENSE-LGPL-2.1.txt`](tools/bigram-trainer/LICENSE-LGPL-2.1.txt)。
+
+| 檔案 | 來源 | 授權 |
+|---|---|---|
+| `bigram.bin`、`chars.bin` | 從[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）與[立法院公報](https://ppg.ly.gov.tw)（資料提供者：立法院，政府資料開放授權條款第 1 版）統計的詞與字 n-gram，不含原文 | CC BY-SA 4.0 |
+| `data.txt` | McBopomofo 詞庫（MIT），加上 [libchewing-data](https://github.com/chewing/libchewing-data) `tsi.csv`（commit `c44e81aef24b06f1509f19e1be54c99812d0c43f`，LGPL-2.1-or-later）的詞，以及從上述訓練文字找出的詞 | LGPL-2.1-or-later |
+
+程式在執行時讀取這些檔案，可以直接替換或移除；沒有它們時改用 McBopomofo 的詞庫與排序。
+
 ### Windows 設定視窗的 NuGet 套件
 
 `platforms/windows/Settings` 建置時由 NuGet 取得，連同設定程式一起安裝：
@@ -48,7 +59,7 @@ SOFTWARE.
 
 ## 執行時下載，不隨 repo 散布
 
-`tools/corpus-evaluator/setup.sh`、`annotate.py` 和 `tools/bigram-trainer/train.sh` 會把下列元件下載到各自的 `.cache/`（已列入 `.gitignore`），只用於本機評測。由維基百科與立法院公報統計出的 `bigram.bin`，以及補進新酷音詞庫與語料新詞的 `data.txt` 若存在，`platforms/macos/build.sh` 與 `platforms/windows/build.ps1` 會把它們放進本機建置的程式；它們能否隨產品散布尚未確認。
+`tools/corpus-evaluator/setup.sh`、`annotate.py` 和 `tools/bigram-trainer/train.sh` 會把下列元件下載到各自的 `.cache/`（已列入 `.gitignore`），只用於本機評測與訓練。訓練出的檔案隨發行版散布的方式見上方「發行版隨附的詞庫與上下文模型」。
 
 | 元件 | 授權 | 用途 |
 |---|---|---|
@@ -62,4 +73,4 @@ SOFTWARE.
 | [pyarrow](https://arrow.apache.org) | Apache-2.0 | 讀取維基百科分片 |
 | [立法院公報](https://ppg.ly.gov.tw)（經 g0v [立法院 API](https://v2.ly.govapi.tw) 取得純文字） | 政府資料開放授權條款第 1 版（與 CC BY 4.0 相容），資料提供者：立法院 | `tools/bigram-trainer` 的訓練文字（`fetch_gazette.py`） |
 
-日後產品若隨附其中任何元件，須把對應的授權條文移到「repo 內含」一節。LGPL 元件還必須保持可替換。
+日後產品若隨附其中其他元件，須把對應的授權條文移到「repo 內含」一節。LGPL 元件還必須保持可替換。

@@ -169,6 +169,10 @@ Copy-Item "$Mcb\LICENSE.txt" "$Out\McBopomofo-LICENSE.txt"
 Copy-Item "$PSScriptRoot\..\..\LICENSE" "$Out\LICENSE.txt"
 if (Test-Path "$Trained\bigram.bin") { Copy-Item "$Trained\bigram.bin" $Out } else { Write-Host "no $Trained\bigram.bin`: building without context ranking" }
 if (Test-Path "$Trained\chars.bin") { Copy-Item "$Trained\chars.bin" $Out }
+# Their licenses and sources go with them.
+if ((Test-Path "$Trained\data.txt") -or (Test-Path "$Trained\bigram.bin")) {
+  Copy-Item "$PSScriptRoot\..\..\tools\bigram-trainer\MODELS-NOTICE.txt", "$PSScriptRoot\..\..\tools\bigram-trainer\LICENSE-LGPL-2.1.txt" $Out
+}
 
 # Smart App Control blocks unsigned programs it has not seen; say so instead of failing the build.
 foreach ($test in $tests) {

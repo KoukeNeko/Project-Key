@@ -71,7 +71,7 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 
 ## 上下文排序
 
-有 `tools/bigram-trainer/.cache/bigram.bin` 時，`build.sh` 會把它放進 App，組字器依前兩個詞選字（bigram 與 trigram）；沒有時與 McBopomofo 的選字結果相同。同一個目錄有 `chars.bin` 時一併放入，再依前兩個字評分，補上詞模型沒見過的詞對（例如「候選」後的 ㄘˋ 改讀成「字」）。同一個目錄有 `data.txt` 時，以它取代 McBopomofo 的詞庫：補上新酷音詞庫與訓練文字中 McBopomofo 沒有的詞（例如「簽核」「氣象署」）。評測結果見 `tools/corpus-evaluator/results/`。
+有 `tools/bigram-trainer/.cache/bigram.bin` 時，`build.sh` 會把它放進 App，組字器依前兩個詞選字（bigram 與 trigram）；沒有時與 McBopomofo 的選字結果相同。同一個目錄有 `chars.bin` 時一併放入，再依前兩個字評分，補上詞模型沒見過的詞對（例如「候選」後的 ㄘˋ 改讀成「字」）。同一個目錄有 `data.txt` 時，以它取代 McBopomofo 的詞庫：補上新酷音詞庫與訓練文字中 McBopomofo 沒有的詞（例如「簽核」「氣象署」）。評測結果見 `tools/corpus-evaluator/results/`。發行版附上這三個檔案；自行建置時可先執行 `tools/bigram-trainer/fetch-models.sh` 下載同一組，或自行訓練。
 
 組字接著游標前的漢字算，不當成句首：已送出「小模型」後打 ㄕˋ ㄕˋ 是「試試」，而不是句首常見的「逝世」。終端機讀不到游標前的文字，仍當成句首。
 

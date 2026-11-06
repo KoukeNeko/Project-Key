@@ -120,3 +120,7 @@ foreach(file data.txt bigram.bin chars.bin)
     install(FILES "${TRAINED}/${file}" DESTINATION "${DATA_DIR}")
   endif()
 endforeach()
+# Their licenses and sources go with them.
+if(EXISTS "${TRAINED}/data.txt" OR EXISTS "${TRAINED}/bigram.bin")
+  install(FILES ../../tools/bigram-trainer/MODELS-NOTICE.txt ../../tools/bigram-trainer/LICENSE-LGPL-2.1.txt DESTINATION "${DATA_DIR}")
+endif()

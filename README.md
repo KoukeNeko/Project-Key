@@ -30,7 +30,7 @@
 
 安裝後到系統的輸入法設定加入 Project Key：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
 
-發行版只含 McBopomofo 詞庫，選字不看上下文，鄰鍵修正也不啟用；上下文模型要自行訓練後再建置，見[上下文模型](#上下文模型)。
+發行版附上[上下文模型](#上下文模型)與補詞後的詞庫，選字依上下文排序，鄰鍵修正也會啟用。這些資料檔另有授權（CC BY-SA 4.0 與 LGPL-2.1-or-later），見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 常用按鍵
 
@@ -71,7 +71,7 @@ distribution/       發行說明，由發行流程讀取
 
 ## 上下文模型
 
-`tools/bigram-trainer` 以維基百科與立法院公報訓練兩個模型，輸入法建置時若存在就一併放入：
+`tools/bigram-trainer` 以維基百科與立法院公報訓練兩個模型，輸入法建置時若存在就一併放入，發行版也附上這兩個模型：
 
 - `bigram.bin`：詞 bigram 與 trigram，依前兩個詞選字（約 190MB）。
 - `chars.bin`：字 trigram，補上詞模型沒見過的詞對（約 126MB）。
@@ -82,8 +82,10 @@ tools/bigram-trainer/train.sh       # 下載訓練文字並訓練，約 10 分�
 platforms/macos/build.sh            # 再建置一次，把模型放進 App
 ```
 
+不想自行訓練時，`tools/bigram-trainer/fetch-models.sh` 下載發行版使用的同一組檔案。
+
 選字的評測方法與結果在 [tools/corpus-evaluator](tools/corpus-evaluator/README.md)。
 
 ## 授權
 
-Project Key 以 [MIT](LICENSE) 授權發布。詞庫與選字引擎來自 [McBopomofo](https://github.com/openvanilla/McBopomofo)（MIT）；其他第三方內容與訓練文字的授權見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+Project Key 以 [MIT](LICENSE) 授權發布。詞庫與選字引擎來自 [McBopomofo](https://github.com/openvanilla/McBopomofo)（MIT）。發行版附上的上下文模型以 CC BY-SA 4.0 授權，補詞後的詞庫以 LGPL-2.1-or-later 授權；這些資料檔與其他第三方內容、訓練文字的授權見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

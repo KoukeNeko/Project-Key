@@ -1,0 +1,62 @@
+Project Key: dictionary and context models
+
+The program is under the MIT License. The three data files below are
+distributed with it under their own licenses. They are separate files the
+program reads at run time; each can be replaced or removed, and the program
+falls back to McBopomofo's dictionary and ranking without them. They were made
+by tools/bigram-trainer in https://github.com/KoukeNeko/Project-Key, which
+rebuilds them from the sources listed here.
+
+bigram.bin, chars.bin
+  Word and character n-gram statistics counted from:
+  - Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard), by
+    Wikipedia contributors, under CC BY-SA 4.0
+    (https://creativecommons.org/licenses/by-sa/4.0/). The text was converted
+    to Taiwan Traditional Chinese with OpenCC and only counted; no text is
+    included.
+  - 立法院公報 (Legislative Yuan Gazette), 資料提供者：立法院, obtained through
+    the g0v Legislative Yuan API (https://v2.ly.govapi.tw), under the Open
+    Government Data License, version 1.0
+    (https://data.gov.tw/license).
+  These two files are licensed under CC BY-SA 4.0.
+
+data.txt
+  McBopomofo's dictionary (MIT License, see McBopomofo-LICENSE.txt), with
+  words added from:
+  - libchewing-data dict/chewing/tsi.csv, commit
+    c44e81aef24b06f1509f19e1be54c99812d0c43f
+    (https://github.com/chewing/libchewing-data), Copyright (c) 2025
+    libchewing Core Team, under LGPL-2.1-or-later;
+  - words found in the training text above.
+  This file is licensed under LGPL-2.1-or-later; the license text is in
+  LICENSE-LGPL-2.1.txt. Its source form is the file itself, and
+  tools/bigram-trainer/train.sh rebuilds it.
+
+---
+
+Project Key：詞庫與上下文模型
+
+程式本身以 MIT 授權發布。以下三個資料檔隨程式散布，各有自己的授權。它們是
+程式執行時讀取的獨立檔案，可以替換或移除；沒有它們時，程式改用 McBopomofo
+的詞庫與排序。這些檔案由 https://github.com/KoukeNeko/Project-Key 的
+tools/bigram-trainer 產生，可依下列來源重新建置。
+
+bigram.bin、chars.bin
+  從下列文字統計出的詞與字 n-gram：
+  - 中文維基百科（wikimedia/wikipedia 20231101.zh 第一個分片），維基百科貢獻
+    者，CC BY-SA 4.0（https://creativecommons.org/licenses/by-sa/4.0/）。文字
+    經 OpenCC 轉為臺灣正體後只做統計，不含原文。
+  - 立法院公報，資料提供者：立法院，經 g0v 立法院 API
+    （https://v2.ly.govapi.tw）取得，政府資料開放授權條款第 1 版
+    （https://data.gov.tw/license）。
+  這兩個檔案以 CC BY-SA 4.0 授權。
+
+data.txt
+  McBopomofo 的詞庫（MIT 授權，見 McBopomofo-LICENSE.txt），另加入：
+  - libchewing-data 的 dict/chewing/tsi.csv（commit
+    c44e81aef24b06f1509f19e1be54c99812d0c43f，
+    https://github.com/chewing/libchewing-data），Copyright (c) 2025
+    libchewing Core Team，LGPL-2.1-or-later；
+  - 從上述訓練文字找出的詞。
+  這個檔案以 LGPL-2.1-or-later 授權，條文見 LICENSE-LGPL-2.1.txt。檔案本身
+  即為原始形式，tools/bigram-trainer/train.sh 可重新建置。
