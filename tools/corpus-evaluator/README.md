@@ -7,6 +7,7 @@ tools/corpus-evaluator/setup.sh                  # 安裝 librime、libchewing�
 python3 tools/corpus-evaluator/evaluate.py       # 評測全部引擎，結果輸出到 stdout
 python3 tools/corpus-evaluator/evaluate.py --engine rime --out report.md
 python3 tools/corpus-evaluator/evaluate.py --engine projectkey --slip column  # 每句一個鍵打成上下列的相鄰鍵
+python3 tools/corpus-evaluator/evaluate.py --engine projectkey --corpus other.tsv  # 另一份同格式的語料
 ```
 
 需要 macOS 與 Homebrew。下載的資料與編譯產物都放在 `.cache/`。
@@ -54,7 +55,7 @@ python3 tools/corpus-evaluator/evaluate.py --engine projectkey --slip column  # 
 
 ## 引擎轉接程式
 
-`adapters/*.c` 從 stdin 每行讀入一句的大千鍵序（一聲為空白鍵），每行輸出 `每鍵毫秒,逗號分隔<Tab>輸出文字`。轉接程式只清除組字、不送出文字，句子之間不會互相學習。
+`adapters/*.c` 從 stdin 每行讀入一句的大千鍵序（一聲為空白鍵），每行輸出 `每鍵毫秒,逗號分隔<Tab>輸出文字`。轉接程式只清除組字、不送出文字，句子之間不會互相學習。`projectkey` 另接受 `游標前文字<Tab>鍵序`，模擬接在已送出文字之後的組字。
 
 新增引擎的步驟：
 
@@ -67,7 +68,7 @@ python3 tools/corpus-evaluator/evaluate.py --engine projectkey --slip column  # 
 | `rime` | librime + `bopomofo_tw` 方案（terra_pinyin 詞庫） |
 | `chewing` | libchewing（Homebrew 版本內建詞庫），關閉自動學習 |
 | `mcbopomofo` | McBopomofo 引擎與 `data.txt`，與 `annotate.py` 使用同一個 commit |
-| `projectkey` | 輸入法的組字器（`core/engine/Composer.cpp`）加上 `tools/bigram-trainer/.cache/bigram.bin`；有同目錄的補詞 `data.txt` 時用它取代 McBopomofo 的詞庫 |
+| `projectkey` | 輸入法的組字器（`core/engine/Composer.cpp`）加上 `tools/bigram-trainer/.cache/bigram.bin`，有同目錄的 `chars.bin` 時一併使用；有同目錄的補詞 `data.txt` 時用它取代 McBopomofo 的詞庫 |
 
 注意事項：
 

@@ -1,9 +1,11 @@
 // Engine adapter for Project Key's macOS composer: McBopomofo's grid and
-// dictionary, plus the context model when one is given.
-// Usage: projectkey <data.txt> [bigram.bin] [context weight] [trigram weight] [adjacent key score]
-// With PK_CANDIDATES set, each output line also carries, tab-separated, every
-// segment's candidates of the same length, '|' between them and '/' between
-// segments, the engine's word first (for rerank.py).
+// dictionary, plus the context model when one is given, and the character model
+// when chars.bin is beside it.
+// Usage: projectkey <data.txt> [bigram.bin] [context weight] [trigram weight] [adjacent key score] [character weight]
+// A line may start with the text before the caret and a tab. With PK_CANDIDATES
+// set, each output line also carries, tab-separated, every segment's candidates
+// of the same length, '|' between them and '/' between segments, the engine's
+// word first (for rerank.py).
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -15,7 +17,7 @@
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::cerr << "usage: " << argv[0] << " <data.txt> [bigram.bin] [context weight] [trigram weight] [adjacent key score]\n";
+    std::cerr << "usage: " << argv[0] << " <data.txt> [bigram.bin] [context weight] [trigram weight] [adjacent key score] [character weight]\n";
     return 2;
   }
   auto model = std::make_shared<ProjectKey::Lexicon>();
@@ -25,19 +27,35 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::shared_ptr<ProjectKey::Bigram> bigram;
+  auto chars = std::make_shared<ProjectKey::CharModel>();
   if (argc >= 3) {
     bigram = std::make_shared<ProjectKey::Bigram>();
     if (!bigram->load(argv[2])) {
       std::cerr << "cannot load " << argv[2] << "\n";
       return 1;
     }
+    std::string path = argv[2];
+    path = path.substr(0, path.find_last_of('/') + 1) + "chars.bin";
+    if (std::FILE* file = std::fopen(path.c_str(), "rb")) {
+      std::fclose(file);
+      if (!chars->load(path)) {
+        std::cerr << "cannot load " << path << "\n";
+        return 1;
+      }
+    }
   }
   ProjectKey::Composer composer(model, bigram, nullptr, argc >= 4 ? std::stod(argv[3]) : ProjectKey::Composer::kContextWeight, argc >= 5 ? std::stod(argv[4]) : ProjectKey::Composer::kTrigramWeight,
-                                argc >= 6 ? std::stod(argv[5]) : ProjectKey::Composer::kAdjacentKeyScore);
+                                argc >= 6 ? std::stod(argv[5]) : ProjectKey::Composer::kAdjacentKeyScore, chars,
+                                argc >= 7 ? std::stod(argv[6]) : ProjectKey::Composer::kCharWeight);
 
   std::string line;
   while (std::getline(std::cin, line)) {
     composer.clear();
+    // "<text before the caret>\t<keys>" starts the composition after that text.
+    if (size_t tab = line.find('\t'); tab != std::string::npos) {
+      composer.setTextBefore(line.substr(0, tab));
+      line.erase(0, tab + 1);
+    }
     for (size_t i = 0; i < line.size(); i++) {
       auto start = std::chrono::steady_clock::now();
       if (line[i] == ' ') {

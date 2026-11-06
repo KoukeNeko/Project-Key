@@ -1,6 +1,6 @@
 """Prototype: rerank Project Key's sentence with a causal language model.
 
-Usage: rerank.py <model> [--slip row|column] [--penalty P ...] [--top K]
+Usage: rerank.py <model> [--slip row|column] [--penalty P ...] [--top K] [--corpus corpus.tsv]
 
 The engine (adapters/projectkey.cpp with PK_CANDIDATES) gives each segment's
 candidates of the same length. Starting from the engine's sentence, each round
@@ -90,8 +90,9 @@ def main():
     parser.add_argument("--slip", choices=["row", "column"])
     parser.add_argument("--penalty", type=float, nargs="+", default=[0, 2, 4, 6, 8])
     parser.add_argument("--top", type=int, default=8)
+    parser.add_argument("--corpus", default=CORPUS)
     args = parser.parse_args()
-    with CORPUS.open() as f:
+    with open(args.corpus) as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
     rng = random.Random(0)
     for row in rows:
