@@ -7,11 +7,14 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
+import Shell from 'gi://Shell';
 import Cogl from 'gi://Cogl';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const NAME = 'org.projectkey.Panel';
+// How far the blur spreads, in logical pixels: about what KWin's blur gives on KDE.
+const BLUR_RADIUS = 30;
 const PANEL = `<node>
   <interface name="org.projectkey.Panel1">
     <method name="Show">
@@ -21,6 +24,8 @@ const PANEL = `<node>
       <arg type="i" name="width" direction="in"/>
       <arg type="i" name="height" direction="in"/>
       <arg type="s" name="pixels" direction="in"/>
+      <arg type="b" name="blur" direction="in"/>
+      <arg type="i" name="radius" direction="in"/>
     </method>
     <method name="Hide">
       <arg type="s" name="id" direction="in"/>
@@ -62,13 +67,18 @@ export default class ProjectKeyExtension extends Extension {
     // D-Bus: one of Project Key's windows, x and y in the stage's coordinates; pixels is
     // a file (in XDG_RUNTIME_DIR) of Cairo's ARGB32, premultiplied BGRA in memory, at the
     // stage's scale. A file, as a D-Bus byte array would cost Fcitx5 a call per byte.
-    Show(id, x, y, width, height, pixels) {
+    // blur asks for what is behind the window, inside its corners of radius (in pixels), blurred.
+    Show(id, x, y, width, height, pixels, blur, radius) {
         // Only Project Key's own frames: this must not show any other file of the user's.
         if (!pixels.startsWith(`${GLib.get_user_runtime_dir()}/project-key-`) || pixels.includes('/..'))
             return;
         let actor = this._windows.get(id);
         if (!actor) {
             actor = new St.Widget({reactive: false, can_focus: false, track_hover: false});
+            actor._blur = new St.Widget();
+            actor._image = new St.Widget();
+            actor.add_child(actor._blur);
+            actor.add_child(actor._image);
             Main.layoutManager.uiGroup.add_child(actor);
             this._windows.set(id, actor);
         }
@@ -89,11 +99,49 @@ export default class ProjectKeyExtension extends Extension {
         } else {
             content.set_bytes(bytes, Cogl.PixelFormat.BGRA_8888_PRE, width, height, width * 4);
         }
-        actor.set_content(content);
+        actor._image.set_content(content);
+        actor._image.set_size(width / scale, height / scale);
+        this._shapeBlur(actor, blur ? Math.round(width / scale) : 0, Math.round(height / scale), radius / scale);
         actor.set_position(x, y);
-        actor.set_size(width / scale, height / scale);
         Main.layoutManager.uiGroup.set_child_above_sibling(actor, null);
         actor.show();
+    }
+
+    // Shell.BlurEffect blurs a whole rectangle, so the blur is a stack of strips that step in
+    // at the corners, a strip for each run of rows set in alike, and none shows outside them.
+    _shapeBlur(actor, width, height, radius) {
+        const shape = `${width}x${height}/${radius}`;
+        if (actor._shape === shape)
+            return;
+        actor._shape = shape;
+        actor._blur.destroy_all_children();
+        if (!width)
+            return;
+        radius = Math.min(Math.round(radius), Math.floor(width / 2), Math.floor(height / 2));
+        const strip = (x, y, w, h) => {
+            const effect = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness: 1});
+            if ('radius' in effect)
+                effect.radius = BLUR_RADIUS;
+            else
+                effect.sigma = BLUR_RADIUS / 2;  // GNOME 45
+            const part = new St.Widget({x, y, width: w, height: h});
+            part.add_effect(effect);
+            actor._blur.add_child(part);
+        };
+        const runs = [];
+        for (let y = 0; y < radius; y++) {
+            const dy = radius - y - 0.5;
+            const inset = Math.round(radius - Math.sqrt(radius * radius - dy * dy));
+            if (runs.length && runs.at(-1).inset === inset)
+                runs.at(-1).height++;
+            else
+                runs.push({y, inset, height: 1});
+        }
+        for (const {y, inset, height: rows} of runs) {
+            strip(inset, y, width - 2 * inset, rows);
+            strip(inset, height - y - rows, width - 2 * inset, rows);
+        }
+        strip(0, radius, width, height - 2 * radius);
     }
 
     Hide(id) {

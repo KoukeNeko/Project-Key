@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
@@ -76,7 +77,7 @@ class GnomeScreen final : public Screen {
   int height() const override { return geometry_.areaHeight * geometry_.scale; }
   float scale() const override { return static_cast<float>(geometry_.scale); }
   bool composited() override { return true; }
-  bool blurs() override { return false; }
+  bool blurs() override { return true; }  // Shell.BlurEffect, in the extension
   // Each frame crosses to GNOME Shell as a file: no animation frames.
   bool animates() const override { return false; }
 
@@ -129,7 +130,7 @@ class GnomeWindow final : public Window {
     message << id_;
     message.send();
   }
-  void setBlur(bool) override { blurred = false; }
+  void setBlur(bool on) override { blurred = on; }  // the next frame carries it
 
   cairo_t* beginPaint() override {
     if (!mapped) return nullptr;
@@ -150,7 +151,8 @@ class GnomeWindow final : public Window {
     const Geometry& g = screen_.geometry();
     auto message = screen_.call("Show");
     message << id_ << static_cast<int32_t>(frame.x / g.scale + g.areaX) << static_cast<int32_t>(frame.y / g.scale + g.areaY)
-            << static_cast<int32_t>(frame.width) << static_cast<int32_t>(frame.height) << file;
+            << static_cast<int32_t>(frame.width) << static_cast<int32_t>(frame.height) << file << blurred
+            << static_cast<int32_t>(std::lround(kWindowRadius * g.scale));
     message.send();
   }
 
