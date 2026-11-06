@@ -2,7 +2,7 @@
 # (core/engine) and shows its candidates in its own X11 window (Sources/Panel.cpp).
 # build.sh fetches McBopomofo (MIT) into .build/mcbopomofo and points MCBOPOMOFO here.
 cmake_minimum_required(VERSION 3.16)
-project(fcitx5-projectkey VERSION 0.2.1 LANGUAGES CXX)
+project(fcitx5-projectkey VERSION 0.2.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
