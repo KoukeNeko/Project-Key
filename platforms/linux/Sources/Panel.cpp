@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <string_view>
 
 #include "PanelMetrics.h"
 
@@ -93,8 +94,15 @@ PangoFontDescription* Font(const char* family, float size, PangoWeight weight) {
 }  // namespace
 
 Panel::Panel(fcitx::Instance* instance, const Settings& settings) : settings_(settings), loop_(instance->eventLoop()) {
-  // X windows cannot be placed at a Wayland app's caret; input method popups can.
-  screen_ = std::getenv("WAYLAND_DISPLAY") ? OpenWaylandScreen(instance) : OpenX11Screen(loop_);
+  // X windows cannot be placed at a Wayland app's caret; input method popups can, and on
+  // GNOME, which has none, its shell can.
+  const char* desktop = std::getenv("XDG_CURRENT_DESKTOP");
+  bool gnome = desktop && std::string_view(desktop).find("GNOME") != std::string_view::npos;
+  if (!std::getenv("WAYLAND_DISPLAY")) {
+    screen_ = OpenX11Screen(loop_);
+  } else {
+    screen_ = gnome ? OpenGnomeScreen(instance) : OpenWaylandScreen(instance);
+  }
   if (!screen_) return;
   scale_ = screen_->scale();
 
@@ -248,6 +256,7 @@ Panel::Rect Panel::shownSelectionRect() const {
 
 void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fcitx::Rect& anchor) {
   if (!ok()) return;
+  scale_ = screen_->scale();  // GNOME's extension reports it after Project Key loads
   if (!panel_) {
     // On Wayland the compositor can move the window above the text once it sees its size.
     panel_ = screen_->createWindow([this] { paintPanel(); },
@@ -257,7 +266,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   }
   bool wasVisible = panel_->mapped;
   // Changes within one list move: the highlight slides and the window resizes.
-  bool animate = wasVisible && content_ && !content_->rows.empty() && !content.rows.empty();
+  bool animate = screen_->animates() && wasVisible && content_ && !content_->rows.empty() && !content.rows.empty();
   Rect from = shownSelectionRect();
   owner_ = &ic;
   anchor_ = anchor;
@@ -271,7 +280,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   int width = static_cast<int>(std::ceil(fittingWidth() * scale_));
   int height = static_cast<int>(std::ceil((proofHeight() + separator + rowHeight()) * scale_));
   int gap = static_cast<int>(std::lround(kGapToText * scale_));
-  fcitx::Rect caret = screen_->caret(anchor);
+  fcitx::Rect caret = screen_->caret(ic, anchor);
   int left = caret.left() - static_cast<int>(std::lround(kAnchorInset * scale_));
   int top = caret.bottom() + gap;
   // A Tab hint goes under the window too, so it needs the room as well.
@@ -587,7 +596,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
 void Panel::follow(fcitx::InputContext& ic, const fcitx::Rect& anchor) {
   if (!ok()) return;
   if (badge_ && badge_->mapped) {
-    placeBadge(anchor);
+    placeBadge(screen_->caret(ic, anchor));
     paintBadge();
   }
   if (&ic == owner_ && content_ && panel_->mapped) show(ic, PanelContent(*content_), anchor);
@@ -597,16 +606,17 @@ void Panel::follow(fcitx::InputContext& ic, const fcitx::Rect& anchor) {
 
 void Panel::showBadge(fcitx::InputContext& ic, const std::string& label, const fcitx::Rect& anchor) {
   if (!ok()) return;
+  scale_ = screen_->scale();
   if (!badge_) {
     badge_ = screen_->createWindow([this] { paintBadge(); },
                                    [this] {
                                      if (!badge_->mapped) return;
-                                     placeBadge(badgeAnchor_);
+                                     placeBadge(badgeCaret_);
                                      paintBadge();
                                    });
   }
   badgeLabel_ = label;
-  placeBadge(anchor);
+  placeBadge(screen_->caret(ic, anchor));
   badgeStart_ = NowMs();
   // Without a compositor a window cannot fade or round its corners: it shows square at full strength.
   badgeFades_ = screen_->composited();
@@ -619,12 +629,11 @@ void Panel::showBadge(fcitx::InputContext& ic, const std::string& label, const f
 }
 
 // Under the caret, above it at the screen's end, beside the panel when they overlap.
-void Panel::placeBadge(const fcitx::Rect& anchor) {
-  badgeAnchor_ = anchor;
+void Panel::placeBadge(const fcitx::Rect& caret) {
+  badgeCaret_ = caret;
   int width = static_cast<int>(std::ceil(std::max(kBadgeSide, this->width(badgeLabel_, badgeFont_) + 2 * kBadgePadding) * scale_));
   int height = static_cast<int>(std::ceil(kBadgeSide * scale_));
   int gap = static_cast<int>(std::lround(kGapToText * scale_));
-  fcitx::Rect caret = screen_->caret(anchor);
   int x = caret.left(), y = caret.bottom() + gap;
   if (badge_->above() || y + height > screen_->height()) y = caret.top() - gap - height;
   badge_->place({x, y, width, height});

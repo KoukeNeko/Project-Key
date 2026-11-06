@@ -1,0 +1,190 @@
+// Project Key's windows on GNOME (Wayland). Mutter gives an input method no way to
+// place a window at the caret, so a GNOME Shell extension shows them
+// (gnome-shell/project-key@koukeneko.github.io): each window is painted into memory,
+// written to a file in XDG_RUNTIME_DIR and handed to the extension with its place on
+// screen. The extension sends back where the focused window and its monitor's work
+// area are, which turn an app's caret (relative to its window) into those coordinates.
+#include <cairo.h>
+#include <dbus_public.h>
+#include <fcitx-utils/dbus/bus.h>
+#include <fcitx-utils/dbus/objectvtable.h>
+#include <fcitx-utils/dbus/servicewatcher.h>
+#include <fcitx/addonmanager.h>
+#include <fcitx/instance.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <string>
+
+#include "Screen.h"
+
+namespace ProjectKey {
+
+namespace {
+
+constexpr char kExtension[] = "org.projectkey.Panel";
+
+// Where the extension says the focused window and its monitor's work area are, in
+// GNOME's logical coordinates, and the scale that makes them pixels.
+struct Geometry {
+  int originX = 0, originY = 0;
+  int areaX = 0, areaY = 0, areaWidth = 0, areaHeight = 0;
+  int scale = 1;
+};
+
+class GnomeScreen;
+
+// What the extension calls on Fcitx5's bus name, at /projectkey/panel.
+class PanelHost : public fcitx::dbus::ObjectVTable<PanelHost> {
+ public:
+  explicit PanelHost(GnomeScreen& screen) : screen_(screen) {}
+  void geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
+                int32_t scale);
+
+ private:
+  GnomeScreen& screen_;
+  FCITX_OBJECT_VTABLE_METHOD(geometry, "Geometry", "iiiiiii", "");
+};
+
+class GnomeScreen final : public Screen {
+ public:
+  explicit GnomeScreen(fcitx::dbus::Bus* bus) : bus_(bus), host_(*this), watcher_(*bus) {
+    bus_->addObjectVTable("/projectkey/panel", "org.projectkey.PanelHost1", host_);
+    entry_ = watcher_.watchService(kExtension, [this](const std::string&, const std::string&, const std::string& owner) {
+      known_ = false;
+      if (!owner.empty()) call("Refresh").send();  // the geometry, for this addon loaded after it last went out
+    });
+  }
+
+  // Until the extension has said where things are, Fcitx5's panel stands in.
+  bool reaches(const fcitx::InputContext&) const override { return known_; }
+  std::unique_ptr<Window> createWindow(std::function<void()>, std::function<void()>) override;
+  // In pixels from the work area's corner. Apps GNOME Shell relays (IBus) give the caret
+  // on screen; apps on Fcitx5's own D-Bus frontend (GTK and Qt under Wayland) give it in
+  // their window, which the extension says is the focused one.
+  fcitx::Rect caret(const fcitx::InputContext& ic, const fcitx::Rect& anchor) const override {
+    int s = geometry_.scale;
+    bool relative = ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect);
+    int originX = relative ? geometry_.originX : 0, originY = relative ? geometry_.originY : 0;
+    int left = (originX + anchor.left() - geometry_.areaX) * s, top = (originY + anchor.top() - geometry_.areaY) * s;
+    return fcitx::Rect(left, top, left + anchor.width() * s, top + anchor.height() * s);
+  }
+  int width() const override { return geometry_.areaWidth * geometry_.scale; }
+  int height() const override { return geometry_.areaHeight * geometry_.scale; }
+  float scale() const override { return static_cast<float>(geometry_.scale); }
+  bool composited() override { return true; }
+  bool blurs() override { return false; }
+  // Each frame crosses to GNOME Shell as a file: no animation frames.
+  bool animates() const override { return false; }
+
+  void setGeometry(const Geometry& geometry) {
+    known_ = geometry.areaWidth > 0 && geometry.areaHeight > 0 && geometry.scale > 0;
+    if (known_) geometry_ = geometry;
+  }
+  fcitx::dbus::Message call(const char* member) {
+    return bus_->createMethodCall(kExtension, "/org/projectkey/Panel", "org.projectkey.Panel1", member);
+  }
+  const Geometry& geometry() const { return geometry_; }
+  int nextId() { return ++windows_; }
+
+ private:
+  fcitx::dbus::Bus* bus_;
+  PanelHost host_;
+  fcitx::dbus::ServiceWatcher watcher_;
+  std::unique_ptr<fcitx::dbus::ServiceWatcherEntry> entry_;
+  Geometry geometry_;
+  bool known_ = false;
+  int windows_ = 0;
+};
+
+void PanelHost::geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
+                         int32_t scale) {
+  screen_.setGeometry({originX, originY, areaX, areaY, areaWidth, areaHeight, scale});
+}
+
+class GnomeWindow final : public Window {
+ public:
+  explicit GnomeWindow(GnomeScreen& screen) : screen_(screen), id_("w" + std::to_string(screen.nextId())) {
+    frame.width = frame.height = 1;
+    const char* runtime = std::getenv("XDG_RUNTIME_DIR");
+    std::string base = std::string(runtime ? runtime : "/tmp") + "/project-key-" + std::to_string(getpid()) + "-" + id_;
+    files_[0] = base + "-a.raw";
+    files_[1] = base + "-b.raw";
+  }
+  ~GnomeWindow() override {
+    unmap();
+    if (image_) cairo_surface_destroy(image_);
+    for (const std::string& file : files_) unlink(file.c_str());
+  }
+
+  void place(const Frame& to) override { frame = {to.x, to.y, std::max(to.width, 1), std::max(to.height, 1)}; }
+  void map(fcitx::InputContext&) override { mapped = true; }  // the next frame shows it
+  void unmap() override {
+    if (!mapped) return;
+    mapped = false;
+    auto message = screen_.call("Hide");
+    message << id_;
+    message.send();
+  }
+  void setBlur(bool) override { blurred = false; }
+
+  cairo_t* beginPaint() override {
+    if (!mapped) return nullptr;
+    if (!image_ || cairo_image_surface_get_width(image_) != frame.width || cairo_image_surface_get_height(image_) != frame.height) {
+      if (image_) cairo_surface_destroy(image_);
+      image_ = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, frame.width, frame.height);
+    }
+    return cairo_create(image_);
+  }
+
+  void endPaint(cairo_t* cr) override {
+    cairo_destroy(cr);
+    cairo_surface_flush(image_);
+    // Two files in turn, so the extension never reads one being written.
+    const std::string& file = files_[next_];
+    next_ ^= 1;
+    if (!write(file)) return;
+    const Geometry& g = screen_.geometry();
+    auto message = screen_.call("Show");
+    message << id_ << static_cast<int32_t>(frame.x / g.scale + g.areaX) << static_cast<int32_t>(frame.y / g.scale + g.areaY)
+            << static_cast<int32_t>(frame.width) << static_cast<int32_t>(frame.height) << file;
+    message.send();
+  }
+
+ private:
+  // The image's rows, without the padding Cairo may put after each.
+  bool write(const std::string& file) const {
+    int fd = open(file.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    if (fd < 0) return false;
+    const unsigned char* data = cairo_image_surface_get_data(image_);
+    int stride = cairo_image_surface_get_stride(image_);
+    size_t row = static_cast<size_t>(frame.width) * 4;
+    bool ok = true;
+    for (int y = 0; y < frame.height && ok; y++) ok = ::write(fd, data + static_cast<size_t>(y) * stride, row) == static_cast<ssize_t>(row);
+    close(fd);
+    return ok;
+  }
+
+  GnomeScreen& screen_;
+  std::string id_;
+  std::string files_[2];
+  int next_ = 0;
+  cairo_surface_t* image_ = nullptr;
+};
+
+std::unique_ptr<Window> GnomeScreen::createWindow(std::function<void()>, std::function<void()>) {
+  return std::make_unique<GnomeWindow>(*this);
+}
+
+}  // namespace
+
+std::unique_ptr<Screen> OpenGnomeScreen(fcitx::Instance* instance) {
+  fcitx::AddonInstance* dbus = instance->addonManager().addon("dbus");
+  fcitx::dbus::Bus* bus = dbus ? dbus->call<fcitx::IDBusModule::bus>() : nullptr;
+  return bus ? std::make_unique<GnomeScreen>(bus) : nullptr;
+}
+
+}  // namespace ProjectKey

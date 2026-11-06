@@ -59,7 +59,7 @@ add_custom_command(
   COMMAND "${WAYLAND_SCANNER}" client-header "${IM_PROTOCOL}" input-method-unstable-v2-client-protocol.h
   COMMAND "${WAYLAND_SCANNER}" private-code "${IM_PROTOCOL}" input-method-unstable-v2-protocol.c
   DEPENDS "${IM_PROTOCOL}")
-add_library(projectkey MODULE Sources/ProjectKey.cpp Sources/Panel.cpp Sources/X11Screen.cpp Sources/WaylandScreen.cpp
+add_library(projectkey MODULE Sources/ProjectKey.cpp Sources/Panel.cpp Sources/X11Screen.cpp Sources/GnomeScreen.cpp Sources/WaylandScreen.cpp
   "${CMAKE_CURRENT_BINARY_DIR}/input-method-unstable-v2-protocol.c")
 target_include_directories(projectkey PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(projectkey PRIVATE engine Fcitx5::Core Fcitx5::Utils Fcitx5::Module::DBus Fcitx5::Module::Wayland
@@ -90,6 +90,9 @@ install(FILES projectkey-settings.desktop DESTINATION "${CMAKE_INSTALL_DATADIR}/
 # The icon (tools/icon/make-icons.ps1), for the input method and the settings launcher. Desktops read
 # icons through hicolor's cache, so refresh it as a package's trigger would.
 install(FILES fcitx-projectkey.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
+# The GNOME Shell extension that shows Project Key's windows on GNOME (Sources/GnomeScreen.cpp),
+# where Mutter lets no input method place them; it is turned on in GNOME's Extensions app.
+install(DIRECTORY gnome-shell/project-key@koukeneko.github.io DESTINATION "${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions")
 # The Fcitx5 theme in the candidate window's look, for Fcitx5's own panel (Wayland, other input methods).
 install(DIRECTORY theme/ DESTINATION "${FCITX_INSTALL_PKGDATADIR}/themes/projectkey")
 install(CODE "execute_process(COMMAND gtk-update-icon-cache -q -t -f \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor\" ERROR_QUIET)")

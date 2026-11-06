@@ -81,7 +81,7 @@ class Panel {
   void paintHint();
 
   // Badge.
-  void placeBadge(const fcitx::Rect& anchor);
+  void placeBadge(const fcitx::Rect& caret);  // as Screen::caret gives it
   void avoidPanel();
   void paintBadge();
   bool tickBadge();
@@ -116,7 +116,7 @@ class Panel {
 
   std::unique_ptr<Window> badge_;
   std::string badgeLabel_;
-  fcitx::Rect badgeAnchor_;
+  fcitx::Rect badgeCaret_;
   float badgeAlpha_ = 1;
   bool badgeFades_ = false;  // a compositor shows its alpha
   uint64_t badgeStart_ = 0;

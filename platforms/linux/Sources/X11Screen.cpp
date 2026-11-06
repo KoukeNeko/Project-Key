@@ -52,7 +52,7 @@ class X11Screen final : public Screen {
     return !ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect);
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
-  fcitx::Rect caret(const fcitx::Rect& anchor) const override { return anchor; }
+  fcitx::Rect caret(const fcitx::InputContext&, const fcitx::Rect& anchor) const override { return anchor; }
   // shortcut: the whole X screen is the work area, so a panel can overlap a dock or straddle monitors; use RandR and _NET_WORKAREA if that shows.
   int width() const override { return screen_->width_in_pixels; }
   int height() const override { return screen_->height_in_pixels; }

@@ -88,7 +88,7 @@ class WaylandScreen final : public Screen {
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
   // The compositor knows the caret; frames start from it.
-  fcitx::Rect caret(const fcitx::Rect&) const override { return fcitx::Rect(); }
+  fcitx::Rect caret(const fcitx::InputContext&, const fcitx::Rect&) const override { return fcitx::Rect(); }
   // And keeps the popups on screen.
   int width() const override { return INT_MAX / 2; }
   int height() const override { return INT_MAX / 2; }

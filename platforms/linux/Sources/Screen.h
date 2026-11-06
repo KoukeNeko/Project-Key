@@ -1,7 +1,8 @@
 // Where Project Key's windows go (Panel.cpp draws them). On X11 they are
 // override-redirect windows placed at the caret (X11Screen.cpp). On Wayland the
 // compositor places them at the caret itself, as input method popups
-// (WaylandScreen.cpp).
+// (WaylandScreen.cpp); on GNOME, which has none, a GNOME Shell extension shows
+// them (GnomeScreen.cpp).
 #pragma once
 
 #include <cairo.h>
@@ -56,7 +57,7 @@ class Screen {
   virtual std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) = 0;
   // What frames are measured from, given the caret in the context's coordinates:
   // the screen's origin on X11, the caret on Wayland, where the compositor finds it.
-  virtual fcitx::Rect caret(const fcitx::Rect& anchor) const = 0;
+  virtual fcitx::Rect caret(const fcitx::InputContext& ic, const fcitx::Rect& anchor) const = 0;
   // The area windows stay within, in the same coordinates.
   virtual int width() const = 0;
   virtual int height() const = 0;
@@ -67,9 +68,12 @@ class Screen {
   virtual bool blurs() = 0;
   // Handles what the display sent, so a window shows at once.
   virtual void sync() {}
+  // Whether windows slide and resize in steps; each step is a frame to deliver.
+  virtual bool animates() const { return true; }
 };
 
 std::unique_ptr<Screen> OpenX11Screen(fcitx::EventLoop& loop);
 std::unique_ptr<Screen> OpenWaylandScreen(fcitx::Instance* instance);
+std::unique_ptr<Screen> OpenGnomeScreen(fcitx::Instance* instance);
 
 }  // namespace ProjectKey

@@ -9,13 +9,15 @@ Fcitx5 注音輸入法，大千鍵盤，按鍵與 [macOS 版](../macos/README.md
 | 引擎要做的事 | Fcitx5 上的做法 |
 |---|---|
 | 組字區 | preedit，可疑字以外的段落加底線，選字中的段落反白 |
-| 候選字窗、中／英標記 | Project Key 自己畫的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同：X11 上是 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上是輸入法的 popup（`Sources/WaylandScreen.cpp`） |
+| 候選字窗、中／英標記 | Project Key 自己畫的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同：X11 上是 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上是輸入法的 popup（`Sources/WaylandScreen.cpp`），GNOME 上由 Project Key 的 GNOME Shell 擴充功能顯示（`Sources/GnomeScreen.cpp`） |
 | 前文（Tab 英文轉注音、組字接著游標前的字選字） | surrounding text；App 不提供時 Tab 照常輸入，選字當成句首 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
 「候選視窗外觀」有深色與模糊（預設）兩種。模糊用 KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），模糊視窗後方的內容再疊一層深色；KWin 的模糊特效關著或用別的視窗管理員時，模糊會改成深色。中／英標記跟著用同一種外觀。有合成器時視窗是圓角，沒有時是直角。
 
 Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連到 Fcitx5 時，候選字窗與中／英標記是畫在 Fcitx5 的 Wayland 連線上的 input popup，由合成器放在游標下方，下方放不下時放在上方；Wayland 下沒有模糊，「模糊」外觀會改成深色。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）或 KWin 的輸入法（input-method-v1）連線時，以及 X11 上 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題；操作與其他平台相同：整句預覽和頁碼在第一行，選字列逐格選取，按 ↓ 展開的格線以直排列出最多五列（GNOME 上面板由 App 畫，每個候選只能是一行純文字，所以選中的那列整列反白、選中的字以［］標出）。
+
+GNOME（Mutter）沒有讓輸入法把視窗放在游標處的協定，所以 GNOME 上候選字窗、Tab 提示與中／英標記由 GNOME Shell 擴充功能「Project Key」（`gnome-shell/`，裝在 `/usr/share/gnome-shell/extensions/project-key@koukeneko.github.io`）顯示：Project Key 照常自己畫，把畫好的影像寫到 `XDG_RUNTIME_DIR` 的檔案，經 D-Bus 交給擴充功能放到游標處；擴充功能則回報焦點視窗與工作區的位置，把 App 給的相對座標換成螢幕座標。GNOME Shell 轉送的 App（IBus）與經 Fcitx5 D-Bus 的 App 都適用。安裝後在「擴充功能」App 開啟它（或 `gnome-extensions enable project-key@koukeneko.github.io`，需重新登入）；沒開啟時改用 Fcitx5 的候選面板。GNOME 上視窗沒有滑動動畫，也沒有模糊。
 
 安裝時附上 Fcitx5 主題「Project Key」（`theme/`，裝在 `/usr/share/fcitx5/themes/projectkey`）：深色、圓角、選取的字用強調色，邊距與候選字窗相同。在 Fcitx5 設定的「附加元件 → 經典使用者介面 → 主題」選它，用到 Fcitx5 候選面板時外觀就和其他平台一致（GNOME 上這個面板由 App 自己畫，同樣讀 Fcitx5 主題）；它也會套用到其他 Fcitx5 輸入法。主題的圖片由 `tools/icon/make-icons.ps1` 產生。
 

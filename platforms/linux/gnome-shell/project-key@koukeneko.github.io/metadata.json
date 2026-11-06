@@ -1,0 +1,7 @@
+{
+  "uuid": "project-key@koukeneko.github.io",
+  "name": "Project Key",
+  "description": "Shows Project Key's candidate window, Tab hint and 中／英 badge at the caret. GNOME gives an input method no way to place its own windows there; Project Key (in Fcitx5) draws them and this shows them.",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "url": "https://github.com/KoukeNeko/Project-Key"
+}
