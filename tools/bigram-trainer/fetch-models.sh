@@ -11,4 +11,5 @@ for file in data.txt bigram.bin chars.bin; do
   curl -fsSL --retry 3 -o ".cache/$file" "$URL/$file"
 done
 cd .cache
-shasum -a 256 -c ../models.sha256
+# Git Bash on Windows has sha256sum but no shasum; macOS has shasum.
+if command -v sha256sum >/dev/null; then sha256sum -c ../models.sha256; else shasum -a 256 -c ../models.sha256; fi
