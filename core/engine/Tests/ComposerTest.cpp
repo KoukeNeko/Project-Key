@@ -124,6 +124,25 @@ int main(int argc, char** argv) {
   composer.clear();
   type(composer, "rup w");
   assert(composer.text() == "今天");
+  // Without 簡拼, a lone symbol is no syllable and each key edits the open syllable:
+  // ㄨ then ㄇ is ㄇㄨ, ㄅ then ㄆ is ㄆ, and ㄋㄧ then ㄏ is ㄏㄧ.
+  Composer plain(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore,
+                 nullptr, Composer::kCharWeight, nullptr, /*abbreviated=*/false);
+  type(plain, "ja");
+  assert(plain.readingCount() <= 1 && plain.text() != "我們" && plain.hasPendingReading());
+  plain.clear();
+  type(plain, "1q");
+  assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄆ");
+  plain.clear();
+  type(plain, "suc");
+  assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄏㄧ");
+  // A syllable still ends with a tone key or Space: ㄋㄧˇ ㄏㄠˇ is 你好.
+  plain.clear();
+  type(plain, "su3cl3");
+  assert(plain.text() == "你好");
+  composer.clear();
+  type(composer, "1q");
+  assert(composer.readingCount() == 2);
   // Keys typed in English are Zhuyin only when they spell a syllable, which a lone letter does not.
   assert(!composer.isSyllableKeys("x") && composer.isSyllableKeys("su"));
 

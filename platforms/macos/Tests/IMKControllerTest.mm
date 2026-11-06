@@ -121,6 +121,8 @@ int main() {
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ProofPreview"];
     // These steps choose after the cursor; macOS defaults to before it.
     [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"CandidatePosition"];
+    // These steps type toneless syllables in a row.
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"Abbreviated"];
     FakeClient *client = [[FakeClient alloc] init];
     PKInputController *controller = [[PKInputController alloc] init];
 
@@ -317,6 +319,7 @@ int main() {
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"CapsLockToggle"];
 
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"CandidatePosition"];
+    [NSUserDefaults.standardUserDefaults removeObjectForKey:@"Abbreviated"];
     std::printf("IMKControllerTest passed\n");
   }
   return 0;

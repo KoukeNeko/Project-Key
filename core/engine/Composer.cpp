@@ -45,10 +45,10 @@ std::string UserKey(const std::string& previousReading, const std::string& previ
 constexpr char kSeparator = '-';  // ReadingGrid's default
 
 // The dictionary, reading a syllable that ends in Composer::kAnyTone as any of its tones,
-// and a lone symbol that ends in it as any syllable it begins.
+// and, when abbreviated, a lone symbol that ends in it as any syllable it begins.
 class TonelessModel : public LanguageModel {
  public:
-  explicit TonelessModel(std::shared_ptr<Lexicon> lm) : lm_(std::move(lm)) {}
+  TonelessModel(std::shared_ptr<Lexicon> lm, bool abbreviated) : lm_(std::move(lm)), abbreviated_(abbreviated) {}
 
   std::vector<Unigram> getUnigrams(const std::string& reading) override {
     size_t marker = reading.find(Composer::kAnyTone);
@@ -59,7 +59,7 @@ class TonelessModel : public LanguageModel {
     std::vector<Typed> typed;
     for (size_t start = 0;;) {
       size_t end = reading.find(kSeparator, start);
-      typed.push_back(Typed::Of(reading.substr(start, end - start)));
+      typed.push_back(Typed::Of(reading.substr(start, end - start), abbreviated_));
       if (end == std::string::npos) break;
       start = end + 1;
     }
@@ -103,12 +103,12 @@ class TonelessModel : public LanguageModel {
     std::string symbols;
     bool anyTone = false, anySyllable = false;
 
-    static Typed Of(const std::string& syllable) {
+    static Typed Of(const std::string& syllable, bool abbreviated) {
       if (syllable.empty() || syllable.back() != Composer::kAnyTone) return {syllable};
       std::string symbols = syllable.substr(0, syllable.size() - 1);
       BopomofoSyllable parsed = BopomofoSyllable::FromComposedString(symbols);
       int parts = !!parsed.consonantComponent() + !!parsed.middleVowelComponent() + !!parsed.vowelComponent();
-      return {symbols, true, parts == 1};
+      return {symbols, true, abbreviated && parts == 1};
     }
 
     bool matches(std::string_view syllable) const {
@@ -133,6 +133,7 @@ class TonelessModel : public LanguageModel {
   }
 
   std::shared_ptr<Lexicon> lm_;
+  bool abbreviated_;
   std::unordered_map<std::string, std::vector<Unigram>> cache_;
 };
 
@@ -235,9 +236,9 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, double adjacentKeyScore, std::shared_ptr<const CharModel> chars,
-                   double charWeight, std::shared_ptr<const PersonalModel> personal)
+                   double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated)
     : lm_(lm),
-      dictionary_(std::make_shared<TonelessModel>(lm)),
+      dictionary_(std::make_shared<TonelessModel>(lm, abbreviated)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
       contextWeight_(contextWeight),
       trigramWeight_(trigramWeight),
@@ -247,6 +248,7 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
       userModel_(std::move(userModel)),
       // Without context nothing can tell a slip from what was typed.
       adjacentKeyScore_(bigram_ ? adjacentKeyScore : -INFINITY),
+      abbreviated_(abbreviated),
       gridModel_(GridModel(dictionary_, adjacentKeyScore_)),
       grid_(gridModel_),
       reading_(BopomofoKeyboardLayout::StandardLayout()) {}
@@ -298,6 +300,7 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
 // composition has a syllable typed with a tone, such a syllable is more likely a slip
 // (ㄍㄛ for ㄍㄜ) than first symbols, so it stays one when a key one off explains it.
 bool Composer::startsSyllable(char key) const {
+  if (!abbreviated_) return false;
   BopomofoSyllable typed = BopomofoKeyboardLayout::StandardLayout()->syllableFromKeySequence(std::string(1, key));
   if (typed.hasToneMarker()) return false;
   auto lastPlace = [](const BopomofoSyllable& s) { return s.hasVowel() ? 3 : s.hasMiddleVowel() ? 2 : s.hasConsonant() ? 1 : 0; };

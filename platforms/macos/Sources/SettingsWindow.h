@@ -10,6 +10,7 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT NSString *const PKProofPreviewKey;     // the bubble beside the text while typing
 FOUNDATION_EXPORT NSString *const PKChoosingProofKey;    // the row under the candidates while choosing
 FOUNDATION_EXPORT NSString *const PKAdjacentKeysKey;     // match readings one key off
+FOUNDATION_EXPORT NSString *const PKAbbreviatedKey;      // 簡拼: a lone symbol stands for a syllable
 FOUNDATION_EXPORT NSString *const PKRememberChoicesKey;  // the user override model
 FOUNDATION_EXPORT NSString *const PKShiftToggleKey;      // a lone Shift switches 中/英
 FOUNDATION_EXPORT NSString *const PKCapsLockToggleKey;   // Caps Lock switches 中/英 and letters stay lowercase

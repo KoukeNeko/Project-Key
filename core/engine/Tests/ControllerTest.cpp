@@ -134,6 +134,7 @@ int main(int argc, char** argv) {
   assert(Utf8Bytes(mixed, Utf16Length(mixed)) == mixed.size());
 
   MemorySettings settings;
+  settings.set(Setting::kAbbreviated, 1);  // most of these tests type toneless syllables in a row
   Environment env;
   env.lm = std::make_shared<Lexicon>();
   env.lm->loadLanguageModel(argv[1]);
@@ -526,6 +527,22 @@ int main(int argc, char** argv) {
   Type(controller, "ji3ap7");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && env.personal->empty());
   settings.remove(Setting::kRememberChoices);
+
+  // 簡拼 off, the default: Zhuyin keys edit the open syllable, as in an ordinary Zhuyin input method.
+  settings.remove(Setting::kAbbreviated);
+  Type(controller, "ja");  // ㄨ then ㄇ is ㄇㄨ, not 我ㄇ
+  assert(client.marked == "ㄇㄨ");
+  EscapeAll(controller, client);
+  Type(controller, "1q");  // ㄅ then ㄆ is ㄆ
+  assert(client.marked == "ㄆ");
+  EscapeAll(controller, client);
+  Type(controller, "suc");  // ㄋㄧ then ㄏ is ㄏㄧ
+  assert(client.marked == "ㄏㄧ");
+  EscapeAll(controller, client);
+  settings.set(Setting::kAbbreviated, 1);
+  Type(controller, "ja");
+  assert(client.marked == "我ㄇ");
+  EscapeAll(controller, client);
 
   std::printf("ControllerTest passed\n");
   return 0;

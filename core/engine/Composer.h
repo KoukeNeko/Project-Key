@@ -55,18 +55,20 @@ class Composer {
   // Each syllable typed with its tone also matches the readings one adjacent key away (a slip
   // such as ㄧㄡˇ for ㄧㄝˇ, or a key in the row above or below), scored adjacentKeyScore
   // lower; -infinity turns it off.
+  // Without abbreviated, a lone symbol is no syllable of its own and every Zhuyin key edits
+  // the open syllable (ㄅ then ㄆ is ㄆ), so a syllable ends only with a tone key or Space.
   explicit Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram = nullptr,
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
                     double adjacentKeyScore = kAdjacentKeyScore, std::shared_ptr<const CharModel> chars = nullptr,
                     double charWeight = kCharWeight,
-                    std::shared_ptr<const PersonalModel> personal = nullptr);
+                    std::shared_ptr<const PersonalModel> personal = nullptr, bool abbreviated = true);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -3;
   // How much the character model's log10 probability adds to a word's score (it only works with a Bigram).
   static constexpr double kCharWeight = 0.2;
   // Ends a grid reading's syllable that was typed without a tone; it reads as any of its tones,
-  // and a lone symbol as any syllable it begins (ㄋ for 你 or 那).
+  // and, when abbreviated, a lone symbol as any syllable it begins (ㄋ for 你 or 那).
   static constexpr char kAnyTone = '*';
 
   enum class KeyResult { kHandled, kInvalid };
@@ -147,6 +149,7 @@ class Composer {
   std::unordered_map<uint64_t, double> charCache_;
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel_;
   double adjacentKeyScore_;
+  bool abbreviated_;
   // dictionary_, plus the words of readings one key off when adjacentKeyScore_ is finite.
   std::shared_ptr<Formosa::Gramambular2::LanguageModel> gridModel_;
   Formosa::Gramambular2::ReadingGrid grid_;

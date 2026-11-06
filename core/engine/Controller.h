@@ -70,6 +70,7 @@ enum class Setting {
   kProofPreviewLastOn,  // the mode ⌃⇧P turns back on; absent until first toggled
   kChoosingProofLastOn,
   kAdjacentKeys,        // match readings one key off
+  kAbbreviated,         // 簡拼: a lone symbol stands for a syllable, and a key that cannot extend the open one starts the next
   kRememberChoices,     // the user override model
   kShiftToggle,         // a lone Shift switches 中/英
   kCapsLockToggle,      // Caps Lock switches 中/英 and letters stay lowercase
@@ -229,7 +230,7 @@ class Controller {
   bool shiftAlone_ = false;
   bool cursorMoved_ = false;  // arrows moved the cursor since the last typed key
   std::string shown_;  // the composition as last shown, pending reading included
-  bool adjacentKeys_ = false, rememberChoices_ = false;  // the settings composer_ was made with
+  bool adjacentKeys_ = false, abbreviated_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
   std::string englishRun_;

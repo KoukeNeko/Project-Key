@@ -26,6 +26,9 @@
       <tk:SettingsCard Header="鄰鍵修正">
         <ToggleSwitch x:Name="AdjacentKeys" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
+      <tk:SettingsCard Header="簡拼">
+        <ToggleSwitch x:Name="Abbreviated" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
       <tk:SettingsCard Header="記住選過的字">
         <ToggleSwitch x:Name="RememberChoices" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
