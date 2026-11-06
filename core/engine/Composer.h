@@ -17,6 +17,7 @@
 #include "McBopomofoLM.h"
 #include "MemoryMappedFile.h"
 #include "ParselessPhraseDB.h"
+#include "PersonalModel.h"
 #include "UserOverrideModel.h"
 #include "gramambular2/reading_grid.h"
 
@@ -58,7 +59,8 @@ class Composer {
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
                     double adjacentKeyScore = kAdjacentKeyScore, std::shared_ptr<const CharModel> chars = nullptr,
-                    double charWeight = kCharWeight);
+                    double charWeight = kCharWeight,
+                    std::shared_ptr<const PersonalModel> personal = nullptr);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -3;
   // How much the character model's log10 probability adds to a word's score (it only works with a Bigram).
@@ -137,6 +139,10 @@ class Composer {
   double trigramWeight_;
   std::shared_ptr<const CharModel> chars_;
   double charWeight_;
+  // What the user typed; it scores characters even without chars_.
+  std::shared_ptr<const PersonalModel> personal_;
+  uint64_t personalVersion_ = 0;  // personal_'s version when charCache_ was filled
+  bool scoresChars() const { return chars_ || personal_; }
   // The character model's log10 P(c | a b) by a << 42 | b << 21 | c.
   std::unordered_map<uint64_t, double> charCache_;
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel_;

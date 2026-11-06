@@ -17,8 +17,6 @@ namespace {
 using ProjectKey::CharModel;
 constexpr double kDiscount = 0.75;
 
-bool IsHan(uint32_t c) { return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x20000 && c <= 0x2FFFF); }
-
 // Sorted n-gram keys -> the kept n-grams' discounted probabilities, and the backoff
 // weight of each context that keeps any.
 void Estimate(std::vector<uint64_t>& keys, uint64_t minCount, std::vector<CharModel::Record>& kept,
@@ -79,7 +77,7 @@ int main(int argc, char** argv) {
   std::string line;
   while (std::getline(std::cin, line)) {
     for (uint32_t c : CharModel::CodePoints(line)) {
-      if (IsHan(c)) {
+      if (CharModel::IsHan(c)) {
         run.push_back(c);
       } else {
         endRun();

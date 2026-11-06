@@ -5,10 +5,12 @@
 // A line may start with the text before the caret and a tab. With PK_CANDIDATES
 // set, each output line also carries, tab-separated, every segment's candidates
 // of the same length, '|' between them and '/' between segments, the engine's
-// word first (for rerank.py).
+// word first (for rerank.py). With PK_LEARN naming a text file, the composer first learns
+// each of its lines as text the user committed (PersonalModel).
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -44,9 +46,15 @@ int main(int argc, char** argv) {
       }
     }
   }
+  std::shared_ptr<ProjectKey::PersonalModel> personal;
+  if (const char* learn = std::getenv("PK_LEARN")) {
+    personal = std::make_shared<ProjectKey::PersonalModel>();
+    std::ifstream text(learn);
+    for (std::string sentence; std::getline(text, sentence);) personal->learn(sentence);
+  }
   ProjectKey::Composer composer(model, bigram, nullptr, argc >= 4 ? std::stod(argv[3]) : ProjectKey::Composer::kContextWeight, argc >= 5 ? std::stod(argv[4]) : ProjectKey::Composer::kTrigramWeight,
                                 argc >= 6 ? std::stod(argv[5]) : ProjectKey::Composer::kAdjacentKeyScore, chars,
-                                argc >= 7 ? std::stod(argv[6]) : ProjectKey::Composer::kCharWeight);
+                                argc >= 7 ? std::stod(argv[6]) : ProjectKey::Composer::kCharWeight, personal);
 
   std::string line;
   while (std::getline(std::cin, line)) {

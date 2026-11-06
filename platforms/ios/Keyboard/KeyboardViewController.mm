@@ -66,6 +66,16 @@ ProjectKey::Environment &SharedEnvironment() {
       }
     }
     env->userModel = ProjectKey::NewUserModel();
+    // What the user typed, learned in the keyboard's own container on this device. The
+    // system ends the extension at any time, so the model is saved after every commit.
+    NSURL *support = [NSFileManager.defaultManager URLForDirectory:NSApplicationSupportDirectory
+                                                         inDomain:NSUserDomainMask
+                                                appropriateForURL:nil
+                                                           create:YES
+                                                            error:nil];
+    if (support) env->personalPath = [support URLByAppendingPathComponent:@"personal.txt"].fileSystemRepresentation;
+    env->personal = std::make_shared<ProjectKey::PersonalModel>();
+    if (!env->personalPath.empty()) env->personal->load(env->personalPath);
     static DefaultsSettings settings;
     env->settings = &settings;
     return env;

@@ -92,6 +92,18 @@ ProjectKey::Environment &SharedEnvironment() {
       }
     }
     env->userModel = ProjectKey::NewUserModel();
+    // What the user typed, learned on this Mac only. Only the installed input method learns:
+    // the tests run from a bare executable without a bundle and must not touch the user's file.
+    if (NSBundle.mainBundle.bundleIdentifier) {
+      NSURL *support = [NSFileManager.defaultManager URLForDirectory:NSApplicationSupportDirectory
+                                                           inDomain:NSUserDomainMask
+                                                  appropriateForURL:nil
+                                                             create:YES
+                                                              error:nil];
+      if (support) env->personalPath = [support URLByAppendingPathComponent:@"ProjectKey/personal.txt"].fileSystemRepresentation;
+      env->personal = std::make_shared<ProjectKey::PersonalModel>();
+      if (!env->personalPath.empty()) env->personal->load(env->personalPath);
+    }
     static DefaultsSettings settings;
     env->settings = &settings;
     env->isEnglish = [](const std::string &text) {
@@ -281,7 +293,7 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 
 - (void)showSettings:(id)sender {
   [PKSettingsWindow showWithClearChoices:^{
-    *SharedEnvironment().userModel = *ProjectKey::NewUserModel();
+    ProjectKey::ClearChoices(SharedEnvironment());
   }];
 }
 

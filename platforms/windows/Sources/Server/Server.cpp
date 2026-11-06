@@ -137,7 +137,7 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kDeactivate: controller->deactivate(); break;
         case Protocol::Request::kReset: controller->reset(); break;
         case Protocol::Request::kClearChoices:
-          if (FromSettings(pipe)) *gEnvironment.userModel = *NewUserModel();
+          if (FromSettings(pipe)) ClearChoices(gEnvironment);
           break;
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
         case Protocol::Request::kShowSettings: LaunchSettings(ModuleDirectory(nullptr)); break;
@@ -214,6 +214,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
   }
   gEnvironment.userModel = NewUserModel();
+  // What the user typed, learned on this PC only, beside other per-user app data.
+  wchar_t local[MAX_PATH];
+  DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+  if (length > 0 && length < MAX_PATH) gEnvironment.personalPath = Narrow(std::wstring(local, length) + L"\\Project Key\\personal.txt");
+  gEnvironment.personal = std::make_shared<PersonalModel>();
+  if (!gEnvironment.personalPath.empty()) gEnvironment.personal->load(gEnvironment.personalPath);
   gEnvironment.settings = &gSettings;
   gEnvironment.isEnglish = IsEnglish;
   gEnvironment.hintWindow = true;

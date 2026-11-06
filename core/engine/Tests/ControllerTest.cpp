@@ -514,6 +514,19 @@ int main(int argc, char** argv) {
   controller.reset();
   assert(!controller.isComposing());
 
+  // What the user typed: a commit teaches env.personal while choices are remembered, and
+  // clearing the choices forgets it too.
+  env.personal = std::make_shared<PersonalModel>();
+  client.marked.clear();  // reset() above left the app's marked text to the app
+  Type(controller, "ji3ap7");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && !env.personal->empty());
+  ClearChoices(env);
+  assert(env.personal->empty());
+  settings.set(Setting::kRememberChoices, 0);
+  Type(controller, "ji3ap7");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && env.personal->empty());
+  settings.remove(Setting::kRememberChoices);
+
   std::printf("ControllerTest passed\n");
   return 0;
 }

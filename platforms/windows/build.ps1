@@ -91,7 +91,7 @@ $engineSources = @('AssociatedPhrasesV2', 'ByteBlockBackedDictionary', 'McBopomo
   ForEach-Object { "$Engine\$_.cpp" }
 $engineSources += "$Engine\gramambular2\reading_grid.cpp", "$Engine\Mandarin\Mandarin.cpp"
 $engineObjects = @(Compile 'mcbopomofo' $engineSources @('/W0'))
-$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\Controller.cpp")
+$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\PersonalModel.cpp", "$Core\Controller.cpp")
 Invoke-Native lib.exe /nologo "/OUT:$Obj\engine.lib" @engineObjects
 
 # Tests: the engine tests shared with macOS, and the pipe protocol.

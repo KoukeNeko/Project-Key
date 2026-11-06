@@ -49,6 +49,8 @@ class CharModel {
   // P(next | first, second).
   double probability(uint32_t first, uint32_t second, uint32_t next) const;
   static std::vector<uint32_t> CodePoints(const std::string& utf8);
+  // The characters the model counts; a run of them is what it scores, start and end included.
+  static bool IsHan(uint32_t c) { return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x20000 && c <= 0x2FFFF); }
 
  private:
   double probability(uint32_t second, uint32_t next) const;

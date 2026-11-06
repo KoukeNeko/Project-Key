@@ -128,7 +128,23 @@ void Controller::makeComposer() {
   rememberChoices_ = rememberChoices;
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight,
-                                         adjacentKeys ? Composer::kAdjacentKeyScore : -INFINITY, env_.chars);
+                                         adjacentKeys ? Composer::kAdjacentKeyScore : -INFINITY, env_.chars,
+                                         Composer::kCharWeight, rememberChoices ? env_.personal : nullptr);
+}
+
+void ClearChoices(Environment& env) {
+  *env.userModel = *NewUserModel();
+  if (!env.personal) return;
+  env.personal->clear();
+  if (!env.personalPath.empty()) env.personal->save(env.personalPath);
+}
+
+void Controller::learn(const std::string& committed) {
+  if (!rememberChoices_ || !env_.personal) return;
+  env_.personal->learn(committed);
+  // shortcut: rewrites the whole file (at most PersonalModel::kMaxTriples lines) on every commit;
+  // batch the writes if that ever shows up in typing latency.
+  if (!env_.personalPath.empty()) env_.personal->save(env_.personalPath);
 }
 
 void Controller::deactivate() {
@@ -458,6 +474,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
       composer_->showSymbols();
       refresh();
       client_.insertText(shown_);
+      learn(shown_);
       composer_->clear();
       commit();
       return true;
@@ -746,6 +763,7 @@ void Controller::pick(int index) {
       }
     }
     client_.insertText(before + candidates_[index] + after);
+    learn(before + candidates_[index] + after);
     composer_->clear();
     choosing_ = false;
     hidePanel();
@@ -780,6 +798,7 @@ void Controller::commit() {
   if (!composer_->isEmpty()) {
     // A pending reading alone commits nothing but still ends the composition.
     client_.insertText(composer_->text());
+    learn(composer_->text());
     composer_->clear();
   }
   choosing_ = false;

@@ -200,6 +200,29 @@ int main(int argc, char** argv) {
   std::remove(charsPath.c_str());
   std::remove(slipPath.c_str());
 
+  // What the user typed: with no context or character model, 程式 learned from committed
+  // text beats the dictionary's 城市.
+  auto personal = std::make_shared<ProjectKey::PersonalModel>();
+  Composer unlearned(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore,
+                     nullptr, Composer::kCharWeight, personal);
+  type(unlearned, "ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3");
+  assert(unlearned.text().find("的程式") == std::string::npos);
+  for (int i = 0; i < 50; i++) personal->learn("我們把舊的程式重構成模組。");
+  Composer learned(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore,
+                   nullptr, Composer::kCharWeight, personal);
+  type(learned, "ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3");
+  assert(learned.text().find("的程式") != std::string::npos);
+  // Saved and loaded, the counts score the same; a missing file loads as empty.
+  std::string personalPath = tempPath("ComposerTest-personal/personal.txt");
+  assert(personal->save(personalPath));
+  ProjectKey::PersonalModel loaded;
+  assert(loaded.load(personalPath) && !loaded.empty());
+  auto c = [](const char* utf8) { return ProjectKey::CharModel::CodePoints(utf8)[0]; };
+  assert(loaded.blend(1e-4, c("的"), c("程"), c("式")) == personal->blend(1e-4, c("的"), c("程"), c("式")));
+  assert(personal->blend(1e-4, c("的"), c("程"), c("式")) > 0.5);
+  std::remove(personalPath.c_str());
+  assert(loaded.load(personalPath) && loaded.empty());
+
   // The user model: after choosing 列 following 第一 once, the next walk keeps it.
   auto userModel = ProjectKey::NewUserModel();
   Composer learning(lm, nullptr, userModel);

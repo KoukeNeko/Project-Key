@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cctype>
 #include <memory>
 #include <optional>
@@ -462,7 +463,7 @@ class Session : public fcitx::InputContextProperty, public Client {
 class SettingsObject : public fcitx::dbus::ObjectVTable<SettingsObject> {
  public:
   explicit SettingsObject(Environment& environment) : environment_(environment) {}
-  void clearChoices() { *environment_.userModel = *NewUserModel(); }
+  void clearChoices() { ClearChoices(environment_); }
 
  private:
   Environment& environment_;
@@ -490,6 +491,14 @@ class Engine : public fcitx::InputMethodEngineV2 {
     auto chars = std::make_shared<CharModel>();
     if (chars->load(dir + "/chars.bin")) environment_.chars = chars;
     environment_.userModel = NewUserModel();
+    // What the user typed, learned on this computer only.
+    if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) {
+      environment_.personalPath = std::string(data) + "/projectkey/personal.txt";
+    } else if (const char* home = std::getenv("HOME")) {
+      environment_.personalPath = std::string(home) + "/.local/share/projectkey/personal.txt";
+    }
+    environment_.personal = std::make_shared<PersonalModel>();
+    if (!environment_.personalPath.empty()) environment_.personal->load(environment_.personalPath);
     environment_.settings = &settings_;
     environment_.isEnglish = [this](const std::string& text) { return spelling_.isEnglish(text); };
     environment_.hintWindow = true;  // beside the candidate window, as on macOS and Windows (Session::showHint)

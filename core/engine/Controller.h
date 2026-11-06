@@ -103,6 +103,10 @@ struct Environment {
   std::shared_ptr<const Bigram> bigram;
   std::shared_ptr<const CharModel> chars;
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel;  // replaced by value to clear it
+  // What the user typed, learned while choices are remembered (Setting::kRememberChoices) and
+  // saved to personalPath after each commit; with an empty path it lives in memory only.
+  std::shared_ptr<PersonalModel> personal;
+  std::string personalPath;
   Settings* settings = nullptr;
   // Whether text (letters and spaces) is correctly spelled English.
   std::function<bool(const std::string&)> isEnglish;
@@ -117,6 +121,9 @@ struct Environment {
   // the guess in its proof row.
   bool hintWindow = false;
 };
+
+// Forgets what the user chose and typed, in memory and in the saved file.
+void ClearChoices(Environment& env);
 
 enum class Key {
   kCharacter,  // anything else; see KeyEvent::characters
@@ -199,6 +206,8 @@ class Controller {
   void pick(int index);
 
   void commit();
+  // Text the composition put in the document, for what the user typed (Environment::personal).
+  void learn(const std::string& committed);
   void refresh();
   void showPanel(const PanelContent& content);
   void hidePanel();

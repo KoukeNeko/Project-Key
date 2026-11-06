@@ -31,8 +31,8 @@ constexpr uint32_t kNoWord = UINT32_MAX;
 constexpr size_t kWordBeforeLength = 4;
 // Character model log10 probabilities kept between walks.
 constexpr size_t kCharCacheSize = 1 << 16;
-
-bool IsHan(uint32_t c) { return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x20000 && c <= 0x2FFFF); }
+// P(c | a b) for every character when there is no character model, before what the user typed.
+constexpr double kNoCharModel = 1e-4;
 
 double Now() {
   return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -235,7 +235,7 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, double adjacentKeyScore, std::shared_ptr<const CharModel> chars,
-                   double charWeight)
+                   double charWeight, std::shared_ptr<const PersonalModel> personal)
     : lm_(lm),
       dictionary_(std::make_shared<TonelessModel>(lm)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
@@ -243,6 +243,7 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
       trigramWeight_(trigramWeight),
       chars_(bigram_ && chars && chars->isLoaded() ? std::move(chars) : nullptr),
       charWeight_(charWeight),
+      personal_(std::move(personal)),
       userModel_(std::move(userModel)),
       // Without context nothing can tell a slip from what was typed.
       adjacentKeyScore_(bigram_ ? adjacentKeyScore : -INFINITY),
@@ -276,7 +277,7 @@ Composer::KeyResult Composer::completeWithFirstTone() {
 // `untoned` is the reading before its tone: when the dictionary lacks that tone, a whole
 // syllable or a lone symbol goes back as it was, still shown as its word; anything else is dropped.
 Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned) {
-  std::string syllable = reading_.composedString();
+  std::string syllable = reading_.syllable().composedString();
   reading_.clear();
   // The grid's model decides: with adjacent keys on, a syllable the dictionary lacks
   // still goes in when a slip of one key explains it.
@@ -314,7 +315,7 @@ bool Composer::startsSyllable(char key) const {
 // Puts the open syllable in the grid, toneless, when the dictionary has it, so its word shows.
 void Composer::showReading() {
   if (reading_.isEmpty() || reading_.hasToneMarker()) return;
-  std::string reading = reading_.composedString() + kAnyTone;
+  std::string reading = reading_.syllable().composedString() + kAnyTone;
   readingShown_ = dictionary_->hasUnigrams(reading) && grid_.insertReading(reading);
 }
 
@@ -403,7 +404,7 @@ void Composer::setTextBefore(const std::string& text) {
     while (at > 0 && (static_cast<unsigned char>(text[at]) & 0xC0) == 0x80) at--;
     size_t end = at;
     uint32_t c = NextCodePoint(text, end);
-    if (end != start || !IsHan(c)) break;  // a malformed sequence ends the run too
+    if (end != start || !CharModel::IsHan(c)) break;  // a malformed sequence ends the run too
     start = at;
   }
   hanBefore_ = text.substr(start);
@@ -471,10 +472,14 @@ void Composer::walk() {
   };
   // The character model's weighted log10 P(chars) after the words `beforeLast` (null at the
   // start) and `last`; the Han text before the composition stands for missing words.
-  const std::vector<uint32_t> openingChars = chars_ ? CharModel::CodePoints(hanBefore_) : std::vector<uint32_t>{};
+  const std::vector<uint32_t> openingChars = scoresChars() ? CharModel::CodePoints(hanBefore_) : std::vector<uint32_t>{};
+  if (personal_ && personal_->version() != personalVersion_) {
+    charCache_.clear();
+    personalVersion_ = personal_->version();
+  }
   static const std::vector<uint32_t> kEndChars{CharModel::kBoundary};
   auto charScore = [&](const std::vector<uint32_t>* beforeLast, const std::vector<uint32_t>& last, const std::vector<uint32_t>& chars) {
-    if (!chars_) return 0.0;
+    if (!scoresChars()) return 0.0;
     uint32_t first = CharModel::kBoundary, second = CharModel::kBoundary;
     for (const std::vector<uint32_t>* part : {beforeLast, &last}) {
       if (!part) continue;
@@ -490,7 +495,11 @@ void Composer::walk() {
       auto cached = charCache_.find(key);
       if (cached == charCache_.end()) {
         if (charCache_.size() >= kCharCacheSize) charCache_.clear();
-        cached = charCache_.emplace(key, std::log10(chars_->probability(first, second, next))).first;
+        // Without the shipped model, every character starts out equally likely and only what
+        // the user typed tells them apart.
+        double p = chars_ ? chars_->probability(first, second, next) : kNoCharModel;
+        if (personal_) p = personal_->blend(p, first, second, next);
+        cached = charCache_.emplace(key, std::log10(p)).first;
       }
       total += cached->second;
       first = second;
@@ -529,10 +538,10 @@ void Composer::walk() {
         uint32_t id = idOf(value);
         // The penalty moves from the dictionary score to the whole word.
         double penalty = penaltyOf(reading, typed, value);
-        std::vector<uint32_t> chars = chars_ ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
+        std::vector<uint32_t> chars = scoresChars() ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
         choices.push_back({start, length, node, std::move(value), id, unigramScore - penalty, penalty, {}, std::move(chars)});
       };
-      if (node->isOverridden() || (!bigram_ && !userModel_)) {
+      if (node->isOverridden() || (!bigram_ && !userModel_ && !personal_)) {
         add(node->value(), node->score());
       } else {
         const auto& unigrams = node->unigrams();
@@ -643,7 +652,7 @@ void Composer::walk() {
       for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()) && !doubtful; k++) {
         if (unigrams[k].value() != choice.value) {
           const std::string& value = unigrams[k].value();
-          std::vector<uint32_t> chars = chars_ ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
+          std::vector<uint32_t> chars = scoresChars() ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
           // Scored as the walk scores it: the penalty out of the unigram, onto the whole word.
           double penalty = penaltyOf(choice.node->reading(), typed, value);
           doubtful = chosen - (local(idOf(value), unigrams[k].score() - penalty, chars) + penalty) < kDoubtfulScoreGap;

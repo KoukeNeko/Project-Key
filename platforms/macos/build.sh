@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 BUILD=build
 MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)
 CORE=../../core/engine  # the engine shared with Windows
-ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/Controller.cpp"
+ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/PersonalModel.cpp $CORE/Controller.cpp"
 MCB=$BUILD/mcbopomofo
 APP=$BUILD/ProjectKey.app
 CXXFLAGS="-std=c++20 -O2 -Wall -mmacosx-version-min=13.0 -I$MCB/Source/Engine -I$CORE -I$BUILD"

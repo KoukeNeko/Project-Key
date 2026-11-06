@@ -44,7 +44,7 @@ add_subdirectory("${MCBOPOMOFO}/Source/Engine" mcbopomofo EXCLUDE_FROM_ALL)
 target_compile_options(McBopomofoLMLib PRIVATE "SHELL:-include iterator")
 
 # The engine shared with macOS, Windows and iOS.
-add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/CharModel.cpp" "${CORE}/Controller.cpp")
+add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/CharModel.cpp" "${CORE}/PersonalModel.cpp" "${CORE}/Controller.cpp")
 target_include_directories(engine PUBLIC "${CORE}" "${MCBOPOMOFO}/Source/Engine")
 target_link_libraries(engine PUBLIC McBopomofoLMLib MandarinLib gramambular2_lib)
 

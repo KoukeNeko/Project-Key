@@ -46,6 +46,6 @@ sudo cmake --install platforms/linux/build    # 安裝到 /usr
 
 Fcitx5 選單的「檢查 Project Key 安裝」以通知列出還缺什麼：詞庫、英文字典（Tab 提示用）、候選字窗的字型、設定程式，以及 Project Key 自己的視窗能不能出現（GNOME 上要開啟擴充功能）。從用 Fcitx5 候選面板的 App 打開時，也檢查 Fcitx5 的主題是不是 Project Key。
 
-設定視窗的分組與 macOS、Windows 相同，改了立即生效。`projectkey-settings` 依桌面開啟對應的版本：KDE 上是 Qt（`Settings/Qt.cpp`，排版與 KDE 系統設定相同），GNOME 等 GTK 桌面上是 libadwaita（`Settings/Gtk.cpp`，沒有建置時改開 Qt 版）。環境裡沒有 `XDG_CURRENT_DESKTOP` 時（例如手動重新啟動的 Fcitx5），改讀 systemd 使用者環境裡的桌面。兩者的列定義在 `Settings/Rows.h`。從 Fcitx5 選單的「Project Key 設定…」或應用程式選單打開。它透過 Fcitx5 的 D-Bus 介面讀寫設定，所以 Fcitx5 設定裡 Project Key 的「設定」頁也能改同一份，存在 `~/.config/fcitx5/conf/projectkey.conf`。「清除選字紀錄」呼叫 addon 在 Fcitx5 D-Bus 上的 `/projectkey`：選字紀錄只存在記憶體裡，和其他平台一樣。
+設定視窗的分組與 macOS、Windows 相同，改了立即生效。`projectkey-settings` 依桌面開啟對應的版本：KDE 上是 Qt（`Settings/Qt.cpp`，排版與 KDE 系統設定相同），GNOME 等 GTK 桌面上是 libadwaita（`Settings/Gtk.cpp`，沒有建置時改開 Qt 版）。環境裡沒有 `XDG_CURRENT_DESKTOP` 時（例如手動重新啟動的 Fcitx5），改讀 systemd 使用者環境裡的桌面。兩者的列定義在 `Settings/Rows.h`。從 Fcitx5 選單的「Project Key 設定…」或應用程式選單打開。它透過 Fcitx5 的 D-Bus 介面讀寫設定，所以 Fcitx5 設定裡 Project Key 的「設定」頁也能改同一份，存在 `~/.config/fcitx5/conf/projectkey.conf`。「清除選字紀錄」呼叫 addon 在 Fcitx5 D-Bus 上的 `/projectkey`。選過的字只存在記憶體裡；從送出的文字學到的字串次數存在 `$XDG_DATA_HOME/projectkey/personal.txt`（預設 `~/.local/share/projectkey/personal.txt`），「清除選字紀錄」一併清空，關掉「記住選過的字」時不學。
 
 移除：`sudo xargs rm < platforms/linux/build/install_manifest.txt`。
