@@ -94,6 +94,7 @@ class TextService : public ITfTextInputProcessorEx,
   void insertText(TfEditCookie cookie, ITfContext* context, const std::wstring& text);
   void setComposition(TfEditCookie cookie, ITfContext* context, const Composition& composition);
   void endComposition(TfEditCookie cookie);
+  void keepComposition(TfEditCookie cookie);
   void setAttribute(TfEditCookie cookie, ITfContext* context, ITfRange* range, TfGuidAtom atom);
   RECT anchorRect(TfEditCookie cookie, ITfContext* context, HWND* window);
   std::string textBeforeCaret(ITfContext* context);

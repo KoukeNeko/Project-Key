@@ -58,6 +58,7 @@ bool EngineClient::connect() {
     for (DWORD waited = 0; waited < kLaunchWaitMs && !WaitNamedPipeW(name.c_str(), 50); waited += 50) Sleep(50);
   }
   if (pipe_ == INVALID_HANDLE_VALUE) return false;
+  newSession_ = true;
   DWORD mode = PIPE_READMODE_MESSAGE;
   SetNamedPipeHandleState(pipe_, &mode, nullptr, nullptr);
   if (!event_) event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
