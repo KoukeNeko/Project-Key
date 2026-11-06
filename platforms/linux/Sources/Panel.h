@@ -26,7 +26,8 @@ size_t BytesFor(const std::string& text, uint32_t units);
 
 class Panel {
  public:
-  explicit Panel(fcitx::EventLoop& loop);
+  // settings gives the appearance: Setting::kAppearance 1 blurs what is behind the windows.
+  Panel(fcitx::EventLoop& loop, const Settings& settings);
   ~Panel();
   Panel(const Panel&) = delete;
   Panel& operator=(const Panel&) = delete;
@@ -50,6 +51,7 @@ class Panel {
     cairo_surface_t* surface = nullptr;
     int x = 0, y = 0, width = 0, height = 0;
     bool mapped = false;
+    bool blurred = false;
   };
   struct Rect {
     float left = 0, top = 0, right = 0, bottom = 0;
@@ -63,6 +65,11 @@ class Panel {
   void unmap(Window& window);
   void dispatch();
   bool composited();
+  // Whether the windows should blur what is behind them: the setting asks for
+  // it and the compositor (KWin) offers it.
+  bool blurs();
+  void setBlur(Window& window, bool on);
+  void setFontOptions(bool blurred);
   void startTimer(std::unique_ptr<fcitx::EventSourceTime>& timer, bool (Panel::*tick)());
 
   // Candidate window.
@@ -92,7 +99,8 @@ class Panel {
   xcb_visualtype_t* visual_ = nullptr;
   uint8_t depth_ = 0;
   xcb_colormap_t colormap_ = 0;
-  xcb_atom_t compositorAtom_ = 0;
+  xcb_atom_t compositorAtom_ = 0, blurAtom_ = 0;
+  const Settings& settings_;
   bool argb_ = false;
   float scale_ = 1;
   fcitx::EventLoop& loop_;

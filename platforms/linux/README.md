@@ -13,7 +13,7 @@ Fcitx5 注音輸入法，大千鍵盤，按鍵與 [macOS 版](../macos/README.md
 | 前文（Tab 英文轉注音） | surrounding text；App 不提供時 Tab 照常輸入 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
-候選字窗只有深色一種，沒有「外觀」設定：X11 沒有 Acrylic、Mica 這類系統材質。有合成器（KWin 等）時視窗是圓角，沒有時是直角。Wayland 下或 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題。
+「候選視窗外觀」有深色與模糊（預設）兩種。模糊用 KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），模糊視窗後方的內容再疊一層深色；KWin 的模糊特效關著或用別的視窗管理員時，模糊會改成深色。中／英標記跟著用同一種外觀。有合成器時視窗是圓角，沒有時是直角。Wayland 下或 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題。
 
 Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「單按 Shift 切換中英」開著時，Shift 由 Project Key 處理，切的是中／英而不是輸入法。關掉這項設定，Shift 就回到 Fcitx5。
 
