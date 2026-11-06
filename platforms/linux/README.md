@@ -9,12 +9,11 @@ Fcitx5 注音輸入法，大千鍵盤，按鍵與 [macOS 版](../macos/README.md
 | 引擎要做的事 | Fcitx5 上的做法 |
 |---|---|
 | 組字區 | preedit，可疑字以外的段落加底線，選字中的段落反白 |
-| 候選字 | Fcitx5 的候選面板：整句預覽在上，目前那一列候選字，頁碼在下 |
-| 中／英標記 | Fcitx5 的輸入法提示（A／ㄅ） |
+| 候選字窗、中／英標記 | Project Key 自己畫的 X11 視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同 |
 | 前文（Tab 英文轉注音） | surrounding text；App 不提供時 Tab 照常輸入 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
-候選面板由 Fcitx5 繪製，外觀跟隨 Fcitx5 的主題，所以沒有「外觀」這項設定。
+候選字窗只有深色一種，沒有「外觀」設定：X11 沒有 Acrylic、Mica 這類系統材質。有合成器（KWin 等）時視窗是圓角，沒有時是直角。Wayland 下或 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題。
 
 Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「單按 Shift 切換中英」開著時，Shift 由 Project Key 處理，切的是中／英而不是輸入法。關掉這項設定，Shift 就回到 Fcitx5。
 
@@ -23,7 +22,7 @@ Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「
 需要 CMake、C++20 編譯器、Python 3（產生詞庫）以及 Fcitx5 與 Enchant 的開發檔。Debian／Ubuntu：
 
 ```sh
-sudo apt install cmake g++ python3 git libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev hunspell-en-us
+sudo apt install cmake g++ python3 git libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev hunspell-en-us fonts-noto-cjk
 platforms/linux/build.sh                       # 下載並編譯引擎、產生詞庫、跑測試，輸出到 .build
 sudo cmake --install platforms/linux/.build    # 安裝到 /usr
 ```
