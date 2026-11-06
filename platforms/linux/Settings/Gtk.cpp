@@ -206,7 +206,7 @@ void Activate(GtkApplication* app) {
   adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(view), page);
   GtkWidget* window = adw_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Project Key 設定");
-  gtk_window_set_icon_name(GTK_WINDOW(window), "input-keyboard");
+  gtk_window_set_icon_name(GTK_WINDOW(window), "fcitx-projectkey");
   gtk_window_set_default_size(GTK_WINDOW(window), 520, 640);  // fits a 768-pixel screen; the page scrolls
   adw_application_window_set_content(ADW_APPLICATION_WINDOW(window), view);
   gtk_window_present(GTK_WINDOW(window));
