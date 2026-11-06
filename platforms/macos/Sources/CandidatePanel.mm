@@ -34,16 +34,16 @@ NSColor *const kEdge = Hex(0x000000, 0.5);
 constexpr CGFloat kRadius = 14, kPillRadius = 8, kGapToText = 8, kAnchorInset = 16;
 // Proof row: 38px tall, the 20px line centered with 9px above and below; its
 // marks (2px, 3px under the line, inset 1px per side) sit in the bottom pad.
-// Text starts 19px in on both rows: kRowLeft + kCellSide = kProofLeft.
+// Proof text starts 19px in; candidate text, kRowLeft + kCellSide, 17px.
 constexpr CGFloat kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
 constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 // Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
 NSString *const kReplacedArrow = @" → ";
 constexpr CGFloat kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
-// Candidate row: padding 6 6 6 8; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
-constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
+// Candidate row: padding 6 on every side; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
+constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;  // the same on all four sides
 constexpr CGFloat kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
-constexpr CGFloat kPageLeft = 12, kPageRight = 13;  // kRowRight + kPageRight = kProofRight
+constexpr CGFloat kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
 // Motion: the selection slides, the grid grows and folds.
 constexpr NSTimeInterval kSlideDuration = 0.12, kResizeDuration = 0.16;
 
