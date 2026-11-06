@@ -106,6 +106,8 @@ class Composer {
   const std::vector<Segment>& segments() const { return segments_; }
   // The open syllable's symbols while they are not in the text as a word.
   std::string pendingReading() const { return readingShown_ ? "" : reading_.composedString(); }
+  // The open syllable's symbols while its word is in the text, just before the cursor.
+  std::string shownReading() const { return readingShown_ ? reading_.composedString() : ""; }
   std::string text() const;
 
   // The segment starting at `start`, or, inside a segment, its part from

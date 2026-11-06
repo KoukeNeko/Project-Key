@@ -437,7 +437,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
     case Key::kDown:
     case Key::kTab:
       if (empty) return false;
-      if (composer_->pendingReading().empty()) startChoosingAt(defaultSegment());
+      if (composer_->pendingReading().empty()) startChoosingAt(openSegment().value_or(defaultSegment()));
       return true;
     case Key::kReturn:
       if (empty) return false;
@@ -632,6 +632,19 @@ size_t Controller::defaultSegment() const {
   return composer_->segments().back().start;
 }
 
+std::optional<size_t> Controller::openSegment() const {
+  if (composer_->shownReading().empty()) return std::nullopt;
+  size_t open = composer_->cursor() - 1;
+  for (const Segment& segment : composer_->segments()) {
+    if (open >= segment.start && open < segment.start + segment.length) return segment.start;
+  }
+  return std::nullopt;
+}
+
+int Controller::span(const std::string& candidate) const {
+  return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, kGridColumns);
+}
+
 // The next doubtful segment in reading order, wrapping around, excluding `start`.
 std::optional<size_t> Controller::doubtfulAfter(size_t start, bool backwards) const {
   std::vector<size_t> doubtful;
@@ -656,9 +669,6 @@ void Controller::startChoosingAt(size_t start) {
   if (!segment) return;
   std::vector<std::string> candidates = composer_->candidates(*segment);
   if (candidates.empty()) return;
-  auto span = [this](const std::string& candidate) {
-    return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, kGridColumns);
-  };
   // The syllables' Zhuyin itself, as the system keyboards offer it: last in the first row when
   // all six columns hold one candidate each (iOS), otherwise right after the first row, which
   // keeps the candidates' digits.
@@ -773,9 +783,16 @@ void Controller::refresh() {
   uint32_t activeStart = 0, activeLength = 0;
   size_t cursor = composer_->cursor();
   uint32_t caret = 0;
+  // The syllable still open without a tone shows as its Zhuyin, so what is being typed
+  // stays visible (and Enter sends it so); its word shows once the syllable closes, and
+  // in the candidates. Not while choosing, where the text is what is chosen.
+  std::u16string open = choosing_ ? u"" : ToUtf16(composer_->shownReading());
+  uint32_t openGrowth = 0;
   for (const Segment& segment : composer_->segments()) {
     std::u16string text = ToUtf16(segment.text);
     uint32_t length = static_cast<uint32_t>(text.size());
+    size_t at = cursor - 1 - segment.start;  // the open syllable's place in this segment
+    bool spliced = !open.empty() && cursor > segment.start && at < segment.length && length == segment.length;
     if (cursor >= segment.start + segment.length) {
       caret += length;
     } else if (cursor > segment.start) {
@@ -790,6 +807,11 @@ void Controller::refresh() {
     }
     content.segments.push_back(segment.text);
     content.doubtful.push_back(segment.doubtful);
+    if (spliced) {
+      text.replace(at, 1, open);
+      openGrowth = static_cast<uint32_t>(open.size()) - 1;
+      caret += openGrowth;  // the open syllable is always before the cursor
+    }
     marked += text;
   }
   std::u16string reading = ToUtf16(composer_->pendingReading());
@@ -814,12 +836,20 @@ void Controller::refresh() {
     return;
   }
   bool showsProof = proofVisible();
-  if (!choosing_ && !showsProof) {
+  // While a syllable is open without a tone, its word is a guess the composition does not
+  // show, so the panel shows it with the other words there: first symbols (ㄨㄇ) show 我們.
+  // No row is selected, so no digits: those keys still type Zhuyin.
+  std::optional<size_t> typing = choosing_ ? std::nullopt : openSegment();
+  std::vector<std::string> guesses;
+  if (typing) {
+    if (std::optional<Segment> segment = composer_->segmentFrom(*typing)) guesses = composer_->candidates(*segment);
+  }
+  if (!choosing_ && !showsProof && guesses.empty()) {
     hidePanel();
     return;
   }
   content.pendingReading = ToUtf8(reading);
-  content.caret = caret - static_cast<uint32_t>(reading.size());
+  content.caret = caret - static_cast<uint32_t>(reading.size()) - openGrowth;
   content.showsProof = showsProof;
   if (choosing_) {
     int row = rowOf(selection_), rows = static_cast<int>(rowStarts_.size());
@@ -838,6 +868,15 @@ void Controller::refresh() {
     content.selectedRow = row - first;
     content.selection = selection_ - rowStarts_[row];
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
+  } else if (!guesses.empty()) {
+    std::vector<std::string> cells;
+    for (int used = 0; cells.size() < guesses.size() && used + span(guesses[cells.size()]) <= kGridColumns;) {
+      used += span(guesses[cells.size()]);
+      cells.push_back(guesses[cells.size()]);
+    }
+    content.rows = {std::move(cells)};
+    content.selectedRow = -1;
+    content.selection = -1;
   }
   showPanel(content);
 }

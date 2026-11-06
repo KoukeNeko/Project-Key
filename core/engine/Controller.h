@@ -30,7 +30,7 @@ struct PanelContent {
   std::string replacedText;     // struck out before the proof text, with an arrow; empty for none
   // Visible rows of the candidate grid; empty hides the candidate area.
   std::vector<std::vector<std::string>> rows;
-  int selectedRow = 0;          // only this row carries the 1-6 labels
+  int selectedRow = 0;          // only this row carries the 1-6 labels; -1 while typing, none does
   int selection = 0;            // index within the selected row
   std::string pageLabel;        // "1/3", empty for a single page
 };
@@ -176,6 +176,9 @@ class Controller {
   int rowEnd(int row) const;
   int indexInRow(int row, int column) const;
   size_t defaultSegment() const;
+  // The segment holding the syllable still open without a tone, while its word shows.
+  std::optional<size_t> openSegment() const;
+  int span(const std::string& candidate) const;
   std::optional<size_t> doubtfulAfter(size_t start, bool backwards) const;
   void startChoosingAt(size_t start);
   void pick(int index);

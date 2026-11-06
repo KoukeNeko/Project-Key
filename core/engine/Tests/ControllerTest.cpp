@@ -176,6 +176,19 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
   assert(HasSuffix(client.committed, "你ㄏㄠ") && client.marked.empty());
 
+  // The open syllable shows as its Zhuyin, the closed one before it as its word.
+  // The guess (你好) leads a row of candidates without digits, and Down opens those.
+  Type(controller, "sucl");
+  assert(client.marked == "你ㄏㄠ");
+  assert(client.panelVisible && client.panel.selectedRow == -1 && client.panel.rows.size() == 1);
+  assert(client.panel.rows[0][0] == "你好");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(client.panel.selectedRow == 0 && client.marked == "你好");
+  EscapeAll(controller, client);
+  // First symbols: ㄨㄇ shows 我ㄇ, and 我們 first among the candidates.
+  Type(controller, "ja");
+  assert(client.marked == "我ㄇ" && client.panel.rows[0][0] == "我們");
+  EscapeAll(controller, client);
   // Down offers candidates while a syllable without a tone is still open; its Zhuyin has no
   // tone mark. Back from the candidates, the syllable is still open: ㄠ makes it ㄋㄧㄠ.
   Type(controller, "su");
@@ -184,7 +197,7 @@ int main(int argc, char** argv) {
   assert(std::find(open.begin(), open.end(), "ㄋㄧ") != open.end() && std::find(open.begin(), open.end(), "你") != open.end());
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
   Type(controller, "l");
-  assert(Utf16Length(client.marked) == 1 && client.panel.pendingReading.empty());
+  assert(client.marked == "ㄋㄧㄠ" && client.panel.pendingReading.empty());
   EscapeAll(controller, client);
   size_t before = client.committed.size();
 
