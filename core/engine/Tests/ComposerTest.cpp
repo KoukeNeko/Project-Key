@@ -203,6 +203,20 @@ int main(int argc, char** argv) {
   Composer alone(lm, slipModel);
   type(alone, "u.31j4hji4");
   assert(alone.text() != "也不錯");
+  // Punctuation in the composition starts a phrase, as punctuation before it does: a model
+  // that has seen phrases start with 也 reads the slip as 也 after 這個，.
+  std::string startPath = tempPath("ComposerTest-start.bin");
+  // Ids: 0 the phrase boundary, 1 也, 2 不.
+  assert(ProjectKey::Bigram::save(startPath, {ProjectKey::Bigram::kBoundary, "也", "不"},
+                                  {{0ull << 32 | 1, -0.1f}, {1ull << 32 | 2, -0.1f}}));
+  auto startModel = std::make_shared<ProjectKey::Bigram>();
+  assert(startModel->load(startPath));
+  Composer punctuated(lm, startModel);
+  type(punctuated, "5k4ek7");
+  assert(punctuated.insertPunctuation('<'));
+  type(punctuated, "u.31j4hji4");
+  assert(punctuated.text() == "這個，也不錯");
+  std::remove(startPath.c_str());
 
   // The character model: no word pair knows 候選 then 字, but its characters 選字 are
   // common and 選次 is not, so ㄘˋ (h4) after 候選 reads as the slip ㄗˋ (y4).

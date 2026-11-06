@@ -539,13 +539,20 @@ void Composer::walk() {
       if (!node) continue;
       const std::string& reading = node->reading();
       bool slips = slipsIn(reading);
+      // Punctuation ends a phrase, as in the text the models learned from, and scores as the
+      // composition's end does; the words after it start a phrase, as after punctuation
+      // before the composition (setTextBefore).
+      bool punctuation = reading[0] == '_';
       std::vector<std::string> typed = typedWords(reading);
       auto add = [&](std::string value, double unigramScore) {
         endingAt[start + length].push_back(static_cast<int>(choices.size()));
-        uint32_t id = idOf(value);
+        uint32_t id = punctuation ? boundary : idOf(value);
         // The penalty moves from the dictionary score to the whole word.
         double penalty = penaltyOf(reading, typed, value);
-        std::vector<uint32_t> chars = scoresChars() ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
+        std::vector<uint32_t> chars = !scoresChars() ? std::vector<uint32_t>{}
+                                      : punctuation  ? kEndChars
+                                                     : CharModel::CodePoints(value);
+        if (punctuation) unigramScore = kEndScore;
         choices.push_back({start, length, node, std::move(value), id, unigramScore - penalty, penalty, {}, std::move(chars)});
       };
       if (node->isOverridden() || (!bigram_ && !userModel_ && !personal_)) {
