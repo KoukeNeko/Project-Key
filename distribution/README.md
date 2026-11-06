@@ -9,5 +9,5 @@ Project Key is published only on GitHub, in the Homebrew tap (`KoukeNeko/homebre
 (`KoukeNeko/scoop-bucket`), so there is no store "What's New" to keep; the cask and the manifest are written by
 `.github/workflows/release.yml`.
 
-To release: set the version in `platforms/macos/Resources/Info.plist` and
-`platforms/windows/Sources/TextService/ProjectKey.rc`, add `release-notes/vX.Y.Z.md`, commit, then push the tag `vX.Y.Z`.
+To release: set the version in `platforms/macos/Resources/Info.plist`,
+`platforms/windows/Sources/TextService/ProjectKey.rc` and `platforms/linux/CMakeLists.txt`, add `release-notes/vX.Y.Z.md`, commit, then push the tag `vX.Y.Z`.
