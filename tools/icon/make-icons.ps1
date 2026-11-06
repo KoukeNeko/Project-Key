@@ -74,3 +74,34 @@ $first.SaveAdd((MacFrame 1), $params)
 $params.Param[0] = [Drawing.Imaging.EncoderParameter]::new([Drawing.Imaging.Encoder]::SaveFlag, [long][Drawing.Imaging.EncoderValue]::Flush)
 $first.SaveAdd($params)
 $first.Dispose()
+
+# The Fcitx5 theme (platforms/linux/theme): the candidate window's colors and corners.
+$theme = Join-Path $root 'platforms\linux\theme'
+function ThemeImage([string]$name, [int]$width, [int]$height, [scriptblock]$draw) {
+  $bitmap = [Drawing.Bitmap]::new($width, $height)
+  $g = [Drawing.Graphics]::FromImage($bitmap)
+  $g.SmoothingMode = 'AntiAlias'
+  & $draw $g
+  $g.Dispose()
+  $bitmap.Save((Join-Path $theme $name), [Drawing.Imaging.ImageFormat]::Png)
+  $bitmap.Dispose()
+}
+$muted = [Drawing.Color]::FromArgb(0x8e, 0x9a, 0xa3)
+# The window: 8px corners, a 1px edge. Fcitx5 stretches the middle and keeps the 8px corners.
+ThemeImage 'panel.png' 24 24 {
+  param($g)
+  $shape = RoundedRect 0.5 0.5 23 23 7.5
+  $g.FillPath([Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(0x23, 0x28, 0x2c)), $shape)
+  $g.DrawPath([Drawing.Pen]::new([Drawing.Color]::FromArgb(0x34, 0x3b, 0x40), 1), $shape)
+}
+# The selection: 4px corners in the accent color, big enough for the 11/5/6 margins it is cut at.
+ThemeImage 'highlight.png' 24 24 { param($g) $g.FillPath([Drawing.SolidBrush]::new($accent), (RoundedRect 0 0 24 24 4)) }
+$chevron = {
+  param($g, [float[]]$xs, [float]$top, [float]$mid, [float]$bottom)
+  $pen = [Drawing.Pen]::new($muted, 2); $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
+  $g.DrawLines($pen, [Drawing.PointF[]]@([Drawing.PointF]::new($xs[0], $top), [Drawing.PointF]::new($xs[1], $mid), [Drawing.PointF]::new($xs[0], $bottom)))
+}
+ThemeImage 'prev.png' 16 24 { param($g) & $chevron $g @(10, 6) 8 12 16 }
+ThemeImage 'next.png' 16 24 { param($g) & $chevron $g @(6, 10) 8 12 16 }
+ThemeImage 'arrow.png' 6 12 { param($g) & $chevron $g @(1.5, 4.5) 3 6 9 }
+ThemeImage 'radio.png' 24 24 { param($g) $g.FillEllipse([Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(0x3f, 0xb9, 0xa3)), 8, 8, 8, 8) }

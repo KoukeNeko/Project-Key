@@ -1,6 +1,6 @@
 # Talks to a running ProjectKeyServer over its pipe, as the text service does,
 # and checks a typed sentence comes back as a composition and a commit.
-# Usage: Tests\ServerTest.ps1   (start .build\out\ProjectKeyServer.exe first)
+# Usage: Tests\ServerTest.ps1   (start build\out\ProjectKeyServer.exe first)
 $ErrorActionPreference = 'Stop'
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $pipe = [IO.Pipes.NamedPipeClientStream]::new('.', "ProjectKey-$sid", [IO.Pipes.PipeDirection]::InOut)

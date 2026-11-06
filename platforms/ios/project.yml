@@ -32,22 +32,22 @@ targets:
       - path: ../../core/engine/Controller.cpp
       - path: ../../core/engine/Bigram.cpp
       - path: ../../core/engine/CharModel.cpp
-      - path: .build/mcbopomofo/Source/Engine/AssociatedPhrasesV2.cpp
-      - path: .build/mcbopomofo/Source/Engine/ByteBlockBackedDictionary.cpp
-      - path: .build/mcbopomofo/Source/Engine/McBopomofoLM.cpp
-      - path: .build/mcbopomofo/Source/Engine/MemoryMappedFile.cpp
-      - path: .build/mcbopomofo/Source/Engine/ParselessPhraseDB.cpp
-      - path: .build/mcbopomofo/Source/Engine/ParselessLM.cpp
-      - path: .build/mcbopomofo/Source/Engine/PhraseReplacementMap.cpp
-      - path: .build/mcbopomofo/Source/Engine/UTF8Helper.cpp
-      - path: .build/mcbopomofo/Source/Engine/UserOverrideModel.cpp
-      - path: .build/mcbopomofo/Source/Engine/UserPhrasesLM.cpp
-      - path: .build/mcbopomofo/Source/Engine/VariantAnnotator.cpp
-      - path: .build/mcbopomofo/Source/Engine/Mandarin/Mandarin.cpp
-      - path: .build/mcbopomofo/Source/Engine/gramambular2/reading_grid.cpp
-      - path: .build/data.txt
+      - path: build/mcbopomofo/Source/Engine/AssociatedPhrasesV2.cpp
+      - path: build/mcbopomofo/Source/Engine/ByteBlockBackedDictionary.cpp
+      - path: build/mcbopomofo/Source/Engine/McBopomofoLM.cpp
+      - path: build/mcbopomofo/Source/Engine/MemoryMappedFile.cpp
+      - path: build/mcbopomofo/Source/Engine/ParselessPhraseDB.cpp
+      - path: build/mcbopomofo/Source/Engine/ParselessLM.cpp
+      - path: build/mcbopomofo/Source/Engine/PhraseReplacementMap.cpp
+      - path: build/mcbopomofo/Source/Engine/UTF8Helper.cpp
+      - path: build/mcbopomofo/Source/Engine/UserOverrideModel.cpp
+      - path: build/mcbopomofo/Source/Engine/UserPhrasesLM.cpp
+      - path: build/mcbopomofo/Source/Engine/VariantAnnotator.cpp
+      - path: build/mcbopomofo/Source/Engine/Mandarin/Mandarin.cpp
+      - path: build/mcbopomofo/Source/Engine/gramambular2/reading_grid.cpp
+      - path: build/data.txt
         buildPhase: resources
-      - path: .build/models
+      - path: build/models
         buildPhase: resources
     dependencies:  # Objective-C++ does not link its frameworks by itself
       - sdk: UIKit.framework
@@ -57,7 +57,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.projectkey.ios.keyboard
         PRODUCT_NAME: Keyboard
-        HEADER_SEARCH_PATHS: ["$(SRCROOT)/../../core/engine", "$(SRCROOT)/.build/mcbopomofo/Source/Engine"]
+        HEADER_SEARCH_PATHS: ["$(SRCROOT)/../../core/engine", "$(SRCROOT)/build/mcbopomofo/Source/Engine"]
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: Keyboard/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Project Key

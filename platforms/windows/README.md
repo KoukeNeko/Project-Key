@@ -28,7 +28,7 @@ scoop install koukeneko/project-key
 自行建置需要 Visual Studio 2026（「使用 C++ 的桌面開發」，含 Windows SDK）、.NET 10 SDK 與 [uv](https://docs.astral.sh/uv/)（產生詞庫用的 Python）。設定視窗使用系統的 Windows App Runtime 2（Windows 11 已內建）。
 
 ```powershell
-platforms\windows\build.ps1      # 下載並編譯引擎、產生詞庫、跑測試，輸出到 .build\out
+platforms\windows\build.ps1      # 下載並編譯引擎、產生詞庫、跑測試，輸出到 build\out
 platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註冊（會要求系統管理員權限）
 ```
 
@@ -89,7 +89,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 安裝後可以再跑：
 
 - `Tests\ServerTest.ps1`：直接透過 pipe 對執行中的伺服器打一整句、選字、送出。
-- `Tests\TypingTest.ps1`：開一個 WPF 文字框（`-Kind winforms` 改用 Win32 的 Edit 控制項），只在該程序內啟用 Project Key，用模擬按鍵打字並截圖到 `.build\shots`：組字、候選、展開、中／英標記、英文轉注音預覽、Caps Lock。`-Flip` 把文字放在螢幕底部，檢查候選視窗翻到上方。需要已解鎖的桌面。
+- `Tests\TypingTest.ps1`：開一個 WPF 文字框（`-Kind winforms` 改用 Win32 的 Edit 控制項），只在該程序內啟用 Project Key，用模擬按鍵打字並截圖到 `build\shots`：組字、候選、展開、中／英標記、英文轉注音預覽、Caps Lock。`-Flip` 把文字放在螢幕底部，檢查候選視窗翻到上方。需要已解鎖的桌面。
 - `Tests\BrowserTest.ps1`：在 Edge 的 textarea 打字並單按 Shift 切換中英。Chromium 會跳過 TSF 的測試階段，直接呼叫 `OnKeyDown`／`OnKeyUp`。Edge 無法只對單一程序啟用鍵盤，測試期間會把整個工作階段切到 Project Key，結束後切回英文（美國）。
 - `Tests\RestoreKeyboard.ps1`：把整個工作階段的鍵盤切回英文（美國）。
 

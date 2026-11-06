@@ -1,9 +1,9 @@
 #!/bin/sh
-# Installs .build/ProjectKey.app for the current user and registers it. Adding
+# Installs build/ProjectKey.app for the current user and registers it. Adding
 # it as an input source is left to System Settings > Keyboard > Input Sources.
 set -eu
 cd "$(dirname "$0")"
-APP=.build/ProjectKey.app
+APP=build/ProjectKey.app
 DEST="$HOME/Library/Input Methods/ProjectKey.app"
 [ -d "$APP" ] || { echo "run ./build.sh first" >&2; exit 1; }
 
