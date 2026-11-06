@@ -1,5 +1,5 @@
 # The Fcitx5 input method: an addon that drives the shared engine
-# (core/engine) and shows its composition and candidates in Fcitx5's own panel.
+# (core/engine) and shows its candidates in its own X11 window (Sources/Panel.cpp).
 # build.sh fetches McBopomofo (MIT) into .build/mcbopomofo and points MCBOPOMOFO here.
 cmake_minimum_required(VERSION 3.16)
 project(fcitx5-projectkey VERSION 0.2.1 LANGUAGES CXX)
@@ -12,6 +12,7 @@ find_package(Fcitx5Core REQUIRED)
 find_package(Fcitx5Utils REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ENCHANT REQUIRED IMPORTED_TARGET enchant-2)
+pkg_check_modules(PANEL REQUIRED IMPORTED_TARGET xcb cairo cairo-xcb pangocairo)
 include(GNUInstallDirs)
 
 set(MCBOPOMOFO "" CACHE PATH "McBopomofo checkout")
@@ -29,8 +30,8 @@ foreach(test ComposerTest ControllerTest)
 endforeach()
 
 set(DATA_DIR "${CMAKE_INSTALL_FULL_DATADIR}/fcitx5/projectkey")
-add_library(projectkey MODULE Sources/ProjectKey.cpp)
-target_link_libraries(projectkey PRIVATE engine Fcitx5::Core Fcitx5::Utils PkgConfig::ENCHANT)
+add_library(projectkey MODULE Sources/ProjectKey.cpp Sources/Panel.cpp)
+target_link_libraries(projectkey PRIVATE engine Fcitx5::Core Fcitx5::Utils PkgConfig::ENCHANT PkgConfig::PANEL)
 target_compile_definitions(projectkey PRIVATE PROJECTKEY_DATA_DIR="${DATA_DIR}" FCITX_GETTEXT_DOMAIN="fcitx5-projectkey")
 set_target_properties(projectkey PROPERTIES PREFIX "")
 

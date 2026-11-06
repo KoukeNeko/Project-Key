@@ -1,7 +1,8 @@
 // The Fcitx5 addon: each input context gets a Controller (core/engine), whose
-// composition becomes the preedit and whose candidates and proof row go into
-// Fcitx5's own input panel. Fcitx5 draws the panel, so its look follows the
-// user's Fcitx5 theme rather than the macOS and Windows candidate window.
+// composition becomes the preedit. On X11 its candidates, proof row and 中／英
+// badge go into Project Key's own windows (Panel.cpp), which look like the
+// macOS and Windows ones; elsewhere, or where the app gives no screen position
+// for its caret, they go into Fcitx5's input panel and follow its theme.
 #include <enchant.h>
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/enum.h>
@@ -22,10 +23,12 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "Controller.h"
+#include "Panel.h"
 
 namespace ProjectKey {
 
@@ -82,7 +85,7 @@ class ConfigSettings : public Settings {
       case Setting::kZhuyinToEnglish: return *config_.zhuyinToEnglish;
       case Setting::kCandidatePosition: return static_cast<int>(*config_.candidatePosition);
       case Setting::kNextDoubtful: return *config_.nextDoubtful;
-      case Setting::kAppearance: return std::nullopt;  // Fcitx5's theme draws the panel
+      case Setting::kAppearance: return std::nullopt;  // the dark window only: X11 has no system materials
     }
     return std::nullopt;
   }
@@ -104,21 +107,8 @@ class ConfigSettings : public Settings {
   Config& config_;
 };
 
-// Bytes of `text` that hold its first `units` UTF-16 code units: the engine
-// counts in UTF-16, as TSF does, and Fcitx5 in UTF-8 bytes.
-size_t BytesFor(const std::string& text, uint32_t units) {
-  size_t i = 0;
-  for (uint32_t n = 0; i < text.size() && n < units;) {
-    unsigned char c = static_cast<unsigned char>(text[i]);
-    size_t length = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xe ? 3 : 4;
-    n += length == 4 ? 2 : 1;
-    i += length;
-  }
-  return std::min(i, text.size());
-}
-
-// Grid columns a candidate takes: two Han characters to a column, as the
-// candidate window on the other platforms packs them.
+// Grid columns a candidate takes without Project Key's window to measure it
+// in: two Han characters to a column, as the candidate window packs them.
 int Span(const std::string& candidate) {
   double width = 0;
   for (unsigned char c : candidate) {
@@ -161,11 +151,25 @@ class Spelling {
 }  // namespace
 
 // One input context's composition: what the Controller does to the app goes
-// into the context's preedit, commit and input panel.
+// into the context's preedit, commit and panel.
 class Session : public fcitx::InputContextProperty, public Client {
  public:
-  Session(Environment& environment, fcitx::Instance* instance, fcitx::InputContext& ic)
-      : instance_(instance), ic_(ic), controller(environment, *this) {}
+  Session(Environment& environment, fcitx::Instance* instance, Panel& panel, fcitx::InputContext& ic)
+      : instance_(instance), panel_(panel), ic_(ic), controller(environment, *this) {}
+  ~Session() override { panel_.hide(this); }
+
+  // Project Key's window needs the caret on screen; a relative rect is only within the app's window.
+  bool ownPanel() const { return panel_.ok() && !ic_.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect); }
+  // The app moved the caret, as it does after each preedit change.
+  void caretMoved() {
+    if (ownPanel()) panel_.follow(this, anchor());
+  }
+  // Where the composition starts, as on the other platforms, so the panel
+  // stays put while it grows; the caret when there is none or it wrapped.
+  fcitx::Rect anchor() const {
+    const fcitx::Rect& caret = ic_.cursorRect();
+    return start_ && start_->top() == caret.top() && start_->left() <= caret.left() ? *start_ : caret;
+  }
 
   void insertText(const std::string& text) override {
     clearPreedit();
@@ -181,6 +185,8 @@ class Session : public fcitx::InputContextProperty, public Client {
       clearPreedit();
       return;
     }
+    // The app has not drawn the preedit yet, so its caret is where the composition starts.
+    if (!start_) start_ = ic_.cursorRect();
     bool inApp = ic_.capabilityFlags().test(fcitx::CapabilityFlag::Preedit);
     fcitx::TextFormatFlags normal = inApp ? fcitx::TextFormatFlag::Underline : fcitx::TextFormatFlag::NoFlag;
     const std::string& text = composition.text;
@@ -203,6 +209,10 @@ class Session : public fcitx::InputContextProperty, public Client {
   // The proof row goes above the candidates, the selection's row of the grid
   // into the candidate list, and the page label below it.
   void showPanel(const PanelContent& content) override {
+    if (ownPanel()) {
+      panel_.show(this, content, anchor());
+      return;
+    }
     fcitx::InputPanel& panel = ic_.inputPanel();
     fcitx::Text aux;
     if (!content.replacedText.empty()) {
@@ -260,6 +270,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   }
 
   void hidePanel() override {
+    panel_.hide(this);
     fcitx::InputPanel& panel = ic_.inputPanel();
     panel.setAuxUp(fcitx::Text());
     panel.setAuxDown(fcitx::Text());
@@ -267,9 +278,13 @@ class Session : public fcitx::InputContextProperty, public Client {
     ic_.updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
   }
 
-  // Fcitx5's own input method popup stands in for the 中／英 badge; it shows
-  // the engine's subMode, which reads the mode the label names.
-  void showIndicator(const std::string&) override {
+  // Without Project Key's window, Fcitx5's own input method popup stands in
+  // for the badge; it shows the engine's subMode, which reads the same mode.
+  void showIndicator(const std::string& label) override {
+    if (ownPanel()) {
+      panel_.showBadge(label, anchor());
+      return;
+    }
     instance_->showInputMethodInformation(&ic_);
     ic_.updateUserInterface(fcitx::UserInterfaceComponent::StatusArea);
   }
@@ -286,6 +301,7 @@ class Session : public fcitx::InputContextProperty, public Client {
   }
 
   void clearPreedit() {
+    start_.reset();
     ic_.inputPanel().setClientPreedit(fcitx::Text());
     ic_.inputPanel().setPreedit(fcitx::Text());
     ic_.updatePreedit();
@@ -311,7 +327,9 @@ class Session : public fcitx::InputContextProperty, public Client {
   };
 
   fcitx::Instance* instance_;
+  Panel& panel_;
   fcitx::InputContext& ic_;
+  std::optional<fcitx::Rect> start_;  // the caret when the composition began
 
  public:
   Controller controller;  // after the members it calls back into
@@ -320,8 +338,8 @@ class Session : public fcitx::InputContextProperty, public Client {
 class Engine : public fcitx::InputMethodEngineV2 {
  public:
   explicit Engine(fcitx::Instance* instance)
-      : instance_(instance), settings_(config_), factory_([this](fcitx::InputContext& ic) {
-          return new Session(environment_, instance_, ic);
+      : instance_(instance), settings_(config_), panel_(instance->eventLoop()), factory_([this](fcitx::InputContext& ic) {
+          return new Session(environment_, instance_, panel_, ic);
         }) {
     fcitx::readAsIni(config_, kConfigPath);
     std::string dir = PROJECTKEY_DATA_DIR;
@@ -335,7 +353,10 @@ class Engine : public fcitx::InputMethodEngineV2 {
     environment_.userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
     environment_.settings = &settings_;
     environment_.isEnglish = [this](const std::string& text) { return spelling_.isEnglish(text); };
-    environment_.columnsSpannedBy = Span;
+    environment_.columnsSpannedBy = panel_.ok() ? std::function<int(const std::string&)>([this](const std::string& candidate) {
+      return panel_.span(candidate);
+    })
+                                                : Span;
     environment_.appTypesUnhandledKeys = true;  // a key the engine does not filter reaches the app
     instance_->inputContextManager().registerProperty("projectkey", &factory_);
     // Fcitx5 takes Left Shift to switch input methods before an engine sees it;
@@ -350,6 +371,11 @@ class Engine : public fcitx::InputMethodEngineV2 {
           }
           event.inputContext()->propertyFor(&factory_)->controller.handleShift(!event.isRelease());
           event.filter();  // the app still gets the key
+        });
+    caretWatcher_ = instance_->watchEvent(
+        fcitx::EventType::InputContextCursorRectChanged, fcitx::EventWatcherPhase::Default, [this](fcitx::Event& e) {
+          fcitx::InputContext* ic = static_cast<fcitx::InputContextEvent&>(e).inputContext();
+          if (instance_->inputMethodEngine(ic) == this) ic->propertyFor(&factory_)->caretMoved();
         });
   }
 
@@ -453,9 +479,10 @@ class Engine : public fcitx::InputMethodEngineV2 {
   Config config_;
   ConfigSettings settings_;
   Spelling spelling_;
+  Panel panel_;  // before the sessions that show it
   Environment environment_;
   fcitx::FactoryFor<Session> factory_;
-  std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> shiftWatcher_;
+  std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> shiftWatcher_, caretWatcher_;
 };
 
 class Factory : public fcitx::AddonFactory {
