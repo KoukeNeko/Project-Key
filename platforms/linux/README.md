@@ -10,7 +10,7 @@ Fcitx5 注音輸入法，大千鍵盤，按鍵與 [macOS 版](../macos/README.md
 |---|---|
 | 組字區 | preedit，可疑字以外的段落加底線，選字中的段落反白 |
 | 候選字窗、中／英標記 | Project Key 自己畫的 X11 視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同 |
-| 前文（Tab 英文轉注音） | surrounding text；App 不提供時 Tab 照常輸入 |
+| 前文（Tab 英文轉注音、組字接著游標前的字選字） | surrounding text；App 不提供時 Tab 照常輸入，選字當成句首 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
 「候選視窗外觀」有深色與模糊（預設）兩種。模糊用 KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），模糊視窗後方的內容再疊一層深色；KWin 的模糊特效關著或用別的視窗管理員時，模糊會改成深色。中／英標記跟著用同一種外觀。有合成器時視窗是圓角，沒有時是直角。Wayland 下或 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題。

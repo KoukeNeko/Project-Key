@@ -31,6 +31,7 @@ targets:
       - path: ../../core/engine/Composer.cpp
       - path: ../../core/engine/Controller.cpp
       - path: ../../core/engine/Bigram.cpp
+      - path: ../../core/engine/CharModel.cpp
       - path: .build/mcbopomofo/Source/Engine/AssociatedPhrasesV2.cpp
       - path: .build/mcbopomofo/Source/Engine/ByteBlockBackedDictionary.cpp
       - path: .build/mcbopomofo/Source/Engine/McBopomofoLM.cpp
@@ -45,6 +46,8 @@ targets:
       - path: .build/mcbopomofo/Source/Engine/Mandarin/Mandarin.cpp
       - path: .build/mcbopomofo/Source/Engine/gramambular2/reading_grid.cpp
       - path: .build/data.txt
+        buildPhase: resources
+      - path: .build/models
         buildPhase: resources
     dependencies:  # Objective-C++ does not link its frameworks by itself
       - sdk: UIKit.framework

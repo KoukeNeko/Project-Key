@@ -91,6 +91,7 @@ class Settings {
 struct Environment {
   std::shared_ptr<Lexicon> lm;
   std::shared_ptr<const Bigram> bigram;
+  std::shared_ptr<const CharModel> chars;
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel;  // replaced by value to clear it
   Settings* settings = nullptr;
   // Whether text (letters and spaces) is correctly spelled English.

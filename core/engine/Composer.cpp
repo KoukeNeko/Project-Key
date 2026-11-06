@@ -25,6 +25,12 @@ constexpr size_t kWordsPerNode = 10;
 constexpr double kEndScore = -0.72;
 // Words outside the context model, and the missing word before the first.
 constexpr uint32_t kNoWord = UINT32_MAX;
+// The longest word before the composition that the context model is asked about.
+constexpr size_t kWordBeforeLength = 4;
+// Character model log10 probabilities kept between walks.
+constexpr size_t kCharCacheSize = 1 << 16;
+
+bool IsHan(uint32_t c) { return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x20000 && c <= 0x2FFFF); }
 
 double Now() {
   return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -226,22 +232,29 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
-                   double trigramWeight, double adjacentKeyScore)
+                   double trigramWeight, double adjacentKeyScore, std::shared_ptr<const CharModel> chars,
+                   double charWeight)
     : lm_(lm),
       dictionary_(std::make_shared<TonelessModel>(lm)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
       contextWeight_(contextWeight),
       trigramWeight_(trigramWeight),
+      chars_(bigram_ && chars && chars->isLoaded() ? std::move(chars) : nullptr),
+      charWeight_(charWeight),
       userModel_(std::move(userModel)),
       // Without context nothing can tell a slip from what was typed.
       adjacentKeyScore_(bigram_ ? adjacentKeyScore : -INFINITY),
-      grid_(GridModel(dictionary_, adjacentKeyScore_)),
+      gridModel_(GridModel(dictionary_, adjacentKeyScore_)),
+      grid_(gridModel_),
       reading_(BopomofoKeyboardLayout::StandardLayout()) {}
 
 Composer::KeyResult Composer::typeReadingKey(char key) {
   if (!reading_.isValidKey(key)) return KeyResult::kInvalid;
   bool shown = readingShown_;
-  if (readingShown_ && startsSyllable(key)) endReading();
+  if (readingShown_ && startsSyllable(key)) {
+    endReading();
+    toned_ = false;
+  }
   Formosa::Mandarin::BopomofoReadingBuffer untoned = reading_;
   hideReading();
   reading_.combineKey(key);
@@ -266,6 +279,7 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
   // The grid's model decides: with adjacent keys on, a syllable the dictionary lacks
   // still goes in when a slip of one key explains it.
   bool inserted = grid_.insertReading(syllable);
+  if (inserted) toned_ = true;
   if (!inserted) {
     reading_ = untoned;
     showReading();
@@ -277,14 +291,22 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
 
 // With a whole syllable open and no tone typed, whether `key` begins the next syllable:
 // it goes in the place of a symbol already there or before one (the order is
-// consonant, medial, vowel), or it makes a syllable the dictionary lacks.
+// consonant, medial, vowel), or it makes a syllable the dictionary lacks. Once this
+// composition has a syllable typed with a tone, such a syllable is more likely a slip
+// (ㄍㄛ for ㄍㄜ) than first symbols, so it stays one when a key one off explains it.
 bool Composer::startsSyllable(char key) const {
   BopomofoSyllable typed = BopomofoKeyboardLayout::StandardLayout()->syllableFromKeySequence(std::string(1, key));
   if (typed.hasToneMarker()) return false;
   auto lastPlace = [](const BopomofoSyllable& s) { return s.hasVowel() ? 3 : s.hasMiddleVowel() ? 2 : s.hasConsonant() ? 1 : 0; };
   BopomofoSyllable open = reading_.syllable();
   if (lastPlace(typed) <= lastPlace(open)) return true;
-  return !dictionary_->hasUnigrams((open + typed).composedString() + kAnyTone);
+  std::string joined = (open + typed).composedString();
+  if (dictionary_->hasUnigrams(joined + kAnyTone)) return false;
+  if (!toned_ || adjacentKeyScore_ == -INFINITY) return true;
+  for (const char* tone : {"", "ˊ", "ˇ", "ˋ", "˙"}) {
+    if (!gridModel_->getUnigrams(joined + tone).empty()) return false;
+  }
+  return true;
 }
 
 // Puts the open syllable in the grid, toneless, when the dictionary has it, so its word shows.
@@ -371,7 +393,27 @@ bool Composer::deleteForward() {
   return true;
 }
 
+void Composer::setTextBefore(const std::string& text) {
+  // Back over the trailing Han characters, a UTF-8 sequence at a time.
+  size_t start = text.size();
+  for (size_t count = 0; start > 0 && count < kWordBeforeLength; count++) {
+    size_t at = start - 1;
+    while (at > 0 && (static_cast<unsigned char>(text[at]) & 0xC0) == 0x80) at--;
+    auto byte = [&](size_t i) { return static_cast<unsigned char>(text[i]); };
+    size_t length = start - at;
+    uint32_t c = length == 3 ? (byte(at) & 0x0F) << 12 | (byte(at + 1) & 0x3F) << 6 | (byte(at + 2) & 0x3F)
+               : length == 4 ? (byte(at) & 0x07) << 18 | (byte(at + 1) & 0x3F) << 12 | (byte(at + 2) & 0x3F) << 6 | (byte(at + 3) & 0x3F)
+               : 0;
+    if (!IsHan(c)) break;
+    start = at;
+  }
+  hanBefore_ = text.substr(start);
+  walk();
+}
+
 void Composer::clear() {
+  toned_ = false;
+  hanBefore_.clear();
   endReading();
   grid_.clear();
   segments_.clear();
@@ -413,13 +455,49 @@ void Composer::walk() {
     double unigramScore;
     double penalty;  // adjacentKeyScore_ for a word of a reading one key off, else 0
     std::vector<State> states;
+    std::vector<uint32_t> chars;  // code points, with a character model
   };
   const std::vector<ReadingGrid::Span>& spans = grid_.spans();
   const size_t n = spans.size();
   const uint32_t boundary = bigram_ ? bigram_->id(Bigram::kBoundary).value_or(kNoWord) : kNoWord;
   auto idOf = [&](const std::string& value) { return bigram_ ? bigram_->id(value).value_or(kNoWord) : kNoWord; };
+  // The word before the first: the start of a phrase, or the longest known word ending the Han text before.
+  uint32_t opening = hanBefore_.empty() ? boundary : kNoWord;
+  for (size_t at = 0; at < hanBefore_.size() && opening == kNoWord;) {
+    opening = idOf(hanBefore_.substr(at));
+    do at++; while (at < hanBefore_.size() && (hanBefore_[at] & 0xC0) == 0x80);
+  }
   auto score = [&](uint32_t first, uint32_t second, uint32_t word, double unigramScore) {
     return bigram_ ? wordScore(first, second, word, unigramScore) : unigramScore;
+  };
+  // The character model's weighted log10 P(chars) after the words `beforeLast` (null at the
+  // start) and `last`; the Han text before the composition stands for missing words.
+  const std::vector<uint32_t> openingChars = chars_ ? CharModel::CodePoints(hanBefore_) : std::vector<uint32_t>{};
+  static const std::vector<uint32_t> kEndChars{CharModel::kBoundary};
+  auto charScore = [&](const std::vector<uint32_t>* beforeLast, const std::vector<uint32_t>& last, const std::vector<uint32_t>& chars) {
+    if (!chars_) return 0.0;
+    uint32_t first = CharModel::kBoundary, second = CharModel::kBoundary;
+    for (const std::vector<uint32_t>* part : {beforeLast, &last}) {
+      if (!part) continue;
+      for (uint32_t c : *part) {
+        first = second;
+        second = c;
+      }
+    }
+    double total = 0;
+    for (uint32_t next : chars) {
+      // Each key walks the whole composition again, through the same characters in the same places.
+      uint64_t key = (static_cast<uint64_t>(first) << CharModel::kBits | second) << CharModel::kBits | next;
+      auto cached = charCache_.find(key);
+      if (cached == charCache_.end()) {
+        if (charCache_.size() >= kCharCacheSize) charCache_.clear();
+        cached = charCache_.emplace(key, std::log10(chars_->probability(first, second, next))).first;
+      }
+      total += cached->second;
+      first = second;
+      second = next;
+    }
+    return charWeight_ * total;
   };
   std::vector<Choice> choices;
   std::vector<std::vector<int>> endingAt(n + 1);
@@ -441,7 +519,8 @@ void Composer::walk() {
         uint32_t id = idOf(value);
         // The penalty moves from the dictionary score to the whole word, context included.
         double penalty = slips && std::find(typed.begin(), typed.end(), value) == typed.end() ? adjacentKeyScore_ : 0;
-        choices.push_back({start, length, node, std::move(value), id, unigramScore - penalty, penalty, {}});
+        std::vector<uint32_t> chars = chars_ ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
+        choices.push_back({start, length, node, std::move(value), id, unigramScore - penalty, penalty, {}, std::move(chars)});
       };
       if (node->isOverridden() || (!bigram_ && !userModel_)) {
         add(node->value(), node->score());
@@ -472,7 +551,9 @@ void Composer::walk() {
   // Choices are in start order, so every predecessor is final before it is used.
   for (Choice& choice : choices) {
     if (choice.start == 0) {
-      double first = learned(-1, choice) ? 0 : choice.penalty + score(kNoWord, boundary, choice.id, choice.unigramScore);
+      double first = learned(-1, choice) ? 0
+                                         : choice.penalty + score(kNoWord, opening, choice.id, choice.unigramScore) +
+                                               charScore(nullptr, openingChars, choice.chars);
       choice.states.push_back({-1, first, -1});
       continue;
     }
@@ -481,8 +562,13 @@ void Composer::walk() {
       State state{previous, -INFINITY, -1};
       bool certain = learned(previous, choice);
       for (size_t k = 0; k < before.states.size(); k++) {
-        uint32_t first = before.states[k].previous >= 0 ? choices[before.states[k].previous].id : boundary;
-        double total = before.states[k].best + (certain ? 0 : choice.penalty + score(first, before.id, choice.id, choice.unigramScore));
+        int beforeLast = before.states[k].previous;
+        uint32_t first = beforeLast >= 0 ? choices[beforeLast].id : opening;
+        double total = before.states[k].best;
+        if (!certain) {
+          total += choice.penalty + score(first, before.id, choice.id, choice.unigramScore) +
+                   charScore(beforeLast >= 0 ? &choices[beforeLast].chars : &openingChars, before.chars, choice.chars);
+        }
         if (total > state.best) {
           state.best = total;
           state.back = static_cast<int>(k);
@@ -496,8 +582,9 @@ void Composer::walk() {
   for (int end : endingAt[n]) {
     for (size_t k = 0; k < choices[end].states.size(); k++) {
       const State& state = choices[end].states[k];
-      uint32_t first = state.previous >= 0 ? choices[state.previous].id : boundary;
-      double total = state.best + score(first, choices[end].id, boundary, kEndScore);
+      uint32_t first = state.previous >= 0 ? choices[state.previous].id : opening;
+      double total = state.best + score(first, choices[end].id, boundary, kEndScore) +
+                     charScore(state.previous >= 0 ? &choices[state.previous].chars : &openingChars, choices[end].chars, kEndChars);
       if (total > lastScore) {
         lastScore = total;
         last = end;
@@ -516,26 +603,37 @@ void Composer::walk() {
   // A word is doubtful when another word of the same node scores within the gap
   // in the same context.
   segments_.clear();
-  auto idAt = [&](long i) { return i < 0 || i >= static_cast<long>(path.size()) ? boundary : choices[path[i]].id; };
+  auto idAt = [&](long i) {
+    return i == -1 ? opening : i < 0 ? kNoWord : i >= static_cast<long>(path.size()) ? boundary : choices[path[i]].id;
+  };
   for (size_t i = 0; i < path.size(); i++) {
     const Choice& choice = choices[path[i]];
     long at = static_cast<long>(i);
     uint32_t first = i > 0 ? idAt(at - 2) : kNoWord, previous = idAt(at - 1);
     bool hasNext = i + 1 < path.size();
     const Choice* next = hasNext ? &choices[path[i + 1]] : nullptr;
-    auto local = [&](uint32_t word, double unigramScore) {
-      double total = score(first, previous, word, unigramScore);
-      total += score(previous, word, idAt(at + 1), next ? next->unigramScore : kEndScore);
-      if (next) total += score(word, next->id, idAt(at + 2), i + 2 < path.size() ? choices[path[i + 2]].unigramScore : kEndScore);
+    const std::vector<uint32_t>& lastChars = i >= 1 ? choices[path[i - 1]].chars : openingChars;
+    const std::vector<uint32_t>* beforeLastChars = i >= 2 ? &choices[path[i - 2]].chars : i == 1 ? &openingChars : nullptr;
+    const std::vector<uint32_t>& afterNextChars = i + 2 < path.size() ? choices[path[i + 2]].chars : kEndChars;
+    auto local = [&](uint32_t word, double unigramScore, const std::vector<uint32_t>& chars) {
+      double total = score(first, previous, word, unigramScore) + charScore(beforeLastChars, lastChars, chars);
+      total += score(previous, word, idAt(at + 1), next ? next->unigramScore : kEndScore) +
+               charScore(&lastChars, chars, next ? next->chars : kEndChars);
+      if (next) {
+        total += score(word, next->id, idAt(at + 2), i + 2 < path.size() ? choices[path[i + 2]].unigramScore : kEndScore) +
+                 charScore(&chars, next->chars, afterNextChars);
+      }
       return total;
     };
     bool doubtful = false;
     if (!choice.node->isOverridden() && !learned(i > 0 ? path[i - 1] : -1, choice)) {
-      double chosen = local(choice.id, choice.unigramScore) + choice.penalty;
+      double chosen = local(choice.id, choice.unigramScore, choice.chars) + choice.penalty;
       const auto& unigrams = choice.node->unigrams();
       for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()) && !doubtful; k++) {
         if (unigrams[k].value() != choice.value) {
-          doubtful = chosen - local(idOf(unigrams[k].value()), unigrams[k].score()) < kDoubtfulScoreGap;
+          const std::string& value = unigrams[k].value();
+          std::vector<uint32_t> chars = chars_ ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
+          doubtful = chosen - local(idOf(value), unigrams[k].score(), chars) < kDoubtfulScoreGap;
         }
       }
     }

@@ -159,10 +159,44 @@ int main(int argc, char** argv) {
   type(above, "5k4ek7ul31j4hji4");
   assert(above.text() == "這個也不錯");
   // A key that makes no syllable with a lone symbol starts the next syllable, so first
-  // symbols spell 可以 (ㄎㄧ), and a slip such as ㄍㄛ˙ for ㄍㄜ˙ reads as ㄍ and ㄛ˙.
+  // symbols spell 可以 (ㄎㄧ).
   Composer unknown(lm, slipModel);
   type(unknown, "du");
   assert(unknown.text() == "可以" && unknown.readingCount() == 2);
+  // After a syllable typed with a tone, such a key that one slip explains stays in the
+  // syllable: ㄍㄛ˙ (ei7) is ㄍㄜ˙ (ek7) one key off, not ㄍ and ㄛ˙.
+  Composer toned(lm, slipModel);
+  type(toned, "5k4ei7");
+  assert(toned.text() == "這個" && toned.readingCount() == 2);
+  // Text before the caret: after 這個 already in the document, the slip still reads as 也.
+  Composer after(lm, slipModel);
+  after.setTextBefore("他說這個");
+  type(after, "u.31j4hji4");
+  assert(after.text() == "也不錯");
+  Composer alone(lm, slipModel);
+  type(alone, "u.31j4hji4");
+  assert(alone.text() != "也不錯");
+
+  // The character model: no word pair knows 候選 then 字, but its characters 選字 are
+  // common and 選次 is not, so ㄘˋ (h4) after 候選 reads as the slip ㄗˋ (y4).
+  std::string charsPath = tempPath("ComposerTest-chars.bin");
+  using Record = ProjectKey::CharModel::Record;
+  auto code = [](const char* utf8) { return static_cast<uint64_t>(ProjectKey::CharModel::CodePoints(utf8)[0]); };
+  ProjectKey::CharModel::Tables tables;
+  for (const char* c : {"候", "字", "次", "選"}) tables.unigrams.push_back({code(c), 0.01f});
+  std::sort(tables.unigrams.begin(), tables.unigrams.end(), [](const Record& a, const Record& b) { return a.key < b.key; });
+  tables.bigramContexts = {{code("選"), 0.1f}};
+  tables.bigrams = {{code("選") << ProjectKey::CharModel::kBits | code("字"), 0.8f}};
+  assert(ProjectKey::CharModel::save(charsPath, tables));
+  auto chars = std::make_shared<ProjectKey::CharModel>();
+  assert(chars->load(charsPath));
+  Composer withChars(lm, slipModel, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore, chars, 1);
+  type(withChars, "c.4vm03h4");
+  assert(withChars.text() == "候選字");
+  Composer withoutChars(lm, slipModel);
+  type(withoutChars, "c.4vm03h4");
+  assert(withoutChars.text() == "候選次");
+  std::remove(charsPath.c_str());
   std::remove(slipPath.c_str());
 
   // The user model: after choosing 列 following 第一 once, the next walk keeps it.

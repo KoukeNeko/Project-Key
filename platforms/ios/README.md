@@ -45,7 +45,7 @@ xcrun devicectl device install app --device <裝置 UDID> .build/derived/Build/P
 
 ## 與桌面版的差異
 
-- 沒有上下文排序：bigram 模型約 190MB，超過鍵盤擴充的記憶體上限，只放詞庫（`tools/bigram-trainer/.cache/data.txt`，沒有時用 McBopomofo 的）。鄰鍵修正因此也不啟用。
+- 上下文排序與鄰鍵修正需要 `tools/bigram-trainer` 訓練出的 `bigram.bin` 與 `chars.bin`；有時 `build.sh` 一併放入，以記憶體映射讀取，不占鍵盤擴充的記憶體上限。沒有時只用詞庫（`data.txt`，沒有時用 McBopomofo 的），鄰鍵修正也不啟用。
 - 沒有英文模式與 Tab 轉換，切換英文用系統的地球鍵。
 - 沒有設定畫面；選過的字只記在記憶體，鍵盤程式被系統結束後清空。
 
