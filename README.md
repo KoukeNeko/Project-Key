@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/KoukeNeko/Project-Key)](https://github.com/KoukeNeko/Project-Key/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-大千注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共用同一個組字引擎。連續打完整句再一起選字，引擎依上下文排序，並標出可能選錯的地方。
+大千注音輸入法，也可改用漢語拼音；macOS、Windows、Linux（Fcitx5）與 iOS 共用同一個組字引擎。連續打完整句再一起選字，引擎依上下文排序，並標出可能選錯的地方。
 
 ![候選視窗：上方整句預覽標出可疑的「程式」，下方為候選列](.github/assets/candidate-window.png)
 

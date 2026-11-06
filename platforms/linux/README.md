@@ -1,6 +1,6 @@
 # Linux 輸入法
 
-Fcitx5 注音輸入法，大千鍵盤，按鍵與 [macOS 版](../macos/README.md)、[Windows 版](../windows/README.md) 相同。目前在 Ubuntu 24.04 上測過：KDE Plasma（X11），以及 GNOME（Xorg 與 Wayland）。
+Fcitx5 注音輸入法（大千鍵盤，也可改用漢語拼音），按鍵與 [macOS 版](../macos/README.md)、[Windows 版](../windows/README.md) 相同。目前在 Ubuntu 24.04 上測過：KDE Plasma（X11），以及 GNOME（Xorg 與 Wayland）。
 
 ## 架構
 
