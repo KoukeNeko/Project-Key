@@ -2,6 +2,8 @@
 
 #import <QuartzCore/QuartzCore.h>
 
+#include "PanelMetrics.h"
+
 NSString *const PKAppearanceKey = @"Appearance";
 const NSInteger PKGridColumns = 6;
 
@@ -15,6 +17,8 @@ BOOL PKGlassAvailable(void) {
 
 namespace {
 
+using namespace ProjectKey::Metrics;
+
 // Design tokens from the prototype's dark theme.
 NSColor *Hex(uint32_t rgb, CGFloat alpha = 1) {
   return [NSColor colorWithSRGBRed:((rgb >> 16) & 0xff) / 255.0
@@ -22,30 +26,19 @@ NSColor *Hex(uint32_t rgb, CGFloat alpha = 1) {
                               blue:(rgb & 0xff) / 255.0
                              alpha:alpha];
 }
-NSColor *const kBackground = Hex(0x23282c);
-NSColor *const kLine = Hex(0x343b40);
-NSColor *const kText = Hex(0xe8ecee);
-NSColor *const kMuted = Hex(0x8e9aa3);
-NSColor *const kAccent = Hex(0x14806f);
-NSColor *const kAccentSoft = Hex(0x3fb9a3);
-NSColor *const kDoubtMark = Hex(0x3fb9a3, 0.7);
+NSColor *const kBackground = Hex(Colors::kBackground);
+NSColor *const kLine = Hex(Colors::kLine);
+NSColor *const kText = Hex(Colors::kText);
+NSColor *const kMuted = Hex(Colors::kMuted);
+NSColor *const kAccent = Hex(Colors::kAccent);
+NSColor *const kAccentSoft = Hex(Colors::kAccentSoft);
+NSColor *const kDoubtMark = Hex(Colors::kAccentSoft, Colors::kDoubtMarkAlpha);
 NSColor *const kEdge = Hex(0x000000, 0.5);
 
-constexpr CGFloat kRadius = 14, kPillRadius = 8, kGapToText = 8, kAnchorInset = 16;
-// Proof row: 38px tall, the 20px line centered with 9px above and below; its
-// marks (2px, 3px under the line, inset 1px per side) sit in the bottom pad.
-// Proof text starts 19px in; candidate text, kRowLeft + kCellSide, 17px.
-constexpr CGFloat kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
-constexpr CGFloat kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
-// Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
+// macOS corners; the other metrics are PanelMetrics.h's, shared with Windows and Linux.
+constexpr CGFloat kRadius = 14, kPillRadius = 8;
 NSString *const kReplacedArrow = @" → ";
-constexpr CGFloat kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
-// Candidate row: padding 6 on every side; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
-constexpr CGFloat kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;  // the same on all four sides
-constexpr CGFloat kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
-constexpr CGFloat kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
-// Motion: the selection slides, the grid grows and folds.
-constexpr NSTimeInterval kSlideDuration = 0.12, kResizeDuration = 0.16;
+constexpr NSTimeInterval kSlideDuration = kSlideMs / 1000.0, kResizeDuration = kResizeMs / 1000.0;
 
 BOOL ReducesMotion() {
   return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
@@ -591,7 +584,7 @@ static NSRect Beside(NSRect badge, NSRect rect) {
 }
 
 - (void)show:(NSString *)label below:(NSRect)lineRect {
-  constexpr CGFloat kSide = 30, kHold = 0.8, kFadeIn = 0.12, kFadeOut = 0.25;
+  constexpr CGFloat kSide = kBadgeSide, kHold = kBadgeHoldMs / 1000.0, kFadeIn = kBadgeFadeInMs / 1000.0, kFadeOut = kBadgeFadeOutMs / 1000.0;
   BOOL glass = UsesGlass();
   if (glass != _glass || !_panel.contentView) {
     _glass = glass;

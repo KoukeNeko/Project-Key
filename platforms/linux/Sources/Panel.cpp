@@ -9,29 +9,22 @@
 #include <cstring>
 #include <vector>
 
+#include "PanelMetrics.h"
+
 namespace ProjectKey {
 
 namespace {
 
-// Metrics and colors from platforms/windows/Sources/Common/Layout.h, in
-// device-independent pixels (docs/design/candidate-window, round 03).
-constexpr float kWindowRadius = 8, kPillRadius = 4, kGapToText = 8, kAnchorInset = 16;
-constexpr float kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
-constexpr float kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
-constexpr float kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
-constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;  // the same on all four sides
-constexpr float kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
-constexpr float kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
-constexpr float kBadgeSide = 30, kBadgePadding = 11;
-constexpr int kSlideMs = 120, kResizeMs = 160, kBadgeFadeInMs = 120, kBadgeHoldMs = 800, kBadgeFadeOutMs = 250;
+using namespace Metrics;
+using namespace Metrics::Colors;
+
+// Windows' corners, fonts and sizes (platforms/windows/Sources/Common/Layout.h).
+constexpr float kWindowRadius = 8, kPillRadius = 4;
 constexpr float kProofSize = 14, kCandidateSize = 19, kLabelSize = 12, kPageSize = 11, kKeySize = 11, kBadgeSize = 15;
 constexpr char kTextFont[] = "Noto Sans CJK TC";
 constexpr char kMonoFont[] = "Noto Sans Mono, DejaVu Sans Mono, monospace";
 constexpr char kKeyFont[] = "Noto Sans, sans-serif";
 constexpr char kReplacedArrow[] = " → ";
-constexpr uint32_t kBackground = 0x23282c, kLine = 0x343b40, kText = 0xe8ecee, kMuted = 0x8e9aa3;
-constexpr uint32_t kAccent = 0x14806f, kAccentSoft = 0x3fb9a3;
-constexpr float kDoubtMarkAlpha = 0.7f;
 // The dark background's opacity over a blur. Darker than over Acrylic (0.6):
 // KWin's blur adds no tint of its own, so over a white page 0.6 reads as light gray.
 constexpr float kAcrylicTint = 0.85f;
@@ -114,17 +107,6 @@ float DpiScale(xcb_connection_t* connection, xcb_screen_t* screen) {
 }
 
 }  // namespace
-
-size_t BytesFor(const std::string& text, uint32_t units) {
-  size_t i = 0;
-  for (uint32_t n = 0; i < text.size() && n < units;) {
-    unsigned char c = static_cast<unsigned char>(text[i]);
-    size_t length = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xe ? 3 : 4;
-    n += length == 4 ? 2 : 1;
-    i += length;
-  }
-  return std::min(i, text.size());
-}
 
 Panel::Panel(fcitx::EventLoop& loop, const Settings& settings) : settings_(settings), loop_(loop) {
   if (std::getenv("WAYLAND_DISPLAY")) return;  // X windows cannot be placed at a Wayland app's caret
@@ -609,7 +591,7 @@ void Panel::drawProof(cairo_t* cr, float top, float windowWidth) {
       x += line.width;
     };
     if (split) {
-      size_t bytes = BytesFor(segment, split);
+      size_t bytes = Utf8Bytes(segment, split);
       drawText(segment.substr(0, bytes));
       drawCursor(x);
       drawText(segment.substr(bytes));
