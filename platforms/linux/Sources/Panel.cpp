@@ -19,9 +19,9 @@ constexpr float kWindowRadius = 8, kPillRadius = 4, kGapToText = 8, kAnchorInset
 constexpr float kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
 constexpr float kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 constexpr float kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
-constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 8, kRowRight = 6;
+constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;  // the same on all four sides
 constexpr float kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
-constexpr float kPageLeft = 12, kPageRight = 13;
+constexpr float kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
 constexpr float kBadgeSide = 30, kBadgePadding = 11;
 constexpr int kSlideMs = 120, kResizeMs = 160, kBadgeFadeInMs = 120, kBadgeHoldMs = 800, kBadgeFadeOutMs = 250;
 constexpr float kProofSize = 14, kCandidateSize = 19, kLabelSize = 12, kPageSize = 11, kKeySize = 11, kBadgeSize = 15;
