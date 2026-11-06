@@ -1,0 +1,10 @@
+#!/bin/sh
+# Opens Project Key's settings in the desktop's own toolkit: the Qt window on
+# KDE and LXQt, the GTK (libadwaita) window on GNOME and other GTK desktops,
+# and the Qt one when the GTK window was not built.
+dir=$(dirname "$(readlink -f "$0")")
+case ":$XDG_CURRENT_DESKTOP:" in
+  *:KDE:* | *:LXQt:*) ;;
+  *) [ -x "$dir/projectkey-settings-gtk" ] && exec "$dir/projectkey-settings-gtk" "$@" ;;
+esac
+exec "$dir/projectkey-settings-qt" "$@"

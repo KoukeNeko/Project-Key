@@ -1,8 +1,7 @@
-// Project Key's settings window on Linux: the groups and rows of the macOS and
-// Windows settings, applied as they change, as there. The values go through
-// Fcitx5's controller on D-Bus to the addon (Sources/ProjectKey.cpp), which
-// saves them, so this window and Fcitx5's own configuration page edit the
-// same settings.
+// Project Key's settings window for KDE (Qt): the rows in Rows.h, applied as they
+// change, as on macOS and Windows. The values go through Fcitx5's controller on
+// D-Bus to the addon (Sources/ProjectKey.cpp), which saves them, so this window,
+// the GTK one (Gtk.cpp) and Fcitx5's own configuration page edit the same settings.
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -29,10 +28,11 @@
 
 #include <algorithm>
 
-namespace {
+#include "Rows.h"
 
-constexpr char kFcitx[] = "org.fcitx.Fcitx5";
-constexpr char kConfig[] = "fcitx://config/addon/projectkey";
+using namespace ProjectKey::SettingsRows;
+
+namespace {
 
 // A config value as text; Fcitx5 sends each as a string inside a variant.
 QString Text(const QVariant& value) {
@@ -55,7 +55,7 @@ void WriteConfig(QDBusInterface& controller, const QString& key, const QString& 
 
 // The newest GitHub release, which the other platforms' package managers install from.
 void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
-  QNetworkRequest request(QUrl("https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest"));
+  QNetworkRequest request{QUrl(kReleases)};
   request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");  // GitHub rejects requests without one
   QNetworkReply* reply = network.get(request);
   QObject::connect(reply, &QNetworkReply::finished, label, [reply, label] {
@@ -158,54 +158,41 @@ int main(int argc, char** argv) {
     label->setForegroundRole(QPalette::PlaceholderText);
     return label;
   };
-  auto toggle = [&](QFormLayout* form, const QString& key, const QString& label, const QString& detail = {}) {
-    auto* box = new QCheckBox(label);
-    box->setChecked(Text(config.value(key)) == "True");
-    box->setEnabled(available);
-    QObject::connect(box, &QCheckBox::toggled, [&controller, key](bool on) { WriteConfig(controller, key, on ? "True" : "False"); });
-    form->addRow(box);
-    if (!detail.isEmpty()) form->addRow(note(detail));
-  };
-  // `values` are the option's names in the addon's config; `shown`, when given, what the list says for them.
-  auto choice = [&](QFormLayout* form, const QString& key, const QString& label, const QStringList& values,
-                    const QStringList& shown = {}) {
-    auto* combo = new QComboBox;
-    combo->addItems(shown.isEmpty() ? values : shown);
-    combo->setCurrentIndex(std::max(0, static_cast<int>(values.indexOf(Text(config.value(key))))));
-    combo->setEnabled(available);
-    QObject::connect(combo, &QComboBox::currentIndexChanged, [&controller, key, values](int index) {
-      if (index >= 0) WriteConfig(controller, key, values[index]);
-    });
-    form->addRow(label, combo);
-  };
-  const QStringList proofModes = {"永遠", "有可疑字時", "關閉"};
-
-  QFormLayout* choosing = group("選字");
-  choice(choosing, "CandidatePosition", "選字位置", {"游標後", "游標前"}, {"游標後（Windows）", "游標前（macOS）"});
-  toggle(choosing, "NextDoubtful", "選完跳到下一個可疑處");
-  toggle(choosing, "AdjacentKeys", "鄰鍵修正");
-  toggle(choosing, "RememberChoices", "記住選過的字");
-  auto* clear = new QPushButton("清除");
-  clear->setEnabled(available);
-  QObject::connect(clear, &QPushButton::clicked, [clear] {
-    // The choices live only in the addon; when it is not loaded there are none to clear.
-    QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ClearChoices");
-    clear->setEnabled(false);
-  });
-  choosing->addRow("選字紀錄", clear);
-
-  QFormLayout* appearance = group("外觀");
-  choice(appearance, "Appearance", "候選視窗", {"深色", "模糊"});
-  appearance->addRow(note("模糊需要 KWin 的模糊特效；沒有時是深色。"));
-  choice(appearance, "ProofPreview", "輸入時的整句預覽", proofModes);
-  choice(appearance, "ChoosingProof", "選字時的整句預覽", proofModes);
-
-  QFormLayout* keys = group("按鍵");
-  toggle(keys, "CapsLockToggle", "Caps Lock 切換中英", "開啟時大寫用 Shift；關閉時 Caps Lock 鎖定大寫");
-  toggle(keys, "ShiftToggle", "單按 Shift 切換中英");
-  toggle(keys, "EnglishToZhuyin", "Tab 英文轉注音");
-  toggle(keys, "ZhuyinToEnglish", "Tab 注音轉英文");
-
+  for (const Group& section : Groups()) {
+    QFormLayout* form = group(section.title);
+    for (const Row& row : section.rows) {
+      QString key = row.key;
+      if (row.kind == Row::kToggle) {
+        auto* box = new QCheckBox(row.title);
+        box->setChecked(Text(config.value(key)) == "True");
+        box->setEnabled(available);
+        QObject::connect(box, &QCheckBox::toggled, [&controller, key](bool on) { WriteConfig(controller, key, on ? "True" : "False"); });
+        form->addRow(box);
+      } else if (row.kind == Row::kChoice) {
+        QStringList values, shown;
+        for (const char* value : row.values) values << value;
+        for (const char* text : row.shown.empty() ? row.values : row.shown) shown << text;
+        auto* combo = new QComboBox;
+        combo->addItems(shown);
+        combo->setCurrentIndex(std::max(0, static_cast<int>(values.indexOf(Text(config.value(key))))));
+        combo->setEnabled(available);
+        QObject::connect(combo, &QComboBox::currentIndexChanged, [&controller, key, values](int index) {
+          if (index >= 0) WriteConfig(controller, key, values[index]);
+        });
+        form->addRow(row.title, combo);
+      } else {
+        auto* clear = new QPushButton("清除");
+        clear->setEnabled(available);
+        QObject::connect(clear, &QPushButton::clicked, [clear] {
+          // The choices live only in the addon; when it is not loaded there are none to clear.
+          QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ClearChoices");
+          clear->setEnabled(false);
+        });
+        form->addRow(row.title, clear);
+      }
+      if (row.detail) form->addRow(note(row.detail));
+    }
+  }
   QFormLayout* about = group("關於");
   auto* version = new QLabel(PROJECTKEY_VERSION);
   version->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -214,7 +201,7 @@ int main(int argc, char** argv) {
   update->setOpenExternalLinks(true);
   about->addRow("更新", update);
   about->addRow("授權", new QLabel("MIT"));
-  auto* engine = new QLabel("<a href=\"https://github.com/openvanilla/McBopomofo\">McBopomofo</a>");
+  auto* engine = new QLabel(QString("<a href=\"%1\">McBopomofo</a>").arg(kEngineUrl));
   engine->setOpenExternalLinks(true);
   about->addRow("引擎與詞庫", engine);
 
