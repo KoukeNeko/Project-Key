@@ -1,8 +1,8 @@
-// Candidate window metrics and text measurement, shared by the text service,
+// Candidate window fonts and text measurement, shared by the text service,
 // which draws the window, and the engine server, which packs candidates into
-// grid rows. Values follow docs/design/candidate-window (round 03, Windows
-// variant: Microsoft JhengHei, 19px candidates, 8px window and 4px selection
-// corners). Lengths are device-independent pixels.
+// grid rows. The metrics shared with macOS and Linux are in PanelMetrics.h;
+// the Windows variant adds Microsoft JhengHei, 19px candidates, and 8px window
+// and 4px selection corners. Lengths are device-independent pixels.
 #pragma once
 
 #include <dwrite.h>
@@ -10,24 +10,14 @@
 
 #include <string>
 
+#include "PanelMetrics.h"
+
 namespace ProjectKey::Layout {
 
-constexpr float kWindowRadius = 8, kPillRadius = 4, kGapToText = 8, kAnchorInset = 16;
-// Proof row: the 20px line centered with 9px above and below; its marks (2px,
-// 3px under the line, inset 1px per side) sit in the bottom pad. Text starts
-// 19px in; candidate text, kRowLeft + kCellSide, 17px.
-constexpr float kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 20;
-constexpr float kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
-// Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
-constexpr float kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
-// Candidate row: padding 6 on every side; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
-constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;  // the same on all four sides
-constexpr float kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
-constexpr float kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
-// 中／英 badge.
-constexpr float kBadgeSide = 30, kBadgePadding = 11;
-// Motion: the selection slides, the grid grows and folds; the badge fades.
-constexpr int kSlideMs = 120, kResizeMs = 160, kBadgeFadeInMs = 120, kBadgeHoldMs = 800, kBadgeFadeOutMs = 250;
+using namespace Metrics;
+using namespace Metrics::Colors;
+
+constexpr float kWindowRadius = 8, kPillRadius = 4;
 
 constexpr float kProofSize = 14, kCandidateSize = 19, kLabelSize = 12, kPageSize = 11, kKeySize = 11, kBadgeSize = 15;
 constexpr const wchar_t* kTextFont = L"Microsoft JhengHei UI";
@@ -36,10 +26,6 @@ constexpr const wchar_t* kKeyFont = L"Segoe UI";
 
 constexpr const wchar_t* kReplacedArrow = L" → ";
 
-// sRGB colors, 0xRRGGBB, from the prototype's dark theme.
-constexpr uint32_t kBackground = 0x23282c, kLine = 0x343b40, kText = 0xe8ecee, kMuted = 0x8e9aa3;
-constexpr uint32_t kAccent = 0x14806f, kAccentSoft = 0x3fb9a3;
-constexpr float kDoubtMarkAlpha = 0.7f;
 constexpr float kAcrylicTint = 0.6f;  // the dark background's opacity over Acrylic
 
 // Text formats and measurement. Not thread-safe; each thread makes its own.
