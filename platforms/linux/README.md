@@ -15,7 +15,7 @@ Fcitx5 注音輸入法，大千鍵盤，按鍵與 [macOS 版](../macos/README.md
 
 「候選視窗外觀」有深色與模糊（預設）兩種。模糊用 KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），模糊視窗後方的內容再疊一層深色；KWin 的模糊特效關著或用別的視窗管理員時，模糊會改成深色。中／英標記跟著用同一種外觀。有合成器時視窗是圓角，沒有時是直角。
 
-Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連到 Fcitx5 時，候選字窗與中／英標記是畫在 Fcitx5 的 Wayland 連線上的 input popup，由合成器放在游標下方，下方放不下時放在上方；Wayland 下沒有模糊，「模糊」外觀會改成深色。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）或 KWin 的輸入法（input-method-v1）連線時，以及 X11 上 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題。
+Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連到 Fcitx5 時，候選字窗與中／英標記是畫在 Fcitx5 的 Wayland 連線上的 input popup，由合成器放在游標下方，下方放不下時放在上方；Wayland 下沒有模糊，「模糊」外觀會改成深色。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）或 KWin 的輸入法（input-method-v1）連線時，以及 X11 上 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題；操作與其他平台相同：整句預覽和頁碼在第一行，選字列逐格選取，按 ↓ 展開的格線以直排列出最多五列（GNOME 上面板由 App 畫，每個候選只能是一行純文字，所以選中的那列整列反白、選中的字以［］標出）。
 
 安裝時附上 Fcitx5 主題「Project Key」（`theme/`，裝在 `/usr/share/fcitx5/themes/projectkey`）：深色、圓角、選取的字用強調色，邊距與候選字窗相同。在 Fcitx5 設定的「附加元件 → 經典使用者介面 → 主題」選它，用到 Fcitx5 候選面板時外觀就和其他平台一致（GNOME 上這個面板由 App 自己畫，同樣讀 Fcitx5 主題）；它也會套用到其他 Fcitx5 輸入法。主題的圖片由 `tools/icon/make-icons.ps1` 產生。
 

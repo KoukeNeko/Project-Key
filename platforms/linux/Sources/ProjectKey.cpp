@@ -217,8 +217,9 @@ class Session : public fcitx::InputContextProperty, public Client {
     ic_.updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
   }
 
-  // The proof row goes above the candidates, the selection's row of the grid
-  // into the candidate list, and the page label below it.
+  // Project Key's window, or else Fcitx5's panel: the proof row and page label on
+  // its top line, then the selection's row as the candidate list, or the
+  // expanded grid's rows as lines of text.
   void showPanel(const PanelContent& content) override {
     if (ownPanel()) {
       panel_.show(ic_, content, anchor());
@@ -264,6 +265,18 @@ class Session : public fcitx::InputContextProperty, public Client {
 
     if (content.rows.empty()) {
       panel.setCandidateList(nullptr);
+    } else if (content.rows.size() > 1 && content.selectedRow >= 0) {
+      // The expanded grid. Fcitx5's candidate list is one row or one column, and a
+      // panel the app draws (GNOME on Wayland) shows each candidate as plain text on
+      // one line, so each grid row is one candidate of a column: the selected row
+      // takes the selection's colors and brackets mark the selected cell.
+      auto list = std::make_unique<fcitx::CommonCandidateList>();
+      list->setLayoutHint(fcitx::CandidateLayoutHint::Vertical);
+      list->setPageSize(static_cast<int>(content.rows.size()));
+      for (size_t r = 0; r < content.rows.size(); r++) list->append<GridRow>(RowText(content, r));
+      list->setLabels(std::vector<std::string>(content.rows.size(), ""));
+      list->setGlobalCursorIndex(content.selectedRow);
+      panel.setCandidateList(std::move(list));
     } else {
       // The row shown while typing (selectedRow -1) has no digits: those keys type Zhuyin.
       bool typing = content.selectedRow < 0;
@@ -322,6 +335,38 @@ class Session : public fcitx::InputContextProperty, public Client {
   }
 
  private:
+  // A row of the expanded grid as text, its columns lined up as the candidate
+  // window's: each cell is a label slot (a digit on the selected row, a figure
+  // space elsewhere), an en space and two ideographic widths per column for the
+  // word, between ideographic spaces, or between brackets for the selected cell.
+  static std::string RowText(const PanelContent& content, size_t r) {
+    static const std::string kFigure = " ", kEn = " ", kIdeographic = "　";
+    bool labeled = static_cast<int>(r) == content.selectedRow;
+    std::string text;
+    for (size_t i = 0; i < content.rows[r].size(); i++) {
+      const std::string& word = content.rows[r][i];
+      int columns = Span(word);
+      // Widths in halves of an ideographic width: ASCII is one, anything else two (as Span counts).
+      int halves = 0;
+      for (unsigned char c : word) {
+        if (c < 0x80) halves += 1;
+        else if ((c & 0xc0) != 0x80) halves += 2;
+      }
+      bool on = labeled && static_cast<int>(i) == content.selection;
+      text += (on ? "［" : kIdeographic) + (labeled ? std::to_string(i + 1) : kFigure) + kEn + word;
+      for (int pad = std::max(0, 4 * columns - halves); pad > 0; pad -= pad >= 2 ? 2 : 1) text += pad >= 2 ? kIdeographic : kEn;
+      for (int extra = 1; extra < columns; extra++) text += kIdeographic + kFigure + kEn + kIdeographic;  // the columns it spans past the first
+      text += on ? "］" : kIdeographic;
+    }
+    return text;
+  }
+
+  // A row of the expanded grid in Fcitx5's panel; the keys choose within it, as in the candidate window.
+  class GridRow : public fcitx::CandidateWord {
+   public:
+    explicit GridRow(const std::string& text) : fcitx::CandidateWord(fcitx::Text(text)) {}
+    void select(fcitx::InputContext*) const override {}
+  };
   // A candidate clicked in the panel: its row's cells sit together in the
   // controller's candidates, so the row's place there gives the index to pick.
   class Word : public fcitx::CandidateWord {
