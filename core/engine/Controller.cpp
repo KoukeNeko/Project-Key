@@ -842,28 +842,23 @@ void Controller::refresh() {
   client_.setComposition(Composition{markedText, caret, activeStart, hasActive ? activeLength : 0, replacing_});
   replacing_ = 0;
 
-  // Below the guess, the other words there, in a row without digits (selectedRow -1):
-  // those keys still type Zhuyin. The Tab hint takes the proof row's place, so there the
-  // row starts with the guess itself.
-  std::vector<std::string> here, others, withGuess;
-  std::string guess;
+  // The words there in a row without digits (selectedRow -1): those keys still type
+  // Zhuyin. selection marks the guess, which the renderers draw brighter than the rest.
+  std::vector<std::string> guesses;
+  int guessAt = -1;
   if (typing) {
     if (std::optional<Segment> segment = composer_->segmentFrom(*typing)) {
-      here = composer_->candidates(*segment);
-      guess = segment->text;
+      std::vector<std::string> all = composer_->candidates(*segment);
+      guesses.assign(all.begin(), all.begin() + static_cast<std::ptrdiff_t>(firstRowSize(all)));
+      auto at = std::find(guesses.begin(), guesses.end(), segment->text);
+      if (at != guesses.end()) guessAt = static_cast<int>(at - guesses.begin());
     }
   }
-  auto fill = [this](const std::vector<std::string>& words, std::vector<std::string>& row) {
-    row.assign(words.begin(), words.begin() + static_cast<std::ptrdiff_t>(firstRowSize(words)));
-  };
-  fill(here, withGuess);
-  std::erase(here, guess);
-  fill(here, others);
-  auto showRow = [](PanelContent& panel, const std::vector<std::string>& row) {
-    if (row.empty()) return;
-    panel.rows = {row};
+  auto showRow = [&](PanelContent& panel) {
+    if (guesses.empty()) return;
+    panel.rows = {guesses};
     panel.selectedRow = -1;
-    panel.selection = -1;
+    panel.selection = guessAt;
   };
 
   std::optional<PanelContent> hint;  // what Tab would turn the keys into; ja is English and ㄨㄇ alike
@@ -876,12 +871,11 @@ void Controller::refresh() {
     hint->keyHint = env_.tabKeycap;
     hint->replacedText = markedText;
   }
-  // Beside the panel, which goes on as without it; otherwise in the panel's proof row,
-  // with the guess leading the row instead.
+  // Beside the panel, which goes on as without it; otherwise in the panel's proof row.
   bool hintApart = hint && typing && env_.hintWindow;
   if (!hintApart) client_.hideHint();
   if (hint && !hintApart) {
-    showRow(*hint, withGuess);
+    showRow(*hint);
     showPanel(*hint);
     return;
   }
@@ -911,7 +905,7 @@ void Controller::refresh() {
     content.selection = selection_ - rowStarts_[row];
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
   } else {
-    showRow(content, others);
+    showRow(content);
   }
   showPanel(content);
   if (hintApart) client_.showHint(*hint);  // placed by the panel just shown

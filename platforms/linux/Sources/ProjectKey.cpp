@@ -264,12 +264,6 @@ class Session : public fcitx::InputContextProperty, public Client {
       merged.selectedRow = shown_->selectedRow;
       merged.selection = shown_->selection;
       merged.pageLabel = shown_->pageLabel;
-      // The hint covers the proof row that showed the guess, so the guess leads the row instead.
-      int guess = shown_->activeSegment;
-      if (shown_->selectedRow < 0 && guess >= 0 && guess < static_cast<int>(shown_->segments.size())) {
-        if (merged.rows.empty()) merged.rows.emplace_back();
-        merged.rows[0].insert(merged.rows[0].begin(), shown_->segments[guess]);
-      }
     }
     showInFcitx(merged);
   }

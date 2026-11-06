@@ -517,7 +517,8 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
       bool typing = content_->selectedRow < 0;  // no digits: the word centered in its cell
       float wordLeft = typing ? x + (span * fonts_.columnWidth() + (span - 1) * kCellGap - word.width) / 2 : x + kCellSide + labelWidth + kLabelGap;
       if (word.layout) {
-        target->DrawTextLayout(D2D1::Point2F(wordLeft, wordTop), word.layout.Get(), on ? white.Get() : typing ? muted.Get() : text.Get());
+        bool dim = typing && static_cast<int>(i) != content_->selection;
+        target->DrawTextLayout(D2D1::Point2F(wordLeft, wordTop), word.layout.Get(), on ? white.Get() : dim ? muted.Get() : text.Get());
       }
     }
   }

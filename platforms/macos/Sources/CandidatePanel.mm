@@ -394,7 +394,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
       CGFloat textX = x + kCellSide + [self widthOf:@"6" font:_labelFont] + kLabelGap;
       BOOL typing = self.content.selectedRow < 0;  // no digits: the word centered in its cell
       if (typing) textX = x + (span * ColumnWidth() + (span - 1) * kCellGap - [self widthOf:row[i] font:_candidateFont]) / 2;
-      NSColor *color = on ? NSColor.whiteColor : typing ? self.mutedColor : self.textColor;
+      BOOL dim = typing && (NSInteger)i != self.content.selection;
+      NSColor *color = on ? NSColor.whiteColor : dim ? self.mutedColor : self.textColor;
       [row[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, color)];
     }
   }

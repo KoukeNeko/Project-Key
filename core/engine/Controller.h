@@ -31,7 +31,7 @@ struct PanelContent {
   // Visible rows of the candidate grid; empty hides the candidate area.
   std::vector<std::vector<std::string>> rows;
   int selectedRow = 0;          // only this row carries the 1-6 labels; -1 while typing, none does
-  int selection = 0;            // index within the selected row
+  int selection = 0;            // index within the selected row; while typing, the guess in row 0 (-1 for none)
   std::string pageLabel;        // "1/3", empty for a single page
 };
 

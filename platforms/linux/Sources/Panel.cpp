@@ -568,7 +568,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
       if (on) {
         cairo_set_source_rgb(cr, 1, 1, 1);
       } else {
-        SetColor(cr, typing ? kMuted : kText);
+        SetColor(cr, typing && static_cast<int>(i) != content_->selection ? kMuted : kText);
       }
       float wordLeft = typing ? x + (cells * columnWidth_ + (cells - 1) * kCellGap - word.width) / 2 : x + kCellSide + labelWidth + kLabelGap;
       word.draw(cr, wordLeft, wordTop);

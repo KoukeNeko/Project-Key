@@ -180,22 +180,22 @@ int main(int argc, char** argv) {
   assert(HasSuffix(client.committed, "你ㄏㄠ") && client.marked.empty());
 
   // The open syllable shows as its Zhuyin, the closed one before it as its word. The guess
-  // (你好) is marked in the proof row; a row without digits holds the other words there,
-  // and Down opens all of them.
+  // (你好) is marked in the proof row and in the row without digits that holds the words
+  // there, and Down opens all of them.
   Type(controller, "sucl");
   assert(client.marked == "你ㄏㄠ");
   const PanelContent& typing = client.panel;
   assert(client.panelVisible && typing.showsProof && typing.segments[typing.activeSegment] == "你好");
   assert(typing.selectedRow == -1 && typing.rows.size() == 1 && !typing.rows[0].empty());
-  assert(std::find(typing.rows[0].begin(), typing.rows[0].end(), "你好") == typing.rows[0].end());
+  assert(typing.selection >= 0 && typing.rows[0][typing.selection] == "你好");
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
   assert(client.panel.selectedRow == 0 && client.marked == "你好");
   EscapeAll(controller, client);
   // First symbols: ㄨㄇ shows 我ㄇ. Tab would make the keys English (ja), which the proof
-  // row shows instead, so the guess 我們 leads the row.
+  // row shows instead; the row still marks the guess 我們.
   Type(controller, "ja");
   assert(client.marked == "我ㄇ" && typing.replacedText == "我ㄇ" && typing.segments[0] == "ja");
-  assert(typing.selectedRow == -1 && typing.rows[0][0] == "我們");
+  assert(typing.selectedRow == -1 && typing.rows[0][typing.selection] == "我們");
   // Looking at the candidates and coming back changes nothing, so the hint is still there.
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && client.panel.selectedRow == 0);
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
@@ -209,7 +209,7 @@ int main(int argc, char** argv) {
   env.hintWindow = true;
   Type(controller, "ja");
   assert(client.hint && client.hint->replacedText == "我ㄇ" && client.hint->segments[0] == "ja");
-  assert(typing.segments[typing.activeSegment] == "我們" && typing.rows[0][0] != "我們");
+  assert(typing.segments[typing.activeSegment] == "我們" && typing.rows[0][typing.selection] == "我們");
   EscapeAll(controller, client);
   assert(!client.hint);
   env.hintWindow = false;

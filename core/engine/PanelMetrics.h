@@ -21,7 +21,7 @@ constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;
 constexpr float kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
 constexpr float kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
 // The row shown while typing (selectedRow -1) keeps the grid's cells, without digits:
-// each word centered in its cell, in the muted color.
+// each word centered in its cell, in the muted color but for the guess (selection).
 // The Tab hint's own window (Environment::hintWindow), this far from the candidate
 // window, on the side away from the text.
 constexpr float kHintGap = 6;
