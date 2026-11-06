@@ -195,13 +195,13 @@ class Session : public fcitx::InputContextProperty, public Client {
     bool inApp = ic_.capabilityFlags().test(fcitx::CapabilityFlag::Preedit);
     fcitx::TextFormatFlags normal = inApp ? fcitx::TextFormatFlag::Underline : fcitx::TextFormatFlag::NoFlag;
     const std::string& text = composition.text;
-    size_t activeStart = BytesFor(text, composition.activeStart);
-    size_t activeEnd = BytesFor(text, composition.activeStart + composition.activeLength);
+    size_t activeStart = Utf8Bytes(text, composition.activeStart);
+    size_t activeEnd = Utf8Bytes(text, composition.activeStart + composition.activeLength);
     fcitx::Text preedit;
     preedit.append(text.substr(0, activeStart), normal);
     if (activeEnd > activeStart) preedit.append(text.substr(activeStart, activeEnd - activeStart), fcitx::TextFormatFlag::HighLight);
     preedit.append(text.substr(activeEnd), normal);
-    preedit.setCursor(static_cast<int>(BytesFor(text, composition.caret)));
+    preedit.setCursor(static_cast<int>(Utf8Bytes(text, composition.caret)));
     if (inApp) {
       ic_.inputPanel().setClientPreedit(preedit);
     } else {
@@ -239,7 +239,7 @@ class Session : public fcitx::InputContextProperty, public Client {
         uint32_t length = Utf16Length(segment);
         if (content.caret == at) reading();
         if (content.caret > at && content.caret < at + length) {
-          size_t split = BytesFor(segment, content.caret - at);
+          size_t split = Utf8Bytes(segment, content.caret - at);
           aux.append(segment.substr(0, split), format);
           reading();
           aux.append(segment.substr(split), format);
@@ -452,9 +452,10 @@ class Engine : public fcitx::InputMethodEngineV2 {
     if (controller.handleKey(k)) event.filterAndAccept();
   }
 
-  // Focus left the field, or the app reset it: drop the composition, as apps
-  // differ in what they do with a preedit then. Any other reset (switching
-  // input methods) commits it.
+  // Focus left the field, or the app reset it (a click in the text): the app
+  // keeps the preedit as text itself (Qt does), so the engine only forgets it;
+  // committing too would type it twice. Any other reset (switching input
+  // methods) commits it.
   void reset(const fcitx::InputMethodEntry&, fcitx::InputContextEvent& event) override {
     Session* session = event.inputContext()->propertyFor(&factory_);
     if (event.type() == fcitx::EventType::InputContextFocusOut || event.type() == fcitx::EventType::InputContextReset) {

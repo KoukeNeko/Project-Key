@@ -199,8 +199,8 @@ class Controller {
   bool expanded_ = false;  // several rows shown; collapsed shows only the selection's row
   int firstRow_ = 0;       // first grid row on screen
   bool shiftAlone_ = false;
-  bool cursorMoved_ = false;
-  std::string shown_;  // the composition as last shown, pending reading included  // arrows moved the cursor since the last typed key
+  bool cursorMoved_ = false;  // arrows moved the cursor since the last typed key
+  std::string shown_;  // the composition as last shown, pending reading included
   bool adjacentKeys_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
@@ -215,5 +215,8 @@ class Controller {
 
 // UTF-16 length of UTF-8 text.
 uint32_t Utf16Length(const std::string& utf8);
+// Bytes of UTF-8 text that hold its first `units` UTF-16 code units, for
+// platforms that count in bytes (Fcitx5, Pango); all of it when it is shorter.
+size_t Utf8Bytes(const std::string& utf8, uint32_t units);
 
 }  // namespace ProjectKey

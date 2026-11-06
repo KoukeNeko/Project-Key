@@ -80,6 +80,15 @@ uint32_t Utf16Length(const std::string& utf8) {
   return static_cast<uint32_t>(ToUtf16(utf8).size());
 }
 
+size_t Utf8Bytes(const std::string& utf8, uint32_t units) {
+  size_t i = 0;
+  for (uint32_t n = 0; i < utf8.size() && n < units;) {
+    char32_t cp = NextCodePoint(utf8, i);
+    n += cp >= 0x10000 ? 2 : 1;
+  }
+  return i;
+}
+
 int Settings::DefaultValue(Setting setting) {
   switch (setting) {
     case Setting::kProofPreview:
