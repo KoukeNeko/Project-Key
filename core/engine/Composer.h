@@ -8,9 +8,11 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "Bigram.h"
+#include "CharModel.h"
 #include "Mandarin/Mandarin.h"
 #include "McBopomofoLM.h"
 #include "MemoryMappedFile.h"
@@ -55,9 +57,12 @@ class Composer {
   explicit Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram = nullptr,
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
-                    double adjacentKeyScore = kAdjacentKeyScore);
+                    double adjacentKeyScore = kAdjacentKeyScore, std::shared_ptr<const CharModel> chars = nullptr,
+                    double charWeight = kCharWeight);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5, kAdjacentKeyScore = -3;
+  // How much the character model's log10 probability adds to a word's score (it only works with a Bigram).
+  static constexpr double kCharWeight = 0.2;
   // Ends a grid reading's syllable that was typed without a tone; it reads as any of its tones,
   // and a lone symbol as any syllable it begins (ㄋ for 你 or 那).
   static constexpr char kAnyTone = '*';
@@ -93,6 +98,9 @@ class Composer {
   void clearPendingReading();
   // Shows the open syllable as its symbols rather than as a word, as Enter sends it.
   void showSymbols();
+  // The app's text before the caret where the composition starts. When it ends in a Han
+  // character the first word follows the word there instead of starting a phrase.
+  void setTextBefore(const std::string& text);
   void clear();
 
   const std::vector<Segment>& segments() const { return segments_; }
@@ -125,11 +133,19 @@ class Composer {
   std::shared_ptr<const Bigram> bigram_;
   double contextWeight_;
   double trigramWeight_;
+  std::shared_ptr<const CharModel> chars_;
+  double charWeight_;
+  // The character model's log10 P(c | a b) by a << 42 | b << 21 | c.
+  std::unordered_map<uint64_t, double> charCache_;
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel_;
   double adjacentKeyScore_;
+  // dictionary_, plus the words of readings one key off when adjacentKeyScore_ is finite.
+  std::shared_ptr<Formosa::Gramambular2::LanguageModel> gridModel_;
   Formosa::Gramambular2::ReadingGrid grid_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
   bool readingShown_ = false;  // the open syllable is in the grid, toneless, right before the cursor
+  bool toned_ = false;         // the last syllable this composition closed was typed with a tone
+  std::string hanBefore_;      // the Han characters right before the composition, at most kWordBeforeLength
   std::vector<Segment> segments_;
 };
 

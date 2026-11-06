@@ -382,6 +382,8 @@ class Engine : public fcitx::InputMethodEngineV2 {
     // The context ranking model from tools/bigram-trainer; without it, unigrams only.
     auto bigram = std::make_shared<Bigram>();
     if (bigram->load(dir + "/bigram.bin")) environment_.bigram = bigram;
+    auto chars = std::make_shared<CharModel>();
+    if (chars->load(dir + "/chars.bin")) environment_.chars = chars;
     environment_.userModel = NewUserModel();
     environment_.settings = &settings_;
     environment_.isEnglish = [this](const std::string& text) { return spelling_.isEnglish(text); };

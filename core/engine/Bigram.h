@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "MemoryMappedFile.h"
+
 namespace ProjectKey {
 
 class Bigram {
@@ -37,16 +39,22 @@ class Bigram {
   static bool save(const std::string& path, const std::vector<std::string>& words, const std::vector<Pair>& pairs,
                    const std::vector<Pair>& triples = {});
 
-  bool isLoaded() const { return !pairs_.empty(); }
-  size_t pairCount() const { return pairs_.size(); }
+  // Records in the mapped file.
+  struct Table {
+    const char* data = nullptr;
+    size_t count = 0;
+  };
+
+  bool isLoaded() const { return pairs_.count > 0; }
+  size_t pairCount() const { return pairs_.count; }
   std::optional<uint32_t> id(const std::string& word) const;
   std::optional<double> log10Probability(uint32_t previous, uint32_t next) const;
   std::optional<double> log10Probability(uint32_t first, uint32_t second, uint32_t next) const;
 
  private:
+  McBopomofo::MemoryMappedFile file_;
   std::unordered_map<std::string, uint32_t> ids_;
-  std::vector<Pair> pairs_;
-  std::vector<Pair> triples_;
+  Table pairs_, triples_;
 };
 
 }  // namespace ProjectKey

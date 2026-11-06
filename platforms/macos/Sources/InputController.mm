@@ -58,6 +58,14 @@ ProjectKey::Environment &SharedEnvironment() {
         NSLog(@"Project Key: cannot load %@", path);
       }
     }
+    if (NSString *path = [NSBundle.mainBundle pathForResource:@"chars" ofType:@"bin"]) {
+      auto chars = std::make_shared<ProjectKey::CharModel>();
+      if (chars->load(path.fileSystemRepresentation)) {
+        env->chars = chars;
+      } else {
+        NSLog(@"Project Key: cannot load %@", path);
+      }
+    }
     env->userModel = std::make_shared<McBopomofo::UserOverrideModel>(NewUserModel());
     static DefaultsSettings settings;
     env->settings = &settings;

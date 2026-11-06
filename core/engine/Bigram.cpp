@@ -1,17 +1,12 @@
 #include "Bigram.h"
 
-#include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <fstream>
 
 namespace ProjectKey {
 
 namespace {
-
-template <typename T>
-bool Read(std::ifstream& in, T& value) {
-  return static_cast<bool>(in.read(reinterpret_cast<char*>(&value), sizeof value));
-}
 
 template <typename T>
 void Write(std::ofstream& out, const T& value) {
@@ -22,34 +17,45 @@ void Write(std::ofstream& out, const T& value) {
 
 bool Bigram::load(const std::string& path) {
   ids_.clear();
-  pairs_.clear();
-  triples_.clear();
-  std::ifstream in(path, std::ios::binary);
+  pairs_ = triples_ = {};
+  // The pair and triple tables stay in the mapped file: the system can drop those pages
+  // under memory pressure, which an iOS keyboard needs.
+  file_.close();
+  if (!file_.open(path.c_str())) return false;
+  const char* at = file_.data();
+  const char* end = at + file_.length();
+  auto take = [&](void* value, size_t size) {
+    if (static_cast<size_t>(end - at) < size) return false;
+    std::memcpy(value, at, size);
+    at += size;
+    return true;
+  };
+  auto table = [&](Table& table) {
+    uint32_t count = 0;
+    if (!take(&count, sizeof count) || static_cast<size_t>(end - at) / sizeof(Pair) < count) return false;
+    table = {at, count};
+    at += count * sizeof(Pair);
+    return true;
+  };
+  auto fail = [&] {
+    ids_.clear();
+    pairs_ = {};
+    file_.close();
+    return false;
+  };
   char magic[sizeof kMagic];
-  if (!in.read(magic, sizeof magic) || std::memcmp(magic, kMagic, sizeof kMagic) != 0) return false;
+  if (!take(magic, sizeof magic) || std::memcmp(magic, kMagic, sizeof kMagic) != 0) return fail();
   uint32_t wordCount = 0;
-  if (!Read(in, wordCount)) return false;
+  if (!take(&wordCount, sizeof wordCount)) return fail();
+  ids_.reserve(wordCount);
   for (uint32_t id = 0; id < wordCount; id++) {
     uint16_t length = 0;
-    if (!Read(in, length)) return false;
-    std::string word(length, '\0');
-    if (!in.read(word.data(), length)) return false;
-    ids_.emplace(std::move(word), id);
+    if (!take(&length, sizeof length) || static_cast<size_t>(end - at) < length) return fail();
+    ids_.emplace(std::string(at, length), id);
+    at += length;
   }
-  uint32_t pairCount = 0;
-  if (!Read(in, pairCount)) return false;
-  pairs_.resize(pairCount);
-  if (!in.read(reinterpret_cast<char*>(pairs_.data()), static_cast<std::streamsize>(pairCount * sizeof(Pair)))) {
-    ids_.clear();
-    pairs_.clear();
-    return false;
-  }
-  uint32_t tripleCount = 0;
-  if (!Read(in, tripleCount)) return true;  // a bigram-only model
-  triples_.resize(tripleCount);
-  if (!in.read(reinterpret_cast<char*>(triples_.data()), static_cast<std::streamsize>(tripleCount * sizeof(Pair)))) {
-    triples_.clear();
-  }
+  if (!table(pairs_)) return fail();
+  if (!table(triples_)) triples_ = {};  // a bigram-only model
   return true;
 }
 
@@ -78,10 +84,28 @@ std::optional<uint32_t> Bigram::id(const std::string& word) const {
 }
 
 namespace {
-std::optional<double> Find(const std::vector<Bigram::Pair>& records, uint64_t key) {
-  auto it = std::lower_bound(records.begin(), records.end(), key, [](const Bigram::Pair& r, uint64_t k) { return r.key < k; });
-  if (it == records.end() || it->key != key) return std::nullopt;
-  return it->log10Probability;
+// Records start at any offset in the file, so they are read byte by byte, not as Pairs.
+uint64_t KeyAt(const char* record) {
+  uint64_t key;
+  std::memcpy(&key, record + offsetof(Bigram::Pair, key), sizeof key);
+  return key;
+}
+
+std::optional<double> Find(const Bigram::Table& table, uint64_t key) {
+  size_t low = 0, high = table.count;
+  while (low < high) {
+    size_t middle = low + (high - low) / 2;
+    if (KeyAt(table.data + middle * sizeof(Bigram::Pair)) < key) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  const char* record = table.data + low * sizeof(Bigram::Pair);
+  if (low == table.count || KeyAt(record) != key) return std::nullopt;
+  float probability;
+  std::memcpy(&probability, record + offsetof(Bigram::Pair, log10Probability), sizeof probability);
+  return probability;
 }
 }  // namespace
 

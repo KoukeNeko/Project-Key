@@ -45,9 +45,26 @@ ProjectKey::Environment &SharedEnvironment() {
   static ProjectKey::Environment *environment = [] {
     auto *env = new ProjectKey::Environment();
     env->lm = std::make_shared<ProjectKey::Lexicon>();
-    NSString *data = [[NSBundle bundleForClass:PKKeyboardViewController.class] pathForResource:@"data" ofType:@"txt"];
+    NSBundle *bundle = [NSBundle bundleForClass:PKKeyboardViewController.class];
+    NSString *data = [bundle pathForResource:@"data" ofType:@"txt"];
     env->lm->loadLanguageModel(data.fileSystemRepresentation);
     if (!env->lm->isDataModelLoaded()) NSLog(@"Project Key: cannot load %@", data);
+    if (NSString *path = [bundle pathForResource:@"bigram" ofType:@"bin"]) {
+      auto bigram = std::make_shared<ProjectKey::Bigram>();
+      if (bigram->load(path.fileSystemRepresentation)) {
+        env->bigram = bigram;
+      } else {
+        NSLog(@"Project Key: cannot load %@", path);
+      }
+    }
+    if (NSString *path = [bundle pathForResource:@"chars" ofType:@"bin"]) {
+      auto chars = std::make_shared<ProjectKey::CharModel>();
+      if (chars->load(path.fileSystemRepresentation)) {
+        env->chars = chars;
+      } else {
+        NSLog(@"Project Key: cannot load %@", path);
+      }
+    }
     env->userModel = std::make_shared<McBopomofo::UserOverrideModel>(500, 5400.0);
     static DefaultsSettings settings;
     env->settings = &settings;

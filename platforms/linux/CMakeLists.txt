@@ -23,7 +23,7 @@ set(CORE "${CMAKE_CURRENT_SOURCE_DIR}/../../core/engine")
 add_subdirectory("${MCBOPOMOFO}/Source/Engine" mcbopomofo EXCLUDE_FROM_ALL)
 
 # The engine shared with macOS, Windows and iOS.
-add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/Controller.cpp")
+add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/CharModel.cpp" "${CORE}/Controller.cpp")
 target_include_directories(engine PUBLIC "${CORE}" "${MCBOPOMOFO}/Source/Engine")
 target_link_libraries(engine PUBLIC McBopomofoLMLib MandarinLib gramambular2_lib)
 
@@ -53,9 +53,9 @@ install(FILES projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmeth
 install(FILES "${MCBOPOMOFO}/Source/Data/data.txt" DESTINATION "${DATA_DIR}")
 install(FILES "${MCBOPOMOFO}/LICENSE.txt" RENAME McBopomofo-LICENSE.txt DESTINATION "${DATA_DIR}")
 # From tools/bigram-trainer when it was run: the dictionary with the words McBopomofo
-# lacks (it replaces McBopomofo's) and the context ranking model.
+# lacks (it replaces McBopomofo's) and the context ranking models.
 set(TRAINED "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/bigram-trainer/.cache")
-foreach(file data.txt bigram.bin)
+foreach(file data.txt bigram.bin chars.bin)
   if(EXISTS "${TRAINED}/${file}")
     install(FILES "${TRAINED}/${file}" DESTINATION "${DATA_DIR}")
   endif()

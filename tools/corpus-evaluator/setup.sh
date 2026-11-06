@@ -38,7 +38,7 @@ c++ -std=c++20 -O2 adapters/mcbopomofo.cpp -I"$MCB/Source/Engine" \
   -o .cache/bin/mcbopomofo
 
 # Project Key's composer; evaluate.py passes it tools/bigram-trainer/.cache/bigram.bin.
-c++ -std=c++20 -O2 adapters/projectkey.cpp ../../core/engine/Composer.cpp ../../core/engine/Bigram.cpp \
+c++ -std=c++20 -O2 adapters/projectkey.cpp ../../core/engine/Composer.cpp ../../core/engine/Bigram.cpp ../../core/engine/CharModel.cpp \
   -I../../core/engine -I"$MCB/Source/Engine" \
   "$MCB/build/libMcBopomofoLMLib.a" "$MCB/build/Mandarin/libMandarinLib.a" "$MCB/build/gramambular2/libgramambular2_lib.a" \
   -o .cache/bin/projectkey

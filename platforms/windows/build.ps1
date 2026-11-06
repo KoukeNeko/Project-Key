@@ -87,7 +87,7 @@ $engineSources = @('AssociatedPhrasesV2', 'ByteBlockBackedDictionary', 'McBopomo
   ForEach-Object { "$Engine\$_.cpp" }
 $engineSources += "$Engine\gramambular2\reading_grid.cpp", "$Engine\Mandarin\Mandarin.cpp"
 $engineObjects = @(Compile 'mcbopomofo' $engineSources @('/W0'))
-$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\Controller.cpp")
+$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\Controller.cpp")
 Invoke-Native lib.exe /nologo "/OUT:$Obj\engine.lib" @engineObjects
 
 # Tests: the engine tests shared with macOS, and the pipe protocol.
@@ -164,6 +164,7 @@ if (Test-Path "$Trained\data.txt") { Copy-Item "$Trained\data.txt" $Out } else {
 Copy-Item "$Mcb\LICENSE.txt" "$Out\McBopomofo-LICENSE.txt"
 Copy-Item "$PSScriptRoot\..\..\LICENSE" "$Out\LICENSE.txt"
 if (Test-Path "$Trained\bigram.bin") { Copy-Item "$Trained\bigram.bin" $Out } else { Write-Host "no $Trained\bigram.bin`: building without context ranking" }
+if (Test-Path "$Trained\chars.bin") { Copy-Item "$Trained\chars.bin" $Out }
 
 # Smart App Control blocks unsigned programs it has not seen; say so instead of failing the build.
 foreach ($test in $tests) {

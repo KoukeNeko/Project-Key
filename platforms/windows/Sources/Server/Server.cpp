@@ -200,6 +200,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       Log(L"cannot load " + dir + L"bigram.bin");
     }
   }
+  auto chars = std::make_shared<CharModel>();
+  if (GetFileAttributesW((dir + L"chars.bin").c_str()) != INVALID_FILE_ATTRIBUTES) {
+    if (chars->load(Narrow(dir + L"chars.bin"))) {
+      gEnvironment.chars = chars;
+    } else {
+      Log(L"cannot load " + dir + L"chars.bin");
+    }
+  }
   gEnvironment.userModel = std::make_shared<McBopomofo::UserOverrideModel>(NewUserModel());
   gEnvironment.settings = &gSettings;
   gEnvironment.isEnglish = IsEnglish;

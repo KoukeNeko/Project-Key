@@ -139,7 +139,7 @@ void Controller::makeComposer() {
   rememberChoices_ = rememberChoices;
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight,
-                                         adjacentKeys ? Composer::kAdjacentKeyScore : -INFINITY);
+                                         adjacentKeys ? Composer::kAdjacentKeyScore : -INFINITY, env_.chars);
 }
 
 void Controller::deactivate() {
@@ -494,6 +494,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
   if (key < 0x20 || key > 0x7e) return !empty;
   cursorMoved_ = false;
   if (!event.shift && composer_->isReadingKey(key)) {
+    if (empty) composer_->setTextBefore(client_.textBeforeCaret());
     if (composer_->typeReadingKey(key) == Composer::KeyResult::kInvalid) client_.beep();
     refresh();
     return true;
