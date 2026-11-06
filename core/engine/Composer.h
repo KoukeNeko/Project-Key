@@ -126,7 +126,7 @@ class Composer {
  private:
   KeyResult insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned);
   bool startsSyllable(char key) const;
-  void showReading();
+  void showReading(bool ending = false);
   void hideReading();
   void endReading();
   bool startsWithSegment(const Segment& segment, const std::string& reading) const;

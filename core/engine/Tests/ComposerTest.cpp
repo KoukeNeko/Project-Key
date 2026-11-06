@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
   Composer plain(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, Composer::kAdjacentKeyScore,
                  nullptr, Composer::kCharWeight, nullptr, /*abbreviated=*/false);
   type(plain, "ja");
-  assert(plain.readingCount() <= 1 && plain.text() != "我們" && plain.hasPendingReading());
+  assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄇㄨ");
   plain.clear();
   type(plain, "1q");
   assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄆ");
@@ -140,6 +140,13 @@ int main(int argc, char** argv) {
   plain.clear();
   type(plain, "su3cl3");
   assert(plain.text() == "你好");
+  // The open syllable is no word until it ends: a tone the dictionary lacks keeps its symbols,
+  // and punctuation puts it in as its word.
+  plain.clear();
+  type(plain, "su");
+  assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄋㄧ");
+  assert(plain.completeWithFirstTone() == Composer::KeyResult::kInvalid && plain.pendingReading() == "ㄋㄧ");
+  assert(plain.insertPunctuation('<') && plain.text() == "你，" && !plain.hasPendingReading());
   composer.clear();
   type(composer, "1q");
   assert(composer.readingCount() == 2);

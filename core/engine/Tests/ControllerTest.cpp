@@ -536,7 +536,9 @@ int main(int argc, char** argv) {
   Type(controller, "1q");  // ㄅ then ㄆ is ㄆ
   assert(client.marked == "ㄆ");
   EscapeAll(controller, client);
-  Type(controller, "suc");  // ㄋㄧ then ㄏ is ㄏㄧ
+  Type(controller, "su");  // no guess row for the open syllable, which would come and go with each key
+  assert(client.marked == "ㄋㄧ" && !client.panelVisible);
+  Type(controller, "c");  // ㄋㄧ then ㄏ is ㄏㄧ
   assert(client.marked == "ㄏㄧ");
   EscapeAll(controller, client);
   settings.set(Setting::kAbbreviated, 1);

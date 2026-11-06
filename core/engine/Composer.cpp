@@ -277,7 +277,8 @@ Composer::KeyResult Composer::completeWithFirstTone() {
 }
 
 // `untoned` is the reading before its tone: when the dictionary lacks that tone, a whole
-// syllable or a lone symbol goes back as it was, still shown as its word; anything else is dropped.
+// syllable or a lone symbol goes back as it was, still shown as its word; anything else is
+// dropped, except without abbreviated, where the symbols stay to be fixed.
 Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned) {
   std::string syllable = reading_.syllable().composedString();
   reading_.clear();
@@ -288,7 +289,7 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
   if (!inserted) {
     reading_ = untoned;
     showReading();
-    if (!readingShown_) reading_.clear();
+    if (!readingShown_ && abbreviated_) reading_.clear();
   }
   walk();
   return inserted ? KeyResult::kHandled : KeyResult::kInvalid;
@@ -316,8 +317,10 @@ bool Composer::startsSyllable(char key) const {
 }
 
 // Puts the open syllable in the grid, toneless, when the dictionary has it, so its word shows.
-void Composer::showReading() {
-  if (reading_.isEmpty() || reading_.hasToneMarker()) return;
+// Without abbreviated only when `ending` it: until then it shows as its symbols, as the word
+// and its candidates would change with each key.
+void Composer::showReading(bool ending) {
+  if (reading_.isEmpty() || reading_.hasToneMarker() || (!abbreviated_ && !ending)) return;
   std::string reading = reading_.syllable().composedString() + kAnyTone;
   readingShown_ = dictionary_->hasUnigrams(reading) && grid_.insertReading(reading);
 }
@@ -356,6 +359,7 @@ bool Composer::insertPunctuation(char key) {
   for (const std::string& prefix : {"_punctuation_Standard_", "_punctuation_"}) {
     std::string reading = prefix + std::string(1, key);
     if (lm_->hasUnigrams(reading)) {
+      if (!readingShown_) showReading(/*ending=*/true);  // the open syllable goes in as its word
       endReading();
       grid_.insertReading(reading);
       walk();
