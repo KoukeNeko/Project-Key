@@ -9,8 +9,10 @@ OnDemand=True
 Configurable=True
 
 # The D-Bus object the settings window clears the remembered choices through,
-# and Fcitx5's Wayland connections, where the candidate window is an input method popup.
+# Fcitx5's Wayland connections, where the candidate window is an input method popup, and the
+# notification the install check (檢查 Project Key 安裝) shows its result in.
 [Addon/OptionalDependencies]
 0=dbus
 1=wayland
 2=waylandim
+3=notifications

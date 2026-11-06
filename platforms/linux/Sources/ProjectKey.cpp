@@ -27,6 +27,8 @@
 #include <fcitx/statusarea.h>
 #include <fcitx/text.h>
 #include <fcitx/userinterfacemanager.h>
+#include <notifications_public.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cctype>
@@ -146,6 +148,7 @@ class Spelling {
     if (dict_) enchant_broker_free_dict(broker_, dict_);
     if (broker_) enchant_broker_free(broker_);
   }
+  bool ok() const { return dict_ != nullptr; }
   bool isEnglish(const std::string& text) const {
     if (!dict_) return false;
     bool any = false;
@@ -469,6 +472,7 @@ class SettingsObject : public fcitx::dbus::ObjectVTable<SettingsObject> {
 class Engine : public fcitx::InputMethodEngineV2 {
   // Defined before its use in the constructor, which needs its deduced type.
   FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
+  FCITX_ADDON_DEPENDENCY_LOADER(notifications, instance_->addonManager());
 
  public:
   explicit Engine(fcitx::Instance* instance)
@@ -498,6 +502,9 @@ class Engine : public fcitx::InputMethodEngineV2 {
     settingsAction_.setShortText("Project Key 設定…");
     settingsAction_.connect<fcitx::SimpleAction::Activated>([](fcitx::InputContext*) { fcitx::startProcess({PROJECTKEY_SETTINGS}); });
     instance_->userInterfaceManager().registerAction("projectkey-settings", &settingsAction_);
+    checkAction_.setShortText("檢查 Project Key 安裝");
+    checkAction_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) { checkInstall(ic); });
+    instance_->userInterfaceManager().registerAction("projectkey-check", &checkAction_);
     if (fcitx::AddonInstance* dbus = this->dbus()) {
       dbus->call<fcitx::IDBusModule::bus>()->addObjectVTable("/projectkey", "org.projectkey.Engine", settingsObject_);
     }
@@ -608,6 +615,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
 
   void activate(const fcitx::InputMethodEntry&, fcitx::InputContextEvent& event) override {
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settingsAction_);
+    event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &checkAction_);
   }
 
   std::string subMode(const fcitx::InputMethodEntry&, fcitx::InputContext&) override {
@@ -625,6 +633,38 @@ class Engine : public fcitx::InputMethodEngineV2 {
   void reloadConfig() override { fcitx::readAsIni(config_, kConfigPath); }
 
  private:
+  // The Fcitx5 menu's 檢查 Project Key 安裝: what an install needs, as a notification. ic is
+  // the app the menu was opened for, whose candidates may go to Fcitx5's panel instead.
+  void checkInstall(fcitx::InputContext* ic) {
+    std::vector<std::string> problems;
+    if (!environment_.lm->isDataModelLoaded()) {
+      problems.push_back(std::string("詞庫沒有載入（") + PROJECTKEY_DATA_DIR + "/data.txt）：請重新安裝");
+    }
+    if (!spelling_.ok()) problems.push_back("沒有英文字典（Debian／Ubuntu 的 hunspell-en-us）：不會出現 Tab 英文提示");
+    if (access(PROJECTKEY_SETTINGS, X_OK) != 0) problems.push_back("找不到設定程式 " + std::string(PROJECTKEY_SETTINGS));
+    for (std::string& problem : panel_.problems()) problems.push_back(std::move(problem));
+    std::string notes;
+    if (ic && panel_.ok() && !panel_.shows(*ic)) {
+      notes = "這個 App 的候選字用 Fcitx5 的候選面板。";
+      fcitx::RawConfig classicUi;
+      fcitx::readAsIni(classicUi, "conf/classicui.conf");
+      const std::string* theme = classicUi.valueByPath("Theme");
+      if (!theme || *theme != "projectkey") {
+        problems.push_back("Fcitx5 的主題不是 Project Key：在 Fcitx5 設定的「附加元件 → 經典使用者介面 → 主題」選 Project Key");
+      }
+    }
+    std::string summary = problems.empty() ? "Project Key 已安裝完成" : "Project Key 安裝有 " + std::to_string(problems.size()) + " 個問題";
+    std::string body;
+    for (const std::string& problem : problems) body += "• " + problem + "\n";
+    if (problems.empty()) body = "詞庫、英文字典、字型、候選字窗與設定程式都正常。\n";
+    body += notes;
+    FCITX_INFO() << summary << "\n" << body;
+    if (fcitx::AddonInstance* notifications = this->notifications()) {
+      notifications->call<fcitx::INotifications::sendNotification>("Project Key", 0, "fcitx-projectkey", summary, body,
+                                                                   std::vector<std::string>{}, -1, nullptr, nullptr);
+    }
+  }
+
   fcitx::Instance* instance_;
   Config config_;
   ConfigSettings settings_;
@@ -633,7 +673,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
   Environment environment_;
   fcitx::FactoryFor<Session> factory_;
   std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> shiftWatcher_, caretWatcher_;
-  fcitx::SimpleAction settingsAction_;
+  fcitx::SimpleAction settingsAction_, checkAction_;
   SettingsObject settingsObject_{environment_};
 };
 

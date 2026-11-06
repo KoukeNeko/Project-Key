@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "Controller.h"
 #include "Screen.h"
@@ -32,6 +33,8 @@ class Panel {
   bool ok() const { return screen_ != nullptr; }
   // Whether the windows can go at ic's caret; Fcitx5's panel stands in where not.
   bool shows(const fcitx::InputContext& ic) const { return screen_ && screen_->reaches(ic); }
+  // What keeps the windows from showing as they should, for the install check.
+  std::vector<std::string> problems() const;
   // Grid columns a candidate takes, measured as the window draws it.
   int span(const std::string& candidate) const;
 

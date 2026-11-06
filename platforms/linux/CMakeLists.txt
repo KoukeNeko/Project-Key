@@ -13,6 +13,7 @@ find_package(Fcitx5Core REQUIRED)
 find_package(Fcitx5Utils REQUIRED)
 find_package(Fcitx5ModuleDBus REQUIRED)
 find_package(Fcitx5ModuleWayland REQUIRED)
+find_package(Fcitx5ModuleNotifications REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ENCHANT REQUIRED IMPORTED_TARGET enchant-2)
 pkg_check_modules(PANEL REQUIRED IMPORTED_TARGET xcb cairo cairo-xcb pangocairo wayland-client)
@@ -63,7 +64,7 @@ add_custom_command(
 add_library(projectkey MODULE Sources/ProjectKey.cpp Sources/Panel.cpp Sources/X11Screen.cpp Sources/GnomeScreen.cpp Sources/WaylandScreen.cpp
   "${CMAKE_CURRENT_BINARY_DIR}/input-method-unstable-v2-protocol.c")
 target_include_directories(projectkey PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(projectkey PRIVATE engine Fcitx5::Core Fcitx5::Utils Fcitx5::Module::DBus Fcitx5::Module::Wayland
+target_link_libraries(projectkey PRIVATE engine Fcitx5::Core Fcitx5::Utils Fcitx5::Module::DBus Fcitx5::Module::Wayland Fcitx5::Module::Notifications
   PkgConfig::ENCHANT PkgConfig::PANEL)
 target_compile_definitions(projectkey PRIVATE PROJECTKEY_DATA_DIR="${DATA_DIR}" FCITX_GETTEXT_DOMAIN="fcitx5-projectkey"
   PROJECTKEY_SETTINGS="${CMAKE_INSTALL_FULL_BINDIR}/projectkey-settings")

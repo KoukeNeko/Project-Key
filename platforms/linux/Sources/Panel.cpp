@@ -140,6 +140,24 @@ float Panel::width(const std::string& text, PangoFontDescription* font) const {
   return text.empty() ? 0 : Line(layout(text, font)).width;
 }
 
+std::vector<std::string> Panel::problems() const {
+  std::vector<std::string> problems;
+  if (!screen_) {
+    problems.push_back("連不上 X11 或 Wayland 顯示，候選字窗改用 Fcitx5 的面板");
+  } else if (std::string problem = screen_->problem(); !problem.empty()) {
+    problems.push_back(problem);
+  }
+  // The other fonts fall back to a generic family; this one has no stand-in.
+  PangoFontFamily** families = nullptr;
+  int count = 0;
+  pango_font_map_list_families(pango_cairo_font_map_get_default(), &families, &count);
+  bool found = std::any_of(families, families + count,
+                           [](PangoFontFamily* family) { return g_ascii_strcasecmp(pango_font_family_get_name(family), kTextFont) == 0; });
+  g_free(families);
+  if (!found) problems.push_back(std::string("缺少 ") + kTextFont + " 字型（Debian／Ubuntu 的 fonts-noto-cjk），候選字會用別的字型");
+  return problems;
+}
+
 int Panel::span(const std::string& candidate) const {
   float cell = kCellSide + width("6", labelFont_) + kLabelGap + width(candidate, candidateFont_) + kCellSide;
   int span = static_cast<int>(std::ceil((cell + kCellGap) / (columnWidth_ + kCellGap)));

@@ -80,6 +80,11 @@ class GnomeScreen final : public Screen {
   bool blurs() override { return true; }  // Shell.BlurEffect, in the extension
   // Each frame crosses to GNOME Shell as a file: no animation frames.
   bool animates() const override { return false; }
+  std::string problem() const override {
+    if (known_) return {};
+    return "GNOME Shell 擴充功能「Project Key」沒有在執行：在「擴充功能」App 開啟它"
+           "（或 gnome-extensions enable project-key@koukeneko.github.io），再重新登入";
+  }
 
   void setGeometry(const Geometry& geometry) {
     known_ = geometry.areaWidth > 0 && geometry.areaHeight > 0 && geometry.scale > 0;

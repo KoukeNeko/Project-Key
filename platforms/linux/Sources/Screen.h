@@ -12,6 +12,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 
 namespace fcitx {
 class Instance;
@@ -70,6 +71,8 @@ class Screen {
   virtual void sync() {}
   // Whether windows slide and resize in steps; each step is a frame to deliver.
   virtual bool animates() const { return true; }
+  // Why no window shows yet, for the install check; empty when they can.
+  virtual std::string problem() const { return {}; }
 };
 
 std::unique_ptr<Screen> OpenX11Screen(fcitx::EventLoop& loop);
