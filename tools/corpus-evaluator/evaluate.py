@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Type every corpus sentence into each engine adapter and score the results.
 
-Usage: evaluate.py [--engine NAME ...] [--out report.md] [--slip row|column]
+Usage: evaluate.py [--engine NAME ...] [--out report.md] [--slip row|column] [--corpus corpus.tsv]
 
 Each sentence is typed as one continuous Daqian key sequence with no candidate
 selection, so the score is what the user gets without correcting anything.
@@ -144,8 +144,9 @@ def main():
     parser.add_argument("--engine", action="append", choices=sorted(engines()))
     parser.add_argument("--out", type=Path)
     parser.add_argument("--slip", choices=["row", "column"], help="mistype one key per sentence as a neighbor in the same row, or the row above or below")
+    parser.add_argument("--corpus", type=Path, default=CORPUS)
     args = parser.parse_args()
-    with CORPUS.open() as f:
+    with args.corpus.open() as f:
         rows = list(csv.DictReader(f, delimiter="\t"))
     if args.slip:
         rng = random.Random(0)
