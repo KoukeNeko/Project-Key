@@ -27,7 +27,10 @@ struct SettingsForm: View {
           Text("游標前（macOS）").tag(1)
         }
         Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
-        Toggle("簡拼", isOn: $abbreviated)
+        Toggle(isOn: $abbreviated) {
+          Text("簡拼")
+          Text("開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音")
+        }
         Toggle(isOn: $keypadPicks) {
           Text("數字鍵盤選字")
           Text("開啟時數字鍵盤的 1–6 直接選字；主鍵盤的 1–6 仍是注音")
