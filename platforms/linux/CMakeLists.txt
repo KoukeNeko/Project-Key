@@ -74,11 +74,13 @@ set_target_properties(projectkey PROPERTIES PREFIX "")
 # projectkey-settings script: Qt on KDE, GTK (libadwaita) on GNOME when it is built.
 add_executable(projectkey-settings-qt Settings/Qt.cpp)
 target_link_libraries(projectkey-settings-qt PRIVATE Qt${PROJECTKEY_QT}::Widgets Qt${PROJECTKEY_QT}::DBus Qt${PROJECTKEY_QT}::Network)
+target_include_directories(projectkey-settings-qt PRIVATE "${CORE}")  # Models.h
 target_compile_definitions(projectkey-settings-qt PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}" PROJECTKEY_DATA_DIR="${DATA_DIR}")
 pkg_check_modules(ADWAITA IMPORTED_TARGET libadwaita-1 libsoup-3.0 json-glib-1.0)
 if(ADWAITA_FOUND)
   add_executable(projectkey-settings-gtk Settings/Gtk.cpp)
   target_link_libraries(projectkey-settings-gtk PRIVATE PkgConfig::ADWAITA)
+  target_include_directories(projectkey-settings-gtk PRIVATE "${CORE}")  # Models.h
   target_compile_definitions(projectkey-settings-gtk PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}" PROJECTKEY_DATA_DIR="${DATA_DIR}")
   install(TARGETS projectkey-settings-gtk DESTINATION "${CMAKE_INSTALL_BINDIR}")
 else()

@@ -56,6 +56,19 @@ FCITX_CONFIG_ENUM_NAME_WITH_I18N(CandidatePosition, N_("游標後"), N_("游標�
 enum class Appearance { Dark, Blur };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(Appearance, N_("深色"), N_("模糊"));
 
+// $XDG_DATA_HOME/projectkey, where personal.txt and the models the settings windows download go
+// (Settings/Rows.h); empty without a home.
+std::string UserData() {
+  if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) return std::string(data) + "/projectkey";
+  if (const char* home = std::getenv("HOME")) return std::string(home) + "/.local/share/projectkey";
+  return "";
+}
+
+// Switches to the newest of the installed models and those the settings windows downloaded.
+bool UseNewestModels(Environment& env) {
+  return UseNewestModels(env, PROJECTKEY_DATA_DIR, UserData().empty() ? "" : UserData() + "/models");
+}
+
 bool DefaultFlag(Setting setting) {
   return Settings::DefaultValue(setting) != 0;
 }
@@ -461,15 +474,19 @@ class Session : public fcitx::InputContextProperty, public Client {
 
 // What the settings windows (Settings/Qt.cpp, Settings/Gtk.cpp) ask of the engine over D-Bus,
 // at /projectkey on Fcitx5's own bus name: forgetting the choices, which live
-// only in this process.
+// only in this process, and switching to models they downloaded.
 class SettingsObject : public fcitx::dbus::ObjectVTable<SettingsObject> {
  public:
   explicit SettingsObject(Environment& environment) : environment_(environment) {}
   void clearChoices() { ClearChoices(environment_); }
+  void reloadModels() {
+    if (!UseNewestModels(environment_)) FCITX_ERROR() << "Project Key: cannot load the downloaded models";
+  }
 
  private:
   Environment& environment_;
   FCITX_OBJECT_VTABLE_METHOD(clearChoices, "ClearChoices", "", "");
+  FCITX_OBJECT_VTABLE_METHOD(reloadModels, "ReloadModels", "", "");
 };
 
 class Engine : public fcitx::InputMethodEngineV2 {
@@ -483,22 +500,11 @@ class Engine : public fcitx::InputMethodEngineV2 {
           return new Session(environment_, instance_, panel_, ic);
         }) {
     fcitx::readAsIni(config_, kConfigPath);
-    std::string dir = PROJECTKEY_DATA_DIR;
-    environment_.lm = std::make_shared<Lexicon>();
-    environment_.lm->loadLanguageModel((dir + "/data.txt").c_str());
-    if (!environment_.lm->isDataModelLoaded()) FCITX_ERROR() << "Project Key: cannot load " << dir << "/data.txt";
-    // The context ranking model from tools/bigram-trainer; without it, unigrams only.
-    auto bigram = std::make_shared<Bigram>();
-    if (bigram->load(dir + "/bigram.bin")) environment_.bigram = bigram;
-    auto chars = std::make_shared<CharModel>();
-    if (chars->load(dir + "/chars.bin")) environment_.chars = chars;
+    // The installed models, or newer ones the settings windows downloaded.
+    if (!UseNewestModels(environment_)) FCITX_ERROR() << "Project Key: cannot load " << PROJECTKEY_DATA_DIR << "/data.txt";
     environment_.userModel = NewUserModel();
     // What the user typed, learned on this computer only.
-    if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) {
-      environment_.personalPath = std::string(data) + "/projectkey/personal.txt";
-    } else if (const char* home = std::getenv("HOME")) {
-      environment_.personalPath = std::string(home) + "/.local/share/projectkey/personal.txt";
-    }
+    if (!UserData().empty()) environment_.personalPath = UserData() + "/personal.txt";
     environment_.personal = std::make_shared<PersonalModel>();
     if (!environment_.personalPath.empty()) environment_.personal->load(environment_.personalPath);
     environment_.settings = &settings_;

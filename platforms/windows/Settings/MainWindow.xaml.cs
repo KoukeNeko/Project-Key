@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
+using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -46,7 +49,7 @@ public sealed partial class MainWindow : Window {
     Bind(CandidatePosition, "CandidatePosition", 0);
     // The text service's version (ProjectKey.rc); build.ps1 puts this app in Settings\ beside it.
     Version.Text = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "..", "ProjectKey.dll")).ProductVersion ?? "";
-    Models.Text = ModelsVersion(Path.Combine(AppContext.BaseDirectory, ".."));
+    CheckForModels();
     CheckForUpdate();
 
     Root.SizeChanged += (_, _) => FitToContent();
@@ -61,11 +64,122 @@ public sealed partial class MainWindow : Window {
     key.SetValue(name, value, RegistryValueKind.DWord);
   }
 
-  // The trained models build.ps1 installed beside the text service, by the date fetch-models.sh or train.sh recorded.
+  // The models build.ps1 installed beside the text service, and newer releases this window downloads
+  // beside personal.txt; the engine uses the newest, as core/engine/Models.h chooses.
+  private static readonly string InstalledModels = Path.Combine(AppContext.BaseDirectory, "..");
+  private static readonly string DownloadedModels =
+      Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key", "models");
+
+  // models-version.txt, from fetch-models.sh or train.sh; empty without it.
   private static string ModelsVersion(string dir) {
-    if (!File.Exists(Path.Combine(dir, "bigram.bin")) || !File.Exists(Path.Combine(dir, "chars.bin"))) return "未安裝";
-    string version = Path.Combine(dir, "models-version.txt");
-    return File.Exists(version) ? File.ReadAllText(version).Trim() : "已安裝";
+    string file = Path.Combine(dir, "models-version.txt");
+    return File.Exists(file) ? File.ReadAllText(file).Trim() : "";
+  }
+
+  // ModelsDirectory in Models.h: a downloaded folder counts once it is named after its version.
+  private static string ModelsInUse() {
+    string newest = InstalledModels;
+    foreach (string dir in Directory.Exists(DownloadedModels) ? Directory.GetDirectories(DownloadedModels) : []) {
+      string version = ModelsVersion(dir);
+      if (version != "" && version == Path.GetFileName(dir) && string.CompareOrdinal(version, ModelsVersion(newest)) > 0) newest = dir;
+    }
+    return newest;
+  }
+
+  private static TextBlock InstalledModelsText() {
+    string dir = ModelsInUse();
+    string version = ModelsVersion(dir);
+    bool installed = File.Exists(Path.Combine(dir, "bigram.bin")) && File.Exists(Path.Combine(dir, "chars.bin"));
+    return new TextBlock { Text = !installed ? "未安裝" : version != "" ? version : "已安裝" };
+  }
+
+  private record ModelsFile(string Name, long Size, string Digest, string Url);
+
+  // The newest models-YYYY-MM-DD release fetch-models.sh published, offered when newer than the
+  // models in use. GitHub gives each file's SHA-256.
+  private async void CheckForModels() {
+    Models.Content = InstalledModelsText();
+    try {
+      using var client = new HttpClient();
+      client.DefaultRequestHeaders.UserAgent.ParseAdd("ProjectKey");
+      using JsonDocument releases = JsonDocument.Parse(
+          await client.GetStringAsync("https://api.github.com/repos/KoukeNeko/Project-Key/releases?per_page=30"));
+      string newestTag = "";
+      List<ModelsFile> newestFiles = [];
+      foreach (JsonElement release in releases.RootElement.EnumerateArray()) {
+        string tag = release.GetProperty("tag_name").GetString()!;
+        if (!tag.StartsWith("models-") || release.GetProperty("draft").GetBoolean() || string.CompareOrdinal(tag, newestTag) <= 0) continue;
+        var files = new List<ModelsFile>();
+        foreach (JsonElement asset in release.GetProperty("assets").EnumerateArray()) {
+          if (asset.TryGetProperty("digest", out JsonElement digest) && digest.ValueKind == JsonValueKind.String) {
+            files.Add(new ModelsFile(asset.GetProperty("name").GetString()!, asset.GetProperty("size").GetInt64(), digest.GetString()!,
+                                     asset.GetProperty("browser_download_url").GetString()!));
+          }
+        }
+        if (new[] { "data.txt", "bigram.bin", "chars.bin" }.All(name => files.Any(file => file.Name == name))) {
+          newestTag = tag;
+          newestFiles = files;
+        }
+      }
+      string date = newestTag.Length > 0 ? newestTag["models-".Length..] : "";
+      if (string.CompareOrdinal(date, ModelsVersion(ModelsInUse())) <= 0) return;
+      var button = new Button { Content = $"下載 {date}（{newestFiles.Sum(file => file.Size) / 1_000_000} MB）" };
+      button.Click += (_, _) => DownloadModels(date, newestFiles);
+      Models.Content = button;
+    } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException
+                                    or KeyNotFoundException or InvalidOperationException) {
+      // The 更新 row already says when GitHub cannot be reached.
+    }
+  }
+
+  private async void DownloadModels(string date, List<ModelsFile> files) {
+    var status = new TextBlock { Text = "下載中 0%" };
+    Models.Content = status;
+    long total = files.Sum(file => file.Size);
+    var progress = new Progress<long>(done => status.Text = $"下載中 {done * 100 / total}%");
+    string partial = Path.Combine(DownloadedModels, date + ".partial");
+    try {
+      // Off the UI thread: a continuation there for every read slows the download to a crawl.
+      await Task.Run(() => Download(files, partial, progress));
+      // Written last: a folder with it is complete.
+      File.WriteAllText(Path.Combine(partial, "models-version.txt"), date + "\n");
+      string folder = Path.Combine(DownloadedModels, date);
+      if (Directory.Exists(folder)) Directory.Delete(folder, true);
+      Directory.Move(partial, folder);
+      SendToServer(11);  // Protocol.h: Request::kReloadModels
+      Models.Content = InstalledModelsText();
+    } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException
+                                    or UnauthorizedAccessException or InvalidDataException) {
+      try { Directory.Delete(partial, true); } catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException) { }
+      Models.Content = new TextBlock { Text = "無法下載" };
+    }
+  }
+
+  // Each file into partial, checked against GitHub's SHA-256, reporting the bytes so far at each whole percent.
+  private static async Task Download(List<ModelsFile> files, string partial, IProgress<long> progress) {
+    Directory.CreateDirectory(DownloadedModels);
+    foreach (string left in Directory.GetDirectories(DownloadedModels, "*.partial")) Directory.Delete(left, true);  // cut short before
+    Directory.CreateDirectory(partial);
+    using var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+    long total = files.Sum(file => file.Size), done = 0;
+    var buffer = new byte[1 << 20];
+    foreach (ModelsFile file in files) {
+      using HttpResponseMessage response = await client.GetAsync(file.Url, HttpCompletionOption.ResponseHeadersRead);
+      response.EnsureSuccessStatusCode();
+      using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+      await using (Stream source = await response.Content.ReadAsStreamAsync())
+      await using (FileStream target = File.Create(Path.Combine(partial, file.Name))) {
+        int read;
+        while ((read = await source.ReadAsync(buffer)) > 0) {
+          await target.WriteAsync(buffer.AsMemory(0, read));
+          hash.AppendData(buffer, 0, read);
+          long before = done * 100 / total;
+          done += read;
+          if (done * 100 / total != before) progress.Report(done);
+        }
+      }
+      if ("sha256:" + Convert.ToHexStringLower(hash.GetHashAndReset()) != file.Digest) throw new InvalidDataException(file.Name);
+    }
   }
 
   private static void Bind(ToggleSwitch toggle, string name, bool fallback = true) {
@@ -118,16 +232,23 @@ public sealed partial class MainWindow : Window {
 
   // Asks the engine server to forget the choices; it keeps them in memory only.
   private void OnClearChoices(object sender, RoutedEventArgs e) {
+    SendToServer(7);  // Protocol.h: Request::kClearChoices
+    ClearChoices.IsEnabled = false;
+  }
+
+  // One request to the engine server. Without a server running there is nothing to tell it:
+  // it starts with the choices cleared and the newest models.
+  private static void SendToServer(byte request) {
     try {
       string sid = WindowsIdentity.GetCurrent().User!.Value;
       using var pipe = new NamedPipeClientStream(".", "ProjectKey-" + sid, PipeDirection.InOut);
       pipe.Connect(1000);
       pipe.ReadMode = PipeTransmissionMode.Message;
-      // Protocol.h: kVersion (2), Request::kClearChoices, an empty key event, no context.
+      // Protocol.h: kVersion (2), the request, an empty key event, no context.
       var message = new MemoryStream();
       var writer = new BinaryWriter(message);
       writer.Write(2u);
-      writer.Write((byte)7);
+      writer.Write(request);
       writer.Write((byte)0);
       writer.Write(0u);
       writer.Write((byte)0);
@@ -140,8 +261,6 @@ public sealed partial class MainWindow : Window {
       while (pipe.Read(reply, 0, reply.Length) > 0 && !pipe.IsMessageComplete) {
       }
     } catch (Exception ex) when (ex is IOException or TimeoutException or UnauthorizedAccessException) {
-      // No server running: there are no choices in memory to clear.
     }
-    ClearChoices.IsEnabled = false;
   }
 }

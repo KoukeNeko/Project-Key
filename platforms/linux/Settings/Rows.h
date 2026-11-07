@@ -5,25 +5,107 @@
 // write through Fcitx5's controller on D-Bus.
 #pragma once
 
+#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
+
+#include "Models.h"
 
 namespace ProjectKey::SettingsRows {
 
 constexpr char kFcitx[] = "org.fcitx.Fcitx5";
 constexpr char kConfig[] = "fcitx://config/addon/projectkey";
 constexpr char kReleases[] = "https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest";
+constexpr char kAllReleases[] = "https://api.github.com/repos/KoukeNeko/Project-Key/releases?per_page=30";
 constexpr char kEngineUrl[] = "https://github.com/openvanilla/McBopomofo";
 
-// The trained models CMakeLists.txt installed, by the date fetch-models.sh or train.sh recorded.
-inline std::string ModelsVersion() {
-  const std::filesystem::path dir = PROJECTKEY_DATA_DIR;
+// Where the models the settings windows download go, as UserData() in Sources/ProjectKey.cpp;
+// the engine uses the newest of them and the installed ones (core/engine/Models.h).
+inline std::filesystem::path DownloadedModels() {
+  if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) return std::filesystem::path(data) / "projectkey/models";
+  if (const char* home = std::getenv("HOME")) return std::filesystem::path(home) / ".local/share/projectkey/models";
+  return {};
+}
+
+inline std::filesystem::path ModelsInUse() {
+  return ProjectKey::ModelsDirectory(PROJECTKEY_DATA_DIR, DownloadedModels());
+}
+
+// The 選字模型 row while nothing newer is offered.
+inline std::string InstalledModelsText() {
+  std::filesystem::path dir = ModelsInUse();
   if (!std::filesystem::exists(dir / "bigram.bin") || !std::filesystem::exists(dir / "chars.bin")) return "未安裝";
-  std::string date;
-  if (std::ifstream file(dir / "models-version.txt"); !(file >> date)) return "已安裝";
-  return date;
+  std::string version = ProjectKey::ModelsVersion(dir);
+  return version.empty() ? "已安裝" : version;
+}
+
+struct ModelsFile {
+  std::string name, digest, url;  // digest: sha256:<hex>, as GitHub gives it
+  long long size = 0;
+};
+
+struct ModelsRelease {
+  std::string tag;
+  bool draft = false;
+  std::vector<ModelsFile> files;
+};
+
+struct NewerModels {
+  std::string date;  // empty when nothing newer is published
+  std::vector<ModelsFile> files;
+  long long bytes() const {
+    long long total = 0;
+    for (const ModelsFile& file : files) total += file.size;
+    return total;
+  }
+};
+
+// The newest models-YYYY-MM-DD release fetch-models.sh published with all three files, when newer
+// than the models in use.
+inline NewerModels FindNewerModels(const std::vector<ModelsRelease>& releases) {
+  NewerModels newest;
+  std::string newestTag;
+  for (const ModelsRelease& release : releases) {
+    auto has = [&](const char* name) {
+      return std::any_of(release.files.begin(), release.files.end(), [&](const ModelsFile& file) { return file.name == name; });
+    };
+    if (release.tag.rfind("models-", 0) != 0 || release.draft || release.tag <= newestTag) continue;
+    if (!has("data.txt") || !has("bigram.bin") || !has("chars.bin")) continue;
+    newestTag = release.tag;
+    newest.files = release.files;
+  }
+  newest.date = newestTag.empty() ? "" : newestTag.substr(7);
+  if (newest.date <= ProjectKey::ModelsVersion(ModelsInUse())) return {};
+  return newest;
+}
+
+// An empty DownloadedModels()/<date>.partial to download into, after removing any download cut
+// short before; empty on failure.
+inline std::filesystem::path StartModels(const std::string& date) {
+  std::error_code error;
+  for (const auto& entry : std::filesystem::directory_iterator(DownloadedModels(), error)) {
+    if (entry.path().extension() == ".partial") std::filesystem::remove_all(entry.path(), error);
+  }
+  std::filesystem::path partial = DownloadedModels() / (date + ".partial");
+  return std::filesystem::create_directories(partial, error) ? partial : std::filesystem::path();
+}
+
+// Completes the download: models-version.txt last, then the folder named after it (Models.h).
+inline bool FinishModels(const std::string& date) {
+  std::filesystem::path partial = DownloadedModels() / (date + ".partial"), done = DownloadedModels() / date;
+  if (!(std::ofstream(partial / "models-version.txt") << date << "\n")) return false;
+  std::error_code error;
+  std::filesystem::remove_all(done, error);
+  std::filesystem::rename(partial, done, error);
+  return !error;
+}
+
+inline void AbandonModels(const std::string& date) {
+  std::error_code error;
+  std::filesystem::remove_all(DownloadedModels() / (date + ".partial"), error);
 }
 
 struct Row {

@@ -7,8 +7,12 @@
 # 2. Publish them as a pre-release under a new date tag, so the settings window's update check
 #    (GitHub's latest release) never finds it:
 #    gh release create models-YYYY-MM-DD --prerelease --latest=false --title "Models YYYY-MM-DD" \
-#      .cache/data.txt .cache/bigram.bin .cache/chars.bin MODELS-NOTICE.txt
-# 3. Set TAG below to the new tag, update the checksums with
+#      .cache/data.txt .cache/bigram.bin .cache/chars.bin MODELS-NOTICE.txt LICENSE-LGPL-2.1.txt
+#    From then on the settings windows offer it to anyone with older models: they take the newest
+#    models-* release with data.txt, bigram.bin and chars.bin, check each file against the SHA-256
+#    GitHub lists, and the engine switches to it (core/engine/Models.h). The models' file formats
+#    must stay readable by the releases already installed; a format change needs a new tag prefix.
+# 3. Set TAG below to the new tag, so new installs bundle it, update the checksums with
 #    (cd .cache && shasum -a 256 data.txt bigram.bin chars.bin) > models.sha256
 #    and commit both.
 set -eu

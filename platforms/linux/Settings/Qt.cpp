@@ -6,13 +6,16 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCryptographicHash>
 #include <QDBusArgument>
 #include <QDBusInterface>
 #include <QDBusReply>
 #include <QDBusVariant>
+#include <QFile>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QIcon>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -80,6 +83,97 @@ void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
     } else {
       label->setText("已是最新版本");
     }
+  });
+}
+
+// A models download in progress, one file after another; it lives as long as the label.
+struct ModelsDownload : QObject {
+  ModelsDownload(QNetworkAccessManager& network, QLabel* label, NewerModels models, std::filesystem::path partial)
+      : QObject(label), network(network), label(label), models(std::move(models)), partial(std::move(partial)) {}
+
+  void fail() {
+    AbandonModels(models.date);
+    label->setText("無法下載");
+    deleteLater();
+  }
+
+  void next() {
+    if (index == models.files.size()) {
+      if (!FinishModels(models.date)) return fail();
+      QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ReloadModels");
+      label->setText(QString::fromStdString(InstalledModelsText()));
+      deleteLater();
+      return;
+    }
+    ModelsFile file = models.files[index];
+    auto* out = new QFile(QString::fromStdString((partial / file.name).string()), this);
+    if (!out->open(QIODevice::WriteOnly)) return fail();
+    auto hash = std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
+    QNetworkRequest request{QUrl(QString::fromStdString(file.url))};
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");
+    QNetworkReply* reply = network.get(request);
+    auto save = [reply, out, hash] {
+      QByteArray data = reply->readAll();
+      out->write(data);
+      hash->addData(data);
+    };
+    QObject::connect(reply, &QNetworkReply::readyRead, this, save);
+    QObject::connect(reply, &QNetworkReply::downloadProgress, this, [this](qint64 received, qint64) {
+      label->setText(QString("下載中 %1%").arg((done + received) * 100 / models.bytes()));
+    });
+    QObject::connect(reply, &QNetworkReply::finished, this, [this, reply, out, hash, save, file] {
+      reply->deleteLater();
+      save();
+      bool written = out->error() == QFileDevice::NoError;
+      out->close();
+      if (reply->error() != QNetworkReply::NoError || !written || "sha256:" + hash->result().toHex().toStdString() != file.digest) {
+        return fail();
+      }
+      done += file.size;
+      index++;
+      next();
+    });
+  }
+
+  QNetworkAccessManager& network;
+  QLabel* label;
+  NewerModels models;
+  std::filesystem::path partial;
+  size_t index = 0;
+  long long done = 0;
+};
+
+// Offers the newest models release (Rows.h) as a link that downloads it.
+void CheckForModels(QNetworkAccessManager& network, QLabel* label) {
+  QNetworkRequest request{QUrl(kAllReleases)};
+  request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");
+  QNetworkReply* reply = network.get(request);
+  QObject::connect(reply, &QNetworkReply::finished, label, [&network, reply, label] {
+    reply->deleteLater();
+    std::vector<ModelsRelease> releases;
+    for (const QJsonValue& value : QJsonDocument::fromJson(reply->readAll()).array()) {
+      QJsonObject release = value.toObject();
+      ModelsRelease parsed{release.value("tag_name").toString().toStdString(), release.value("draft").toBool(), {}};
+      for (const QJsonValue& asset : release.value("assets").toArray()) {
+        QJsonObject file = asset.toObject();
+        if (!file.value("digest").isString()) continue;
+        parsed.files.push_back({file.value("name").toString().toStdString(), file.value("digest").toString().toStdString(),
+                                file.value("browser_download_url").toString().toStdString(),
+                                static_cast<long long>(file.value("size").toDouble())});
+      }
+      releases.push_back(std::move(parsed));
+    }
+    NewerModels newer = FindNewerModels(releases);
+    if (newer.date.empty()) return;  // the 更新 row already says when GitHub cannot be reached
+    label->setText(QString("<a href=\"#\">下載 %1（%2 MB）</a>").arg(QString::fromStdString(newer.date)).arg(newer.bytes() / 1000000));
+    QObject::connect(label, &QLabel::linkActivated, label, [&network, label, newer] {
+      QObject::disconnect(label, &QLabel::linkActivated, nullptr, nullptr);
+      std::filesystem::path partial = StartModels(newer.date);
+      if (partial.empty()) return label->setText("無法下載");
+      label->setText("下載中 0%");
+      (new ModelsDownload(network, label, newer, partial))->next();
+    });
   });
 }
 
@@ -240,7 +334,8 @@ int main(int argc, char** argv) {
   auto* update = new QLabel("檢查中…");
   update->setOpenExternalLinks(true);
   about->addRow("更新：", update);
-  about->addRow("選字模型：", new QLabel(QString::fromStdString(ModelsVersion())));
+  auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
+  about->addRow("選字模型：", models);
   about->addRow("授權：", new QLabel("MIT"));
   auto* engine = new QLabel(QString("<a href=\"%1\">McBopomofo</a>").arg(kEngineUrl));
   engine->setOpenExternalLinks(true);
@@ -248,6 +343,7 @@ int main(int argc, char** argv) {
 
   QNetworkAccessManager network;
   CheckForUpdate(network, update);
+  CheckForModels(network, models);
   window.setWidget(content);
   content->setMinimumWidth(460);
   QSize size = content->sizeHint();

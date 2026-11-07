@@ -146,6 +146,158 @@ void CheckForUpdate(GtkLabel* label) {
   g_object_unref(message);
 }
 
+// A models download in progress, one file after another.
+struct ModelsDownload {
+  GtkLabel* label;
+  SoupSession* session;
+  NewerModels models;
+  std::filesystem::path partial;
+  size_t index = 0;
+  long long done = 0;
+  std::ofstream out;
+  GChecksum* hash = nullptr;
+  GInputStream* in = nullptr;
+  char buffer[1 << 16];
+};
+
+void EndModelsDownload(ModelsDownload* download, bool done) {
+  if (!done) AbandonModels(download->models.date);
+  gtk_label_set_text(download->label, done ? InstalledModelsText().c_str() : "無法下載");
+  if (download->in) g_object_unref(download->in);
+  if (download->hash) g_checksum_free(download->hash);
+  g_object_unref(download->label);
+  g_object_unref(download->session);
+  delete download;
+}
+
+void NextModelsFile(ModelsDownload* download);
+
+void ReadModelsFile(ModelsDownload* download) {
+  g_input_stream_read_async(
+      download->in, download->buffer, sizeof download->buffer, G_PRIORITY_DEFAULT, nullptr,
+      +[](GObject* source, GAsyncResult* result, gpointer data) {
+        auto* download = static_cast<ModelsDownload*>(data);
+        gssize read = g_input_stream_read_finish(G_INPUT_STREAM(source), result, nullptr);
+        if (read < 0) return EndModelsDownload(download, false);
+        if (read > 0) {
+          download->out.write(download->buffer, read);
+          g_checksum_update(download->hash, reinterpret_cast<const guchar*>(download->buffer), read);
+          long long before = download->done * 100 / download->models.bytes();
+          download->done += read;
+          long long percent = download->done * 100 / download->models.bytes();
+          if (percent != before) gtk_label_set_text(download->label, ("下載中 " + std::to_string(percent) + "%").c_str());
+          return ReadModelsFile(download);
+        }
+        download->out.close();
+        std::string digest = std::string("sha256:") + g_checksum_get_string(download->hash);
+        g_checksum_free(download->hash);
+        download->hash = nullptr;
+        g_object_unref(download->in);
+        download->in = nullptr;
+        if (!download->out || digest != download->models.files[download->index].digest) return EndModelsDownload(download, false);
+        download->index++;
+        NextModelsFile(download);
+      },
+      download);
+}
+
+void NextModelsFile(ModelsDownload* download) {
+  if (download->index == download->models.files.size()) {
+    bool done = FinishModels(download->models.date);
+    if (done) {
+      g_dbus_connection_call(Bus(), kFcitx, "/projectkey", "org.projectkey.Engine", "ReloadModels", nullptr, nullptr,
+                             G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+    }
+    return EndModelsDownload(download, done);
+  }
+  const ModelsFile& file = download->models.files[download->index];
+  download->out.open(download->partial / file.name, std::ios::binary);
+  SoupMessage* message = soup_message_new("GET", file.url.c_str());
+  if (!download->out || !message) return EndModelsDownload(download, false);
+  download->hash = g_checksum_new(G_CHECKSUM_SHA256);
+  soup_session_send_async(
+      download->session, message, G_PRIORITY_DEFAULT, nullptr,
+      +[](GObject* source, GAsyncResult* result, gpointer data) {
+        auto* download = static_cast<ModelsDownload*>(data);
+        GInputStream* in = soup_session_send_finish(SOUP_SESSION(source), result, nullptr);
+        SoupMessage* message = soup_session_get_async_result_message(SOUP_SESSION(source), result);
+        if (!in || !message || soup_message_get_status(message) != SOUP_STATUS_OK) {
+          if (in) g_object_unref(in);
+          return EndModelsDownload(download, false);
+        }
+        download->in = in;
+        ReadModelsFile(download);
+      },
+      download);
+  g_object_unref(message);
+}
+
+// Offers the newest models release (Rows.h) as a link that downloads it.
+void CheckForModels(GtkLabel* label) {
+  SoupSession* session = soup_session_new_with_options("user-agent", "ProjectKey", nullptr);
+  SoupMessage* message = soup_message_new("GET", kAllReleases);
+  g_object_ref(label);
+  soup_session_send_and_read_async(
+      session, message, G_PRIORITY_DEFAULT, nullptr,
+      +[](GObject* source, GAsyncResult* result, gpointer data) {
+        auto* label = GTK_LABEL(data);
+        SoupSession* session = SOUP_SESSION(source);
+        GBytes* body = soup_session_send_and_read_finish(session, result, nullptr);
+        SoupMessage* message = soup_session_get_async_result_message(session, result);
+        std::vector<ModelsRelease> releases;
+        if (body && message && soup_message_get_status(message) == SOUP_STATUS_OK) {
+          JsonParser* parser = json_parser_new();
+          gsize size = 0;
+          const char* text = static_cast<const char*>(g_bytes_get_data(body, &size));
+          JsonNode* root = json_parser_load_from_data(parser, text, static_cast<gssize>(size), nullptr) ? json_parser_get_root(parser) : nullptr;
+          JsonArray* array = root && JSON_NODE_HOLDS_ARRAY(root) ? json_node_get_array(root) : nullptr;
+          for (guint i = 0; array && i < json_array_get_length(array); i++) {
+            JsonObject* release = json_array_get_object_element(array, i);
+            if (!release || !json_object_has_member(release, "tag_name") || !json_object_has_member(release, "assets")) continue;
+            ModelsRelease parsed{json_object_get_string_member(release, "tag_name"),
+                                 json_object_get_boolean_member_with_default(release, "draft", false), {}};
+            JsonArray* assets = json_object_get_array_member(release, "assets");
+            for (guint j = 0; assets && j < json_array_get_length(assets); j++) {
+              JsonObject* file = json_array_get_object_element(assets, j);
+              const char* digest = file ? json_object_get_string_member_with_default(file, "digest", nullptr) : nullptr;
+              if (!digest) continue;
+              parsed.files.push_back({json_object_get_string_member_with_default(file, "name", ""), digest,
+                                      json_object_get_string_member_with_default(file, "browser_download_url", ""),
+                                      json_object_get_int_member_with_default(file, "size", 0)});
+            }
+            releases.push_back(std::move(parsed));
+          }
+          g_object_unref(parser);
+        }
+        // Without a newer release, or without GitHub (the 更新 row says so), the row stays as it is.
+        NewerModels newer = FindNewerModels(releases);
+        if (!newer.date.empty()) {
+          char* markup = g_markup_printf_escaped("<a href=\"#\">下載 %s（%lld MB）</a>", newer.date.c_str(), newer.bytes() / 1000000);
+          gtk_label_set_markup(label, markup);
+          g_free(markup);
+          g_signal_connect_data(label, "activate-link", G_CALLBACK((+[](GtkLabel* label, const char*, gpointer data) -> gboolean {
+                                  const NewerModels& newer = *static_cast<NewerModels*>(data);
+                                  std::filesystem::path partial = StartModels(newer.date);
+                                  if (partial.empty()) {
+                                    gtk_label_set_text(label, "無法下載");
+                                    return true;
+                                  }
+                                  gtk_label_set_text(label, "下載中 0%");  // no link left to follow again
+                                  g_object_ref(label);
+                                  NextModelsFile(new ModelsDownload{label, soup_session_new_with_options("user-agent", "ProjectKey", nullptr), newer, partial});
+                                  return true;
+                                })),
+                                new NewerModels(std::move(newer)), +[](gpointer data, GClosure*) { delete static_cast<NewerModels*>(data); },
+                                GConnectFlags{});
+        }
+        if (body) g_bytes_unref(body);
+        g_object_unref(label);
+        g_object_unref(session);
+      },
+      label);
+  g_object_unref(message);
+}
+
 // A row's value on the right, as GNOME's settings show plain facts.
 GtkWidget* InfoRow(const char* title, GtkWidget** value, const char* text) {
   GtkWidget* row = adw_action_row_new();
@@ -220,8 +372,9 @@ void Activate(GtkApplication* app) {
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("更新", &value, "檢查中…"));
   gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
   CheckForUpdate(GTK_LABEL(value));
-  const std::string models = ModelsVersion();
-  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("選字模型", &value, models.c_str()));
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("選字模型", &value, InstalledModelsText().c_str()));
+  gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
+  CheckForModels(GTK_LABEL(value));
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("授權", &value, "MIT"));
   GtkWidget* engine = adw_action_row_new();
   adw_preferences_row_set_title(ADW_PREFERENCES_ROW(engine), "引擎與詞庫");

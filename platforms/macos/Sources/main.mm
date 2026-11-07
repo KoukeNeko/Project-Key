@@ -4,6 +4,28 @@
 
 #import "CandidatePanel.h"
 #import "ProjectKey-Swift.h"
+#import "SettingsWindow.h"
+
+// The settings preview's models: the bundled ones, with nothing newer downloaded.
+@interface PKPreviewModels : NSObject <PKModels>
+@end
+
+@implementation PKPreviewModels
+- (NSString *)version {
+  NSString *path = [NSBundle.mainBundle pathForResource:@"models-version" ofType:@"txt"];
+  NSString *text = path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] : nil;
+  return [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] ?: @"";
+}
+- (BOOL)loaded {
+  return [NSBundle.mainBundle pathForResource:@"bigram" ofType:@"bin"] && [NSBundle.mainBundle pathForResource:@"chars" ofType:@"bin"];
+}
+- (NSURL *)downloads {
+  return [NSURL fileURLWithPath:NSTemporaryDirectory()];
+}
+- (BOOL)reload {
+  return NO;
+}
+@end
 
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
@@ -82,7 +104,8 @@ int main(int argc, const char *argv[]) {
       content.selection = 0;
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"typing-hint.png"] atomically:YES];
       NSView *form = [PKSettingsForm makeViewWithClearChoices:^{
-      }];
+      }
+                                                       models:[[PKPreviewModels alloc] init]];
       NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, form.fittingSize.width, form.fittingSize.height)
                                                      styleMask:NSWindowStyleMaskBorderless
                                                        backing:NSBackingStoreBuffered

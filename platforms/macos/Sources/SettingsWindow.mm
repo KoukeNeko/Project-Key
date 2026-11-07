@@ -33,10 +33,10 @@ NSString *const PKKeypadPicksKey = @"KeypadPicks";
   }];
 }
 
-+ (void)showWithClearChoices:(void (^)(void))clearChoices {
++ (void)showWithClearChoices:(void (^)(void))clearChoices models:(id<PKModels>)models {
   static NSWindow *window;
   // A new form each time: one opened again offers 清除 again and checks for an update again.
-  NSView *form = [PKSettingsForm makeViewWithClearChoices:clearChoices];
+  NSView *form = [PKSettingsForm makeViewWithClearChoices:clearChoices models:models];
   if (!window) {
     window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, form.fittingSize.width, form.fittingSize.height)
                                          styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "Models.h"
 #include "Utf8.h"
 
 namespace ProjectKey {
@@ -125,9 +126,10 @@ void Controller::makeComposer() {
   if (!composer_) replacing_ = 0;
   bool abbreviated = env_.settings->flag(Setting::kAbbreviated);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
-  if (composer_ && abbreviated == abbreviated_ && rememberChoices == rememberChoices_) return;
+  if (composer_ && abbreviated == abbreviated_ && rememberChoices == rememberChoices_ && env_.models == models_) return;
   abbreviated_ = abbreviated;
   rememberChoices_ = rememberChoices;
+  models_ = env_.models;
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight, rememberChoices ? env_.personal : nullptr, abbreviated);
 }
@@ -137,6 +139,39 @@ void ClearChoices(Environment& env) {
   if (!env.personal) return;
   env.personal->clear();
   if (!env.personalPath.empty()) env.personal->save(env.personalPath);
+}
+
+namespace {
+
+// Paths come and go as UTF-8; a plain std::string would be read in the ANSI code page on Windows.
+std::filesystem::path Path(const std::string& utf8) {
+  return std::u8string(utf8.begin(), utf8.end());
+}
+
+std::string Utf8(const std::filesystem::path& path) {
+  std::u8string text = path.u8string();
+  return std::string(text.begin(), text.end());
+}
+
+}  // namespace
+
+bool UseNewestModels(Environment& env, const std::string& bundled, const std::string& downloaded) {
+  std::filesystem::path dir = ModelsDirectory(Path(bundled), Path(downloaded));
+  auto lm = std::make_shared<Lexicon>();
+  lm->loadLanguageModel(Utf8(dir / "data.txt").c_str());
+  if (!lm->isDataModelLoaded()) return false;
+  auto bigram = std::make_shared<Bigram>();
+  auto chars = std::make_shared<CharModel>();
+  env.lm = lm;
+  env.bigram = bigram->load(Utf8(dir / "bigram.bin")) ? bigram : nullptr;
+  env.chars = chars->load(Utf8(dir / "chars.bin")) ? chars : nullptr;
+  ++env.models;
+  std::error_code error;
+  for (const auto& entry : std::filesystem::directory_iterator(Path(downloaded), error)) {
+    // Best effort: Windows keeps a release open while a composer still maps it; the next start removes it.
+    if (entry.path() != dir && entry.path().extension() != ".partial") std::filesystem::remove_all(entry.path(), error);
+  }
+  return true;
 }
 
 void Controller::learn(const std::string& committed) {

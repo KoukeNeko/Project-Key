@@ -81,9 +81,7 @@
       <tk:SettingsCard x:Name="Update" Header="更新">
         <TextBlock Text="檢查中…" />
       </tk:SettingsCard>
-      <tk:SettingsCard Header="選字模型">
-        <TextBlock x:Name="Models" />
-      </tk:SettingsCard>
+      <tk:SettingsCard x:Name="Models" Header="選字模型" />
       <tk:SettingsCard Header="授權">
         <TextBlock Text="MIT" />
       </tk:SettingsCard>

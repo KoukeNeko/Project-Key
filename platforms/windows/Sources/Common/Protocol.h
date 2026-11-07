@@ -27,6 +27,7 @@ enum class Request : uint8_t {
   kState = 8,         // nothing to do; returns the mode and appearance
   kToggleMode = 9,    // the language bar button
   kShowSettings = 10, // the server starts the settings window, outside any app container
+  kReloadModels = 11, // from the settings app, after it downloaded newer models
 };
 
 // What the text service does with the document and windows, in order.

@@ -19,9 +19,18 @@ FOUNDATION_EXPORT NSString *const PKCandidatePositionKey;  // candidates for the
 FOUNDATION_EXPORT NSString *const PKNextDoubtfulKey;       // picking a candidate moves on to the next doubtful word
 FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's 1-6 pick from the row shown while typing
 
+// The dictionary and context models the engine uses, and where the settings window puts a
+// newer release for it (core/engine/Models.h).
+@protocol PKModels <NSObject>
+@property(readonly, copy) NSString *version;  // models-version.txt of the models in use; empty when they have none
+@property(readonly) BOOL loaded;              // bigram.bin and chars.bin are in use
+@property(readonly, copy) NSURL *downloads;
+- (BOOL)reload;  // switches to the newest release in downloads; NO when it cannot be loaded
+@end
+
 @interface PKSettingsWindow : NSObject
 + (void)registerDefaults;
-+ (void)showWithClearChoices:(void (^)(void))clearChoices;
++ (void)showWithClearChoices:(void (^)(void))clearChoices models:(id<PKModels>)models;
 @end
 
 NS_ASSUME_NONNULL_END

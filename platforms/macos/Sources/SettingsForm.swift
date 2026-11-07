@@ -1,5 +1,6 @@
 // The settings content: one grouped form, as in System Settings.
 import AppKit
+import CryptoKit
 import SwiftUI
 
 struct SettingsForm: View {
@@ -17,6 +18,7 @@ struct SettingsForm: View {
   @AppStorage(PKNextDoubtfulKey) private var nextDoubtful = true
   @State private var cleared = false
   @State private var update = UpdateState.checking
+  @ObservedObject var models: ModelsUpdater
   let clearChoices: () -> Void
 
   var body: some View {
@@ -80,7 +82,14 @@ struct SettingsForm: View {
           case .failed: Text("無法檢查")
           }
         }
-        LabeledContent("選字模型", value: modelsVersion)
+        LabeledContent("選字模型") {
+          switch models.state {
+          case .current: Text(models.installed)
+          case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { models.download(release) }
+          case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
+          case .failed: Text("無法下載")
+          }
+        }
         LabeledContent("授權", value: "MIT")
         LabeledContent("引擎與詞庫") {
           Link("McBopomofo", destination: URL(string: "https://github.com/openvanilla/McBopomofo")!)
@@ -92,21 +101,11 @@ struct SettingsForm: View {
     .frame(width: 440)
     .fixedSize(horizontal: false, vertical: true)
     .task { update = await checkForUpdate() }
+    .task { await models.check() }
   }
 }
 
 private let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-
-// The trained models build.sh put in Resources, by the date fetch-models.sh or train.sh recorded.
-private let modelsVersion: String = {
-  let resources = Bundle.main.resourceURL!
-  let installed = ["bigram.bin", "chars.bin"].allSatisfy {
-    FileManager.default.fileExists(atPath: resources.appendingPathComponent($0).path)
-  }
-  guard installed else { return "未安裝" }
-  let date = try? String(contentsOf: resources.appendingPathComponent("models-version.txt"), encoding: .utf8)
-  return date?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "已安裝"
-}()
 
 private enum UpdateState {
   case checking, current, available(String, URL), failed
@@ -129,9 +128,143 @@ private func checkForUpdate() async -> UpdateState {
       ? .available(latest, release.html_url) : .current
 }
 
+// Models (tools/bigram-trainer) newer than the ones in use, from the GitHub releases
+// fetch-models.sh publishes as models-YYYY-MM-DD, downloaded when the user asks. GitHub gives
+// each file's SHA-256. One for all settings forms, so a download outlives the window.
+@MainActor
+final class ModelsUpdater: ObservableObject {
+  struct Release {
+    let date: String
+    let files: [File]
+    var megabytes: Int64 { files.reduce(0) { $0 + $1.size } / 1_000_000 }
+  }
+  struct File: Decodable {
+    let name: String
+    let size: Int64
+    let digest: String?  // sha256:<hex>
+    let browser_download_url: URL
+  }
+  enum State {
+    case current, available(Release), downloading(Double), failed
+  }
+
+  static var shared: ModelsUpdater?
+  @Published private(set) var state = State.current
+  private let models: PKModels
+
+  init(models: PKModels) { self.models = models }
+
+  // What the row says while nothing newer is offered.
+  var installed: String { models.loaded ? (models.version.isEmpty ? "已安裝" : models.version) : "未安裝" }
+
+  func check() async {
+    switch state {
+    case .current, .failed: break
+    case .available, .downloading: return
+    }
+    struct GitHubRelease: Decodable {
+      let tag_name: String
+      let draft: Bool
+      let assets: [File]
+    }
+    let api = URL(string: "https://api.github.com/repos/KoukeNeko/Project-Key/releases?per_page=30")!
+    guard let (data, response) = try? await URLSession.shared.data(from: api),
+          (response as? HTTPURLResponse)?.statusCode == 200,
+          let releases = try? JSONDecoder().decode([GitHubRelease].self, from: data) else {
+      return  // the 更新 row already says when GitHub cannot be reached
+    }
+    let complete = releases.filter { release in
+      release.tag_name.hasPrefix("models-") && !release.draft
+          && ["data.txt", "bigram.bin", "chars.bin"].allSatisfy { name in release.assets.contains { $0.name == name && $0.digest != nil } }
+    }
+    guard let newest = complete.max(by: { $0.tag_name < $1.tag_name }) else { return }
+    let date = String(newest.tag_name.dropFirst("models-".count))
+    state = date > models.version ? .available(Release(date: date, files: newest.assets)) : .current
+  }
+
+  func download(_ release: Release) {
+    state = .downloading(0)
+    Task {
+      let fileManager = FileManager.default
+      let partial = models.downloads.appendingPathComponent(release.date + ".partial", isDirectory: true)
+      do {
+        for left in (try? fileManager.contentsOfDirectory(at: models.downloads, includingPropertiesForKeys: nil)) ?? []
+        where left.pathExtension == "partial" {
+          try fileManager.removeItem(at: left)  // a download cut short
+        }
+        try fileManager.createDirectory(at: partial, withIntermediateDirectories: true)
+        let total = Double(release.files.reduce(0) { $0 + $1.size })
+        var done: Int64 = 0
+        for file in release.files {
+          let target = partial.appendingPathComponent(file.name)
+          let base = done
+          let response = try await fetch(file.browser_download_url, to: target) { received in
+            self.state = .downloading(Double(base + received) / total)
+          }
+          guard (response as? HTTPURLResponse)?.statusCode == 200,
+                try await Task.detached(operation: { try sha256(of: target) }).value == file.digest else {
+            throw URLError(.badServerResponse)
+          }
+          done += file.size
+        }
+        // Written last: a folder with it is complete (core/engine/Models.h).
+        try Data((release.date + "\n").utf8).write(to: partial.appendingPathComponent("models-version.txt"))
+        let target = models.downloads.appendingPathComponent(release.date, isDirectory: true)
+        try? fileManager.removeItem(at: target)
+        try fileManager.moveItem(at: partial, to: target)
+        state = models.reload() ? .current : .failed
+      } catch {
+        try? fileManager.removeItem(at: partial)
+        state = .failed
+      }
+    }
+  }
+}
+
+// Downloads url into target, reporting the bytes received so far every quarter second.
+private func fetch(_ url: URL, to target: URL, received: @escaping @MainActor (Int64) -> Void) async throws -> URLResponse {
+  final class Download: @unchecked Sendable {
+    var task: URLSessionDownloadTask?
+  }
+  let download = Download()
+  let poll = Task { @MainActor in
+    while !Task.isCancelled {
+      if let task = download.task { received(task.countOfBytesReceived) }
+      try? await Task.sleep(nanoseconds: 250_000_000)
+    }
+  }
+  defer { poll.cancel() }
+  return try await withCheckedThrowingContinuation { continuation in
+    let task = URLSession.shared.downloadTask(with: url) { temporary, response, error in
+      // The temporary file is gone once this returns.
+      guard let temporary, let response else { return continuation.resume(throwing: error ?? URLError(.unknown)) }
+      do {
+        try FileManager.default.moveItem(at: temporary, to: target)
+        continuation.resume(returning: response)
+      } catch {
+        continuation.resume(throwing: error)
+      }
+    }
+    download.task = task
+    task.resume()
+  }
+}
+
+private func sha256(of file: URL) throws -> String {
+  let handle = try FileHandle(forReadingFrom: file)
+  defer { try? handle.close() }
+  var hash = SHA256()
+  while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+    hash.update(data: chunk)
+  }
+  return "sha256:" + hash.finalize().map { String(format: "%02x", $0) }.joined()
+}
+
 @objc(PKSettingsForm)
 final class SettingsFormFactory: NSObject {
-  @objc static func makeView(clearChoices: @escaping () -> Void) -> NSView {
-    NSHostingView(rootView: SettingsForm(clearChoices: clearChoices))
+  @MainActor @objc static func makeView(clearChoices: @escaping () -> Void, models: PKModels) -> NSView {
+    let updater = ModelsUpdater.shared ?? ModelsUpdater(models: models)
+    ModelsUpdater.shared = updater
+    return NSHostingView(rootView: SettingsForm(models: updater, clearChoices: clearChoices))
   }
 }

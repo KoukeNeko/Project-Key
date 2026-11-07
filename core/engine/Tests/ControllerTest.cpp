@@ -4,10 +4,13 @@
 #undef NDEBUG
 #include <cassert>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <set>
 
 #include "Controller.h"
+#include "Models.h"
 
 using namespace ProjectKey;
 
@@ -622,6 +625,39 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(shiftTab) && HasSuffix(client.committed, "我們") && client.marked.empty());
   env.hintWindow = false;
   settings.remove(Setting::kProofPreview);
+
+  // A downloaded release newer than the bundled models replaces them on the next composition;
+  // older releases go, a download in progress stays, and a release without data.txt is refused.
+  {
+    namespace fs = std::filesystem;
+    fs::path root = fs::temp_directory_path() / "ControllerTest-models";
+    fs::remove_all(root);
+    auto release = [&](const fs::path& dir, const char* version, bool data) {
+      fs::create_directories(dir);
+      if (data) fs::copy_file(argv[1], dir / "data.txt");
+      std::ofstream(dir / "models-version.txt") << version << "\n";
+    };
+    fs::path bundled = root / "bundled", downloaded = root / "downloaded";
+    release(bundled, "2026-01-01", true);
+    release(downloaded / "2025-12-01", "2025-12-01", true);
+    release(downloaded / "2026-03-01.partial", "2026-03-01", true);
+    release(downloaded / "2026-04-01", "2026-04-01", false);
+    unsigned loads = env.models;
+    std::shared_ptr<Lexicon> before = env.lm;
+    assert(!UseNewestModels(env, bundled.string(), downloaded.string()));
+    assert(env.lm == before && env.models == loads);
+    fs::remove_all(downloaded / "2026-04-01");
+    release(downloaded / "2026-02-01", "2026-02-01", true);
+    assert(ModelsDirectory(bundled, downloaded) == downloaded / "2026-02-01");
+    assert(UseNewestModels(env, bundled.string(), downloaded.string()));
+    assert(env.lm != before && env.models == loads + 1);
+    assert(!fs::exists(downloaded / "2025-12-01") && fs::exists(downloaded / "2026-03-01.partial"));
+    Type(controller, "ji3");
+    assert(client.marked == "我");
+    EscapeAll(controller, client);
+    std::error_code mapped;  // Windows keeps the loaded release open; the next run removes it
+    fs::remove_all(root, mapped);
+  }
 
   std::printf("ControllerTest passed\n");
   return 0;

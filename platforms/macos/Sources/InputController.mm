@@ -6,6 +6,7 @@
 #import "CandidatePanel.h"
 #import "SettingsWindow.h"
 #include "Controller.h"
+#include "Models.h"
 
 using ProjectKey::Key;
 
@@ -67,31 +68,25 @@ class DefaultsSettings : public ProjectKey::Settings {
   }
 };
 
+// Newer models the settings window downloads, beside personal.txt.
+NSURL *DownloadedModels() {
+  NSURL *support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
+  return [support URLByAppendingPathComponent:@"ProjectKey/models" isDirectory:YES];
+}
+
+// Switches env to the newest models. The tests run from a bare executable without a bundle and
+// must not pick up the user's downloads.
+bool UseNewestModels(ProjectKey::Environment &env) {
+  std::string downloaded = NSBundle.mainBundle.bundleIdentifier ? DownloadedModels().fileSystemRepresentation : "";
+  return ProjectKey::UseNewestModels(env, NSBundle.mainBundle.resourcePath.fileSystemRepresentation, downloaded);
+}
+
 // The models, settings and 中/英 switch every input session shares.
 ProjectKey::Environment &SharedEnvironment() {
   static ProjectKey::Environment *environment = [] {
     [PKSettingsWindow registerDefaults];
     auto *env = new ProjectKey::Environment();
-    env->lm = std::make_shared<ProjectKey::Lexicon>();
-    NSString *data = [NSBundle.mainBundle pathForResource:@"data" ofType:@"txt"];
-    env->lm->loadLanguageModel(data.fileSystemRepresentation);
-    if (!env->lm->isDataModelLoaded()) NSLog(@"Project Key: cannot load %@", data);
-    if (NSString *path = [NSBundle.mainBundle pathForResource:@"bigram" ofType:@"bin"]) {
-      auto bigram = std::make_shared<ProjectKey::Bigram>();
-      if (bigram->load(path.fileSystemRepresentation)) {
-        env->bigram = bigram;
-      } else {
-        NSLog(@"Project Key: cannot load %@", path);
-      }
-    }
-    if (NSString *path = [NSBundle.mainBundle pathForResource:@"chars" ofType:@"bin"]) {
-      auto chars = std::make_shared<ProjectKey::CharModel>();
-      if (chars->load(path.fileSystemRepresentation)) {
-        env->chars = chars;
-      } else {
-        NSLog(@"Project Key: cannot load %@", path);
-      }
-    }
+    if (!UseNewestModels(*env)) NSLog(@"Project Key: cannot load data.txt");
     env->userModel = ProjectKey::NewUserModel();
     // What the user typed, learned on this Mac only. Only the installed input method learns:
     // the tests run from a bare executable without a bundle and must not touch the user's file.
@@ -248,6 +243,31 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 
 }  // namespace
 
+// The engine's models, for the settings window.
+@interface PKEngineModels : NSObject <PKModels>
+@end
+
+@implementation PKEngineModels
+
+- (NSString *)version {
+  return String(ProjectKey::ModelsVersion(ProjectKey::ModelsDirectory(NSBundle.mainBundle.resourcePath.fileSystemRepresentation,
+                                                                     DownloadedModels().fileSystemRepresentation)));
+}
+
+- (BOOL)loaded {
+  return SharedEnvironment().bigram && SharedEnvironment().chars;
+}
+
+- (NSURL *)downloads {
+  return DownloadedModels();
+}
+
+- (BOOL)reload {
+  return UseNewestModels(SharedEnvironment());
+}
+
+@end
+
 @implementation PKInputController {
   std::unique_ptr<ClientAdapter> _client;
   std::unique_ptr<ProjectKey::Controller> _controller;
@@ -297,7 +317,7 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 - (void)showSettings:(id)sender {
   [PKSettingsWindow showWithClearChoices:^{
     ProjectKey::ClearChoices(SharedEnvironment());
-  }];
+  } models:[[PKEngineModels alloc] init]];
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)client {

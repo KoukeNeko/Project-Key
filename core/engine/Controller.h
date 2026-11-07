@@ -104,6 +104,7 @@ struct Environment {
   std::shared_ptr<Lexicon> lm;
   std::shared_ptr<const Bigram> bigram;
   std::shared_ptr<const CharModel> chars;
+  unsigned models = 0;  // counts UseNewestModels loads; controllers make a new composer when it changes
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel;  // replaced by value to clear it
   // What the user typed, learned while choices are remembered (Setting::kRememberChoices) and
   // saved to personalPath after each commit; with an empty path it lives in memory only.
@@ -127,6 +128,12 @@ struct Environment {
 
 // Forgets what the user chose and typed, in memory and in the saved file.
 void ClearChoices(Environment& env);
+
+// Loads data.txt, bigram.bin and chars.bin from ModelsDirectory(bundled, downloaded) (Models.h)
+// into env, at start and after the settings window downloads a release; controllers switch on
+// their next composition. Then removes the downloaded releases it did not choose, except one still
+// downloading. False, leaving env as it was, when that folder's data.txt cannot be loaded.
+bool UseNewestModels(Environment& env, const std::string& bundled, const std::string& downloaded);
 
 enum class Key {
   kCharacter,  // anything else; see KeyEvent::characters
@@ -248,6 +255,7 @@ class Controller {
   std::optional<size_t> rowSegment_;  // the segment whose words the row shown while typing offers
   std::string shown_;  // the composition as last shown, pending reading included
   bool abbreviated_ = false, rememberChoices_ = false;  // the settings composer_ was made with
+  unsigned models_ = 0;                                // and Environment::models
   // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
   std::string englishRun_;

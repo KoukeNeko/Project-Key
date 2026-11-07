@@ -105,6 +105,22 @@ bool ReadMessage(HANDLE pipe, std::string& message) {
   }
 }
 
+void Log(const std::wstring& message) {
+  OutputDebugStringW((L"Project Key: " + message + L"\n").c_str());
+}
+
+// %LOCALAPPDATA%\Project Key\, where personal.txt and downloaded models go; empty without it.
+std::wstring UserData() {
+  wchar_t local[MAX_PATH];
+  DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+  return length > 0 && length < MAX_PATH ? std::wstring(local, length) + L"\\Project Key\\" : L"";
+}
+
+// Switches to the newest of the installed models and those the settings app downloaded.
+bool UseNewestModels() {
+  return UseNewestModels(gEnvironment, Narrow(ModuleDirectory(nullptr)), UserData().empty() ? "" : Narrow(UserData() + L"models"));
+}
+
 // Whether the other end of the pipe is the installed settings window. Apps in a
 // sandbox can connect too, but cannot pose as it.
 bool FromSettings(HANDLE pipe) {
@@ -138,6 +154,11 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kReset: controller->reset(); break;
         case Protocol::Request::kClearChoices:
           if (FromSettings(pipe)) ClearChoices(gEnvironment);
+          break;
+        case Protocol::Request::kReloadModels:
+          if (FromSettings(pipe) && !UseNewestModels()) {
+            Log(L"cannot load the downloaded models");
+          }
           break;
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
         case Protocol::Request::kShowSettings: LaunchSettings(ModuleDirectory(nullptr)); break;
@@ -177,10 +198,6 @@ SECURITY_ATTRIBUTES* PipeSecurity() {
   return &attributes;
 }
 
-void Log(const std::wstring& message) {
-  OutputDebugStringW((L"Project Key: " + message + L"\n").c_str());
-}
-
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -189,35 +206,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   if (GetLastError() == ERROR_ALREADY_EXISTS) return 0;
 
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-  std::wstring dir = ModuleDirectory(nullptr);
-  gEnvironment.lm = std::make_shared<Lexicon>();
-  gEnvironment.lm->loadLanguageModel(Narrow(dir + L"data.txt").c_str());
-  if (!gEnvironment.lm->isDataModelLoaded()) {
-    Log(L"cannot load " + dir + L"data.txt");
+  // The installed models, or newer ones the settings app downloaded.
+  if (!UseNewestModels()) {
+    Log(L"cannot load data.txt");
     return 1;
-  }
-  // Context ranking model from tools/bigram-trainer; without it, unigrams only.
-  auto bigram = std::make_shared<Bigram>();
-  if (GetFileAttributesW((dir + L"bigram.bin").c_str()) != INVALID_FILE_ATTRIBUTES) {
-    if (bigram->load(Narrow(dir + L"bigram.bin"))) {
-      gEnvironment.bigram = bigram;
-    } else {
-      Log(L"cannot load " + dir + L"bigram.bin");
-    }
-  }
-  auto chars = std::make_shared<CharModel>();
-  if (GetFileAttributesW((dir + L"chars.bin").c_str()) != INVALID_FILE_ATTRIBUTES) {
-    if (chars->load(Narrow(dir + L"chars.bin"))) {
-      gEnvironment.chars = chars;
-    } else {
-      Log(L"cannot load " + dir + L"chars.bin");
-    }
   }
   gEnvironment.userModel = NewUserModel();
   // What the user typed, learned on this PC only, beside other per-user app data.
-  wchar_t local[MAX_PATH];
-  DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
-  if (length > 0 && length < MAX_PATH) gEnvironment.personalPath = Narrow(std::wstring(local, length) + L"\\Project Key\\personal.txt");
+  if (!UserData().empty()) gEnvironment.personalPath = Narrow(UserData() + L"personal.txt");
   gEnvironment.personal = std::make_shared<PersonalModel>();
   if (!gEnvironment.personalPath.empty()) gEnvironment.personal->load(gEnvironment.personalPath);
   gEnvironment.settings = &gSettings;
