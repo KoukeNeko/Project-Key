@@ -555,6 +555,11 @@ int main(int argc, char** argv) {
   // digits, rather than fading out until the next key. Arrows put it away.
   Type(controller, "ji3");
   assert(client.marked == "我" && client.panelVisible && client.panel.rows[0][0] == "我" && client.panel.selectedRow == -1);
+  // Folded as when choosing: more rows of words behind it show as the page label (a chevron).
+  std::string typingPage = client.panel.pageLabel;
+  assert(!typingPage.empty() && !client.panel.expanded);
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && client.panel.pageLabel == typingPage);
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
   Type(controller, "ap7");
   assert(client.marked == "我們" && client.panelVisible && client.panel.rows[0][0] == "我們");
   controller.handleKey(Special(ProjectKey::Key::kLeft));

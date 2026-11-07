@@ -740,6 +740,20 @@ std::vector<std::string> Controller::choicesFor(const Segment& segment, int* rea
   return candidates;
 }
 
+void Controller::pack(const std::vector<std::string>& words, std::vector<int>* rowStarts, std::vector<int>* columns) const {
+  rowStarts->clear();
+  columns->clear();
+  int column = kGridColumns;
+  for (int i = 0; i < static_cast<int>(words.size()); i++) {
+    if (column + span(words[i]) > kGridColumns) {
+      rowStarts->push_back(i);
+      column = 0;
+    }
+    columns->push_back(column);
+    column += span(words[i]);
+  }
+}
+
 void Controller::startChoosingAt(size_t start) {
   std::optional<Segment> segment = composer_->segmentFrom(start);
   if (!segment) return;
@@ -750,17 +764,7 @@ void Controller::startChoosingAt(size_t start) {
   firstRow_ = 0;
   activeStart_ = start;
   candidates_ = std::move(candidates);
-  rowStarts_.clear();
-  columns_.clear();
-  int column = kGridColumns;
-  for (int i = 0; i < static_cast<int>(candidates_.size()); i++) {
-    if (column + span(candidates_[i]) > kGridColumns) {
-      rowStarts_.push_back(i);
-      column = 0;
-    }
-    columns_.push_back(column);
-    column += span(candidates_[i]);
-  }
+  pack(candidates_, &rowStarts_, &columns_);
   auto current = std::find(candidates_.begin(), candidates_.end(), segment->text);
   selection_ = current == candidates_.end() ? 0 : static_cast<int>(current - candidates_.begin());
   refresh();
@@ -896,6 +900,7 @@ void Controller::refresh() {
   // Zhuyin. selection marks the guess, which the renderers draw brighter than the rest.
   std::vector<std::string> guesses;
   int guessAt = -1;
+  std::string guessPage;
   if (typing) {
     std::optional<Segment> segment = composer_->segmentFrom(*typing);
     if (segment && segment->reading[0] != '_') {  // punctuation keeps the proof row alone
@@ -903,6 +908,10 @@ void Controller::refresh() {
       int readingIndex;
       std::vector<std::string> all = choicesFor(*segment, &readingIndex);
       guesses.assign(all.begin(), all.begin() + static_cast<std::ptrdiff_t>(firstRowSize(all)));
+      std::vector<int> rowStarts, columns;
+      pack(all, &rowStarts, &columns);
+      // Folded as when choosing: with more rows, the page label (drawn as a down chevron).
+      if (rowStarts.size() > 1) guessPage = "1/" + std::to_string(rowStarts.size());
       auto at = std::find(guesses.begin(), guesses.end(), segment->text);
       if (at != guesses.end()) guessAt = static_cast<int>(at - guesses.begin());
     }
@@ -913,6 +922,7 @@ void Controller::refresh() {
     panel.rows = {guesses};
     panel.selectedRow = -1;
     panel.selection = guessAt;
+    panel.pageLabel = guessPage;
   };
 
   std::optional<PanelContent> hint;  // what Tab would turn the keys into; ja is English and ㄨㄇ alike

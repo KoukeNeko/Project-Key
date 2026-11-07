@@ -208,6 +208,8 @@ class Controller {
   std::optional<size_t> doubtfulAfter(size_t start, bool backwards) const;
   // The segment's candidates as the grid lists them, with its Zhuyin at *readingIndex (-1 for none).
   std::vector<std::string> choicesFor(const Segment& segment, int* readingIndex) const;
+  // words packed into grid rows: where each row starts, and the column each word starts at.
+  void pack(const std::vector<std::string>& words, std::vector<int>* rowStarts, std::vector<int>* columns) const;
   void startChoosingAt(size_t start);
   // moveOn: then to the next doubtful segment, as Setting::kNextDoubtful says.
   void pick(int index, bool moveOn = true);
