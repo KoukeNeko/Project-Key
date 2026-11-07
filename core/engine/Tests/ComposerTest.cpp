@@ -169,6 +169,22 @@ int main(int argc, char** argv) {
   std::vector<std::string> fromStart = composer.candidates(typed);
   assert(std::find(fromStart.begin(), fromStart.end(), "打") != fromStart.end());
   assert(composer.choose(typed, "自", /*fromEnd=*/true) && composer.text().ends_with("自") && composer.readingCount() == 2);
+  // Other tones: ㄨㄟˇ ㄗㄠˋ walks as typed, but the word before the cursor also offers 偽造,
+  // which the dictionary reads ㄨㄟˋ-ㄗㄠˋ, and choosing it takes that reading.
+  composer.clear();
+  type(composer, "jo3yl4");
+  assert(composer.text() != "偽造" && composer.readingCount() == 2);
+  const Segment toned = composer.segments().back();
+  std::vector<std::string> offered = composer.candidates(toned, /*fromEnd=*/true);
+  assert(std::find(offered.begin(), offered.end(), "偽造") != offered.end());
+  assert(composer.choose(toned, "偽造", /*fromEnd=*/true) && composer.text() == "偽造" && composer.readingCount() == 2);
+  // A syllable's own tone comes first: ㄨㄟˇ offers 為 (ㄨㄟˊ) after its own words.
+  composer.clear();
+  type(composer, "jo3");
+  const Segment wei = composer.segments().back();
+  std::vector<std::string> weis = composer.candidates(wei, /*fromEnd=*/true);
+  auto own = std::find(weis.begin(), weis.end(), wei.text), other = std::find(weis.begin(), weis.end(), "為");
+  assert(own != weis.end() && other != weis.end() && own < other);
   // Keys typed in English are Zhuyin only when they spell a syllable, which a lone letter does not.
   assert(!composer.isSyllableKeys("x") && composer.isSyllableKeys("su"));
 

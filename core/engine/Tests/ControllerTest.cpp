@@ -613,6 +613,15 @@ int main(int argc, char** argv) {
   controller.choose(static_cast<int>(gold - firsts.begin()));
   assert(client.marked == "金天");
   EscapeAll(controller, client);
+  // Words in other tones than were typed are offered too: 偽造 for ㄨㄟˇ ㄗㄠˋ.
+  Type(controller, "jo3yl4");
+  assert(client.marked != "偽造" && controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const std::vector<std::string>& tones = controller.candidates();
+  auto forged = std::find(tones.begin(), tones.end(), "偽造");
+  assert(forged != tones.end());
+  controller.choose(static_cast<int>(forged - tones.begin()));
+  assert(client.marked == "偽造");
+  EscapeAll(controller, client);
   settings.remove(Setting::kCandidatePosition);
 
   // Tab sends the sentence as the proof row has it, which ends in the Tab keycap: 你好 for 你ㄏㄠ.

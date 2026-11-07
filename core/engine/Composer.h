@@ -120,8 +120,10 @@ class Composer {
   std::optional<Segment> segmentFrom(size_t start) const;
 
   // Candidates for the segment: same-length phrases first, then the shorter
-  // phrases that start where the segment starts, or, fromEnd, that end where it
-  // ends (for the word before the cursor: 打字, then 字 and the like for its ㄗˋ).
+  // phrases that start where the segment starts, or, fromEnd, the longer phrases
+  // that end where it ends, then its own and the shorter ones (for the word before
+  // the cursor: 打字, then 字 and the like for its ㄗˋ). Each reading's words come
+  // first, then those of the same syllables in other tones (偽造 for ㄨㄟˇ-ㄗㄠˋ).
   std::vector<std::string> candidates(const Segment& segment, bool fromEnd = false);
   // Puts `value`, one of candidates(segment, fromEnd), in the grid where it stands.
   bool choose(const Segment& segment, const std::string& value, bool fromEnd = false);
@@ -132,7 +134,7 @@ class Composer {
   void showReading(bool ending = false);
   void hideReading();
   void endReading();
-  bool startsWithSegment(const Segment& segment, const std::string& reading) const;
+  void replaceReadings(size_t start, size_t length, const std::string& reading);
   // candidates() with where each one starts, in its order.
   std::vector<std::pair<size_t, Formosa::Gramambular2::ReadingGrid::Candidate>> choices(const Segment& segment, bool fromEnd);
   void walk();

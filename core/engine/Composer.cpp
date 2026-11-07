@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 #include <cmath>
 #include <cstring>
 
@@ -51,11 +52,24 @@ class TonelessModel : public LanguageModel {
   TonelessModel(std::shared_ptr<Lexicon> lm, bool abbreviated) : lm_(std::move(lm)), abbreviated_(abbreviated) {}
 
   std::vector<Unigram> getUnigrams(const std::string& reading) override {
-    size_t marker = reading.find(Composer::kAnyTone);
     // Punctuation readings such as _punctuation_* are not syllables.
-    if (marker == std::string::npos || reading[0] == '_') return lm_->getUnigrams(reading);
+    if (reading.find(Composer::kAnyTone) == std::string::npos || reading[0] == '_') return lm_->getUnigrams(reading);
     auto cached = cache_.find(reading);
     if (cached != cache_.end()) return cached->second;
+    std::vector<Unigram> unigrams;
+    std::unordered_set<std::string> values;
+    for (const auto& [key, unigram] : matches(reading)) {
+      if (values.insert(unigram.value()).second) unigrams.push_back(unigram);  // the best, as matches() comes best first
+    }
+    if (cache_.size() >= kCacheSize) cache_.clear();
+    return cache_.emplace(reading, std::move(unigrams)).first->second;
+  }
+
+  // Every dictionary word that a reading with kAnyTone in it matches, with the word's own
+  // reading, best first.
+  const std::vector<std::pair<std::string, Unigram>>& matches(const std::string& reading) {
+    auto cached = matchCache_.find(reading);
+    if (cached != matchCache_.end()) return cached->second;
     std::vector<Typed> typed;
     for (size_t start = 0;;) {
       size_t end = reading.find(kSeparator, start);
@@ -63,11 +77,10 @@ class TonelessModel : public LanguageModel {
       if (end == std::string::npos) break;
       start = end + 1;
     }
-    std::vector<Unigram> unigrams;
-    std::unordered_map<std::string, size_t> indexOf;  // by value
+    std::vector<std::pair<std::string, Unigram>> found;
     std::string_view previous;
     // Every match starts with what was typed before the first kAnyTone; a reading's rows are adjacent.
-    for (std::string_view row : lm_->rowsStartingWith(reading.substr(0, marker))) {
+    for (std::string_view row : lm_->rowsStartingWith(reading.substr(0, reading.find(Composer::kAnyTone)))) {
       std::string_view key = row.substr(0, row.find(' '));
       if (key == previous) continue;
       previous = key;
@@ -76,18 +89,12 @@ class TonelessModel : public LanguageModel {
       for (Unigram& unigram : lm_->getUnigrams(toned)) {
         // The dictionary also lists each lone symbol as itself (ㄉ for ㄉ), which is no syllable;
         // the candidates offer the Zhuyin anyway.
-        if (unigram.value() == toned) continue;
-        auto [at, added] = indexOf.emplace(unigram.value(), unigrams.size());
-        if (added) {
-          unigrams.push_back(std::move(unigram));
-        } else if (unigram.score() > unigrams[at->second].score()) {
-          unigrams[at->second] = std::move(unigram);
-        }
+        if (unigram.value() != toned) found.emplace_back(toned, std::move(unigram));
       }
     }
-    std::stable_sort(unigrams.begin(), unigrams.end(), [](const Unigram& a, const Unigram& b) { return a.score() > b.score(); });
-    if (cache_.size() >= kCacheSize) cache_.clear();
-    return cache_.emplace(reading, std::move(unigrams)).first->second;
+    std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.second.score() > b.second.score(); });
+    if (matchCache_.size() >= kCacheSize) matchCache_.clear();
+    return matchCache_.emplace(reading, std::move(found)).first->second;
   }
 
   bool hasUnigrams(const std::string& reading) override {
@@ -135,7 +142,28 @@ class TonelessModel : public LanguageModel {
   std::shared_ptr<Lexicon> lm_;
   bool abbreviated_;
   std::unordered_map<std::string, std::vector<Unigram>> cache_;
+  std::unordered_map<std::string, std::vector<std::pair<std::string, Unigram>>> matchCache_;
 };
+
+// A grid reading with each syllable in any tone: ㄨㄟˇ-ㄗㄠˋ as ㄨㄟ*-ㄗㄠ*.
+std::string AnyTone(const std::string& reading) {
+  std::string result;
+  for (size_t start = 0;;) {
+    size_t end = reading.find(kSeparator, start);
+    std::string syllable = reading.substr(start, end - start);
+    if (syllable.empty() || syllable.back() != Composer::kAnyTone) {
+      for (const std::string tone : {"ˊ", "ˇ", "ˋ", "˙"}) {
+        if (syllable.ends_with(tone)) syllable.erase(syllable.size() - tone.size());
+      }
+      syllable += Composer::kAnyTone;
+    }
+    if (start > 0) result += kSeparator;
+    result += syllable;
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return result;
+}
 
 
 }  // namespace
@@ -574,30 +602,50 @@ std::optional<Segment> Composer::segmentFrom(size_t start) const {
   return std::nullopt;
 }
 
-// candidatesAt() returns every node overlapping the location; keep the ones
-// that begin where the segment begins: its own reading or a prefix of it.
-bool Composer::startsWithSegment(const Segment& segment, const std::string& reading) const {
-  return reading == segment.reading || segment.reading.rfind(reading + grid_.readingSeparator(), 0) == 0;
-}
-
 std::vector<std::pair<size_t, ReadingGrid::Candidate>> Composer::choices(const Segment& segment, bool fromEnd) {
   std::vector<std::pair<size_t, ReadingGrid::Candidate>> found;
-  const std::string& separator = grid_.readingSeparator();
-  for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(segment.start)) {
-    if (fromEnd ? candidate.reading == segment.reading : startsWithSegment(segment, candidate.reading)) {
-      found.emplace_back(segment.start, candidate);
+  const std::vector<std::string>& readings = grid_.readings();
+  // The words for readings [from, to): the grid's for what was typed, then the dictionary's for
+  // the same syllables in other tones (偽造 for ㄨㄟˇ-ㄗㄠˋ), which the walk never takes on its own.
+  auto add = [&](size_t from, size_t to) {
+    std::string typed = readings[from];
+    for (size_t i = from + 1; i < to; i++) typed += grid_.readingSeparator() + readings[i];
+    for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(from)) {
+      if (candidate.reading == typed) found.emplace_back(from, candidate);
     }
-  }
-  if (!fromEnd) return found;
-  // The readings that end where the segment ends, longest first: ㄗˋ of ㄉㄚˇ-ㄗˋ.
-  std::string rest = segment.reading;
-  for (size_t at = segment.start + 1; at < segment.start + segment.length; at++) {
-    rest.erase(0, rest.find(separator) + separator.size());
-    for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(at)) {
-      if (candidate.reading == rest) found.emplace_back(at, candidate);
+    std::string anyTone = AnyTone(typed);
+    if (typed.find('_') != std::string::npos || anyTone == typed) return;  // punctuation, or already in any tone
+    for (const auto& [reading, unigram] : static_cast<TonelessModel&>(*dictionary_).matches(anyTone)) {
+      if (reading != typed) found.emplace_back(from, ReadingGrid::Candidate(reading, unigram.value(), unigram.rawValue()));
     }
+  };
+  size_t end = segment.start + segment.length;
+  if (!fromEnd) {
+    for (size_t to = end; to > segment.start; to--) add(segment.start, to);
+    return found;
   }
+  // Before the cursor: the longer words that end where the segment ends, longest first; the
+  // segment's own; then the shorter ones, as ㄗˋ of ㄉㄚˇ-ㄗˋ.
+  size_t longest = end > ReadingGrid::kMaximumSpanLength ? end - ReadingGrid::kMaximumSpanLength : 0;
+  for (size_t from = longest; from < segment.start; from++) add(from, end);
+  for (size_t from = segment.start; from < end; from++) add(from, end);
   return found;
+}
+
+// Puts `reading` in the grid in place of readings [start, start + length), as a word read in
+// other tones than were typed is chosen.
+void Composer::replaceReadings(size_t start, size_t length, const std::string& reading) {
+  size_t cursor = grid_.cursor();
+  grid_.setCursor(start + length);
+  for (size_t i = 0; i < length; i++) grid_.deleteReadingBeforeCursor();
+  const std::string& separator = grid_.readingSeparator();
+  for (size_t from = 0;;) {
+    size_t to = reading.find(separator, from);
+    grid_.insertReading(reading.substr(from, to - from));
+    if (to == std::string::npos) break;
+    from = to + separator.size();
+  }
+  grid_.setCursor(cursor);
 }
 
 std::vector<std::string> Composer::candidates(const Segment& segment, bool fromEnd) {
@@ -612,6 +660,10 @@ bool Composer::choose(const Segment& segment, const std::string& value, bool fro
   // Found before walk() rebuilds segments_, which `segment` may belong to.
   for (const auto& [start, candidate] : choices(segment, fromEnd)) {
     if (candidate.value != value) continue;
+    size_t length = std::count(candidate.reading.begin(), candidate.reading.end(), kSeparator) + 1;
+    std::string typed = grid_.readings()[start];
+    for (size_t i = start + 1; i < start + length; i++) typed += grid_.readingSeparator() + grid_.readings()[i];
+    if (typed != candidate.reading) replaceReadings(start, length, candidate.reading);
     if (grid_.overrideCandidate(start, candidate)) {
       endReading();  // a word chosen ends the syllable being typed
       walk();
