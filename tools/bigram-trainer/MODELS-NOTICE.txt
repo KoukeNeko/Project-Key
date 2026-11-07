@@ -27,7 +27,11 @@ data.txt
     c44e81aef24b06f1509f19e1be54c99812d0c43f
     (https://github.com/chewing/libchewing-data), Copyright (c) 2025
     libchewing Core Team, under LGPL-2.1-or-later;
-  - words found in the training text above.
+  - words found in the training text above;
+  - road and district names from 全國路名資料 (national road names, year 115
+    edition), 資料提供者：內政部戶政司 (https://data.gov.tw/dataset/35321), under
+    the Open Government Data License, version 1.0
+    (https://data.gov.tw/license).
   This file is licensed under LGPL-2.1-or-later; the license text is in
   LICENSE-LGPL-2.1.txt. Its source form is the file itself, and
   tools/bigram-trainer/train.sh rebuilds it.
@@ -57,6 +61,9 @@ data.txt
     c44e81aef24b06f1509f19e1be54c99812d0c43f，
     https://github.com/chewing/libchewing-data），Copyright (c) 2025
     libchewing Core Team，LGPL-2.1-or-later；
-  - 從上述訓練文字找出的詞。
+  - 從上述訓練文字找出的詞；
+  - 全國路名資料（115 年版）的路名與鄉鎮市區名，資料提供者：內政部戶政司
+    （https://data.gov.tw/dataset/35321），政府資料開放授權條款第 1 版
+    （https://data.gov.tw/license）。
   這個檔案以 LGPL-2.1-or-later 授權，條文見 LICENSE-LGPL-2.1.txt。檔案本身
   即為原始形式，tools/bigram-trainer/train.sh 可重新建置。
