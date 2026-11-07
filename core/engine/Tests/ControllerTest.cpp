@@ -560,6 +560,22 @@ int main(int argc, char** argv) {
   controller.handleKey(Special(ProjectKey::Key::kLeft));
   assert(!client.panelVisible || client.panel.rows.empty());
   EscapeAll(controller, client);
+  // When set, the keypad's 1-6 pick from the row shown while typing, and typing goes on;
+  // otherwise, and on the main row, they are Zhuyin keys (2 is ㄉ).
+  KeyEvent keypad = Press("2");
+  keypad.numpad = true;
+  settings.set(Setting::kKeypadPicks, 1);
+  Type(controller, "su3");
+  std::string picked = client.panel.rows[0][1];
+  assert(picked != "你" && controller.handleKey(keypad));
+  assert(client.marked == picked && client.panelVisible && client.panel.selectedRow == -1);
+  Type(controller, "2");
+  assert(client.marked == picked + "ㄉ");
+  EscapeAll(controller, client);
+  settings.remove(Setting::kKeypadPicks);
+  Type(controller, "su3");
+  assert(controller.handleKey(keypad) && HasSuffix(client.marked, "ㄉ"));  // 妳ㄉ: the choice above is remembered
+  EscapeAll(controller, client);
 
   std::printf("ControllerTest passed\n");
   return 0;

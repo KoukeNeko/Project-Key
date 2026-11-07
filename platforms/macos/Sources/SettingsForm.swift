@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SettingsForm: View {
   @AppStorage(PKAbbreviatedKey) private var abbreviated = false
+  @AppStorage(PKKeypadPicksKey) private var keypadPicks = false
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
   @AppStorage(PKCapsLockToggleKey) private var capsLockToggle = false
@@ -27,6 +28,10 @@ struct SettingsForm: View {
         }
         Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
         Toggle("簡拼", isOn: $abbreviated)
+        Toggle(isOn: $keypadPicks) {
+          Text("數字鍵盤選字")
+          Text("開啟時數字鍵盤的 1–6 直接選字；主鍵盤的 1–6 仍是注音")
+        }
         Toggle("記住選過的字", isOn: $rememberChoices)
         LabeledContent("選字紀錄") {
           Button("清除") {

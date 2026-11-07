@@ -34,6 +34,7 @@ public sealed partial class MainWindow : Window {
 
     Bind(NextDoubtful, "NextDoubtful");
     Bind(Abbreviated, "Abbreviated", false);
+    Bind(KeypadPicks, "KeypadPicks", false);
     Bind(RememberChoices, "RememberChoices");
     Bind(CapsLockToggle, "CapsLockToggle", false);
     Bind(ShiftToggle, "ShiftToggle");

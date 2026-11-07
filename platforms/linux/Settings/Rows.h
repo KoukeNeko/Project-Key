@@ -36,6 +36,7 @@ inline const std::vector<Group>& Groups() {
            {Row::kChoice, "CandidatePosition", "選字位置", nullptr, {"游標後", "游標前"}, {"游標後（Windows）", "游標前（macOS）"}},
            {Row::kToggle, "NextDoubtful", "選完跳到下一個可疑處"},
            {Row::kToggle, "Abbreviated", "簡拼"},
+           {Row::kToggle, "KeypadPicks", "數字鍵盤選字", "開啟時數字鍵盤的 1–6 直接選字；主鍵盤的 1–6 仍是注音"},
            {Row::kToggle, "RememberChoices", "記住選過的字"},
            {Row::kClearChoices, "", "選字紀錄"},
        }},

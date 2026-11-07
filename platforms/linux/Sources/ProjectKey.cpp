@@ -71,6 +71,7 @@ FCITX_CONFIGURATION(
         this, "Appearance", "候選視窗外觀", static_cast<Appearance>(Settings::DefaultValue(Setting::kAppearance))};
     fcitx::Option<bool> nextDoubtful{this, "NextDoubtful", "選完跳到下一個可疑處", DefaultFlag(Setting::kNextDoubtful)};
     fcitx::Option<bool> abbreviated{this, "Abbreviated", "簡拼", DefaultFlag(Setting::kAbbreviated)};
+    fcitx::Option<bool> keypadPicks{this, "KeypadPicks", "數字鍵盤選字", DefaultFlag(Setting::kKeypadPicks)};
     fcitx::Option<bool> rememberChoices{this, "RememberChoices", "記住選過的字", DefaultFlag(Setting::kRememberChoices)};
     fcitx::OptionWithAnnotation<ProofMode, ProofModeI18NAnnotation> proofPreview{
         this, "ProofPreview", "輸入時的整句預覽", static_cast<ProofMode>(Settings::DefaultValue(Setting::kProofPreview))};
@@ -95,6 +96,7 @@ class ConfigSettings : public Settings {
       case Setting::kProofPreviewLastOn: return LastOn(*config_.proofPreviewLastOn);
       case Setting::kChoosingProofLastOn: return LastOn(*config_.choosingProofLastOn);
       case Setting::kAbbreviated: return *config_.abbreviated;
+      case Setting::kKeypadPicks: return *config_.keypadPicks;
       case Setting::kRememberChoices: return *config_.rememberChoices;
       case Setting::kShiftToggle: return *config_.shiftToggle;
       case Setting::kCapsLockToggle: return *config_.capsLockToggle;
@@ -577,6 +579,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
     k.win = states.test(fcitx::KeyState::Super);
     k.capsLock = states.test(fcitx::KeyState::CapsLock);
     k.isP = sym == FcitxKey_p || sym == FcitxKey_P;
+    k.numpad = sym >= FcitxKey_KP_0 && sym <= FcitxKey_KP_9;
     switch (sym) {
       case FcitxKey_space: k.key = Key::kSpace; k.characters = " "; break;
       case FcitxKey_Return:

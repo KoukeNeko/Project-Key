@@ -12,7 +12,7 @@
 
 namespace ProjectKey::Protocol {
 
-// 2: kShowHint, kHideHint. 3: PanelContent::expanded. A text service and server of different versions refuse
+// 2: kShowHint, kHideHint. 3: PanelContent::expanded, KeyEvent::numpad. A text service and server of different versions refuse
 // each other's messages rather than misread them.
 constexpr uint32_t kVersion = 3;
 
@@ -105,7 +105,7 @@ inline void WriteKey(Writer& w, const KeyEvent& e) {
   w.u8(static_cast<uint8_t>(e.key));
   w.str(e.characters);
   w.u8(static_cast<uint8_t>(int{e.shift} | int{e.control} << 1 | int{e.alt} << 2 | int{e.win} << 3 | int{e.capsLock} << 4 |
-                            int{e.isP} << 5));
+                            int{e.isP} << 5 | int{e.numpad} << 6));
 }
 
 inline KeyEvent ReadKey(Reader& r) {
@@ -119,6 +119,7 @@ inline KeyEvent ReadKey(Reader& r) {
   e.win = flags & 8;
   e.capsLock = flags & 16;
   e.isP = flags & 32;
+  e.numpad = flags & 64;
   return e;
 }
 

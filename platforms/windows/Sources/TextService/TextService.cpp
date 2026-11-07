@@ -280,6 +280,7 @@ KeyEvent TextService::keyEvent(WPARAM vk) const {
   event.win = IsDown(VK_LWIN) || IsDown(VK_RWIN);
   event.capsLock = (GetKeyState(VK_CAPITAL) & 1) != 0;
   event.isP = vk == 'P';
+  event.numpad = vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9;
   switch (vk) {
     case VK_SPACE: event.key = Key::kSpace; event.characters = " "; break;
     case VK_RETURN: event.key = Key::kReturn; break;

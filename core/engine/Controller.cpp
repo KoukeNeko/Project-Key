@@ -86,6 +86,7 @@ int Settings::DefaultValue(Setting setting) {
       return 1;  // Acrylic; macOS registers its own default
     case Setting::kCapsLockToggle:
     case Setting::kAbbreviated:
+    case Setting::kKeypadPicks:
     case Setting::kCandidatePosition:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
@@ -110,6 +111,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kAppearance: return "Appearance";
     case Setting::kCandidatePosition: return "CandidatePosition";
     case Setting::kNextDoubtful: return "NextDoubtful";
+    case Setting::kKeypadPicks: return "KeypadPicks";
   }
   return "";
 }
@@ -524,6 +526,19 @@ bool Controller::handleComposing(const KeyEvent& event) {
   if (key < 0x20 || key > 0x7e) return !empty;
   cursorMoved_ = false;
   typed_ = true;
+  // The keypad's 1-6 pick from the row shown while typing, as its digits say; typing goes on.
+  if (event.numpad && key >= '1' && key <= '6' && rowSegment_ && env_.settings->flag(Setting::kKeypadPicks)) {
+    startChoosingAt(*rowSegment_);
+    int index = key - '1';
+    if (choosing_ && index < rowEnd(0)) {
+      pick(index, /*moveOn=*/false);
+    } else {
+      client_.beep();
+      choosing_ = false;
+      refresh();
+    }
+    return true;
+  }
   if (!event.shift && composer_->isReadingKey(key)) {
     if (empty) composer_->setTextBefore(client_.textBeforeCaret());
     if (composer_->typeReadingKey(key) == Composer::KeyResult::kInvalid) client_.beep();
@@ -755,7 +770,7 @@ void Controller::choose(int index) {
   if (choosing_ && index >= 0 && index < static_cast<int>(candidates_.size())) pick(index);
 }
 
-void Controller::pick(int index) {
+void Controller::pick(int index, bool moveOn) {
   zhuyinEdited_ = true;  // also when picked by a click, which passes no key
   std::optional<Segment> segment = composer_->segmentFrom(activeStart_);
   if (segment && index == readingIndex_) {
@@ -782,7 +797,7 @@ void Controller::pick(int index) {
   }
   if (segment) composer_->choose(*segment, candidates_[index]);
   std::optional<size_t> next;
-  if (env_.settings->flag(Setting::kNextDoubtful)) next = doubtfulAfter(activeStart_, false);
+  if (moveOn && env_.settings->flag(Setting::kNextDoubtful)) next = doubtfulAfter(activeStart_, false);
   if (next) {
     startChoosingAt(*next);
   } else {
@@ -817,6 +832,7 @@ void Controller::commit() {
 }
 
 void Controller::refresh() {
+  rowSegment_.reset();
   if (composer_->isEmpty()) {
     choosing_ = false;
     client_.setComposition(Composition{});
@@ -891,6 +907,7 @@ void Controller::refresh() {
       if (at != guesses.end()) guessAt = static_cast<int>(at - guesses.begin());
     }
   }
+  rowSegment_ = guesses.empty() ? std::nullopt : typing;
   auto showRow = [&](PanelContent& panel) {
     if (guesses.empty()) return;
     panel.rows = {guesses};

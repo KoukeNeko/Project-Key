@@ -26,6 +26,9 @@
       <tk:SettingsCard Header="簡拼">
         <ToggleSwitch x:Name="Abbreviated" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
+      <tk:SettingsCard Header="數字鍵盤選字" Description="開啟時數字鍵盤的 1–6 直接選字；主鍵盤的 1–6 仍是注音">
+        <ToggleSwitch x:Name="KeypadPicks" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
       <tk:SettingsCard Header="記住選過的字">
         <ToggleSwitch x:Name="RememberChoices" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>

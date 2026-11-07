@@ -49,6 +49,10 @@ int main() {
   Protocol::Message readMessage;
   assert(Protocol::ReadMessage(bytes, readMessage) && readMessage.type == Protocol::Request::kShift && readMessage.context == "abc");
   for (size_t length = 0; length < bytes.size(); length++) assert(!Protocol::ReadMessage(bytes.substr(0, length), readMessage));
+  Protocol::Message keypad{Protocol::Request::kKeyDown, {}, false, ""};
+  keypad.key.characters = "1";
+  keypad.key.numpad = true;
+  assert(Protocol::ReadMessage(Protocol::WriteMessage(keypad), readMessage) && readMessage.key.numpad && readMessage.key.characters == "1");
 
   std::printf("ProtocolTest passed\n");
   return 0;

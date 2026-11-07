@@ -79,6 +79,7 @@ enum class Setting {
   kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
   kCandidatePosition,   // candidates for the word: 0 after the cursor (Windows), 1 before it (macOS)
   kNextDoubtful,        // picking a candidate moves on to the next doubtful word
+  kKeypadPicks,         // the keypad's 1-6 pick from the row shown while typing
 };
 
 class Settings {
@@ -137,6 +138,7 @@ struct KeyEvent {
   std::string characters;  // what the key types in a US layout with Shift and Caps Lock applied; empty for none
   bool shift = false, control = false, alt = false, win = false, capsLock = false;
   bool isP = false;  // the P key, for ⌃⇧P whatever it types
+  bool numpad = false;  // a digit key on the numeric keypad
 };
 
 class Controller {
@@ -207,7 +209,8 @@ class Controller {
   // The segment's candidates as the grid lists them, with its Zhuyin at *readingIndex (-1 for none).
   std::vector<std::string> choicesFor(const Segment& segment, int* readingIndex) const;
   void startChoosingAt(size_t start);
-  void pick(int index);
+  // moveOn: then to the next doubtful segment, as Setting::kNextDoubtful says.
+  void pick(int index, bool moveOn = true);
 
   void commit();
   // Text the composition put in the document, for what the user typed (Environment::personal).
@@ -233,6 +236,7 @@ class Controller {
   bool shiftAlone_ = false;
   bool cursorMoved_ = false;  // arrows moved the cursor since the last typed key
   bool typed_ = false;        // this key typed or deleted at the cursor
+  std::optional<size_t> rowSegment_;  // the segment whose words the row shown while typing offers
   std::string shown_;  // the composition as last shown, pending reading included
   bool abbreviated_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   // What English mode let through since the last other key, so Tab

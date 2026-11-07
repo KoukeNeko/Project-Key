@@ -241,6 +241,7 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
   key.win = flags & NSEventModifierFlagCommand;
   key.capsLock = flags & NSEventModifierFlagCapsLock;
   key.isP = event.keyCode == kVK_ANSI_P;
+  key.numpad = flags & NSEventModifierFlagNumericPad;  // the arrows carry it too; only digits look at it
   return key;
 }
 
