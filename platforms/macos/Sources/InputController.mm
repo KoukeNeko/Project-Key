@@ -120,6 +120,7 @@ ProjectKey::Environment &SharedEnvironment() {
       return static_cast<int>([PKCandidatePanel columnsSpannedBy:String(candidate)]);
     };
     env->tabKeycap = "⇥";
+    env->shiftTabKeycap = "⇧⇥";
     env->appTypesUnhandledKeys = true;
     env->hintWindow = true;
     return env;

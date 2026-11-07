@@ -465,10 +465,20 @@ bool Controller::handleComposing(const KeyEvent& event) {
       startChoosingAt(defaultSegment());
       return true;
     case Key::kDown:
-    case Key::kTab:
       if (empty) return false;
       if (composer_->pendingReading().empty()) startChoosingAt(openSegment().value_or(defaultSegment()));
       return true;
+    case Key::kTab: {
+      // The sentence as the proof row has it: guesses for syllables still shown as Zhuyin. Shift+Tab
+      // when Tab offers English instead.
+      if (empty) return false;
+      std::string sentence = composer_->text() + composer_->pendingReading();
+      client_.insertText(sentence);
+      learn(sentence);
+      composer_->clear();
+      commit();
+      return true;
+    }
     case Key::kReturn:
       if (empty) return false;
       // The text as shown, except that a syllable still open without a tone goes as its
@@ -982,6 +992,7 @@ void Controller::refresh() {
   content.pendingReading = ToUtf8(reading);
   content.caret = caret - static_cast<uint32_t>(reading.size()) - openGrowth;
   content.showsProof = showsProof;
+  if (showsProof && !choosing_) content.keyHint = hintApart ? env_.shiftTabKeycap : env_.tabKeycap;  // Tab sends it
   if (choosing_) {
     int row = rowOf(selection_), rows = static_cast<int>(rowStarts_.size());
     // Collapsed: the selection's row. Expanded: up to kExpandedRows rows, scrolled to the selection.

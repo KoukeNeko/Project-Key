@@ -506,7 +506,7 @@ void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windo
   }
   uint32_t length = 0;
   for (const std::string& segment : c.segments) length += Utf16Length(segment);
-  const bool hint = !c.keyHint.empty();
+  const bool hint = !c.replacedText.empty();  // a conversion preview, not the proof row's Tab
   // The pending reading, or a caret line when there is none, sits at the cursor.
   auto drawCursor = [&](float& at) {
     if (!c.pendingReading.empty()) {

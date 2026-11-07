@@ -441,7 +441,7 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
   std::wstring joined;
   for (const std::string& segment : content_->segments) joined += Widen(segment);
   const uint32_t length = static_cast<uint32_t>(joined.size());
-  const bool hint = !content_->keyHint.empty();
+  const bool hint = !content_->replacedText.empty();  // a conversion preview, not the proof row's Tab
   // The pending reading, or a caret line when there is none, sits at the cursor.
   auto drawCursor = [&](float& at) {
     std::wstring reading = Widen(content_->pendingReading);

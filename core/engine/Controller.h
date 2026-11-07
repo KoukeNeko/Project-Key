@@ -116,6 +116,7 @@ struct Environment {
   std::function<int(const std::string&)> columnsSpannedBy;
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
   std::string tabKeycap = "Tab";  // the key the conversion previews end with
+  std::string shiftTabKeycap = "Shift+Tab";  // the proof row's, while Tab offers English
   // macOS lets the app type a key the input method returns; TSF does not
   // deliver a key once its test phase handed it on, so there the input method types it.
   bool appTypesUnhandledKeys = false;

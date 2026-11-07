@@ -519,11 +519,11 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   }];
 }
 
-// What the window is showing, apart from the words: the rows, the proof row, the keycap. Typing
-// and choosing look alike, so going from one to the other is no change of layout.
+// What the window is showing, apart from the words: the rows, the proof row. Typing and
+// choosing look alike, so going from one to the other, Tab keycap and all, is no change of layout.
 static NSString *Layout(PKPanelContent *content) {
   if (!content) return @"";
-  return [NSString stringWithFormat:@"%d%d%d", content.rows != nil, content.showsProof, content.keyHint != nil];
+  return [NSString stringWithFormat:@"%d%d", content.rows != nil, content.showsProof];
 }
 
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect {

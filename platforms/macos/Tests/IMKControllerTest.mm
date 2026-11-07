@@ -252,7 +252,7 @@ int main() {
     assert([[hint.segments componentsJoinedByString:@""] isEqualToString:@"我好"] && [hint.replacedText isEqualToString:@"ji3cl3"]);
     assert([controller handleEvent:Key(@"\t", kVK_Tab) client:client]);
     assert([client.committed hasSuffix:@"hello "] && [client.marked isEqualToString:@"我好"]);
-    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
+    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.replacedText == nil);
     assert([controller handleEvent:Key(@"r") client:client]);  // back in 中
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
 
@@ -287,12 +287,12 @@ int main() {
     // Turned off in settings: no preview.
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"ZhuyinToEnglish"];
     Type(controller, client, @"hello");
-    assert(!PKCandidatePanel.hint.visible && (!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil));
+    assert(!PKCandidatePanel.hint.visible && (!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.replacedText == nil));
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
     [NSUserDefaults.standardUserDefaults removeObjectForKey:@"ZhuyinToEnglish"];
     // Real Zhuyin is left alone, even when it spells something: "su " is ㄋㄧ as well as "su".
     Type(controller, client, @"su ");
-    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.keyHint == nil);
+    assert(!PKCandidatePanel.shared.visible || PKCandidatePanel.shared.content.replacedText == nil);
     while (client.marked.length) [controller handleEvent:Key(@"\x1b", kVK_Escape) client:client];
 
     // With its setting on (off by default), each Caps Lock press switches 中/英; the lock it

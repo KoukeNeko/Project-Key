@@ -435,7 +435,7 @@ int main(int argc, char** argv) {
   assert(Joined(client.panel.segments) == "我好" && client.panel.replacedText == "ji3cl3");
   assert(controller.handleKey(Special(ProjectKey::Key::kTab)));
   assert(HasSuffix(client.committed, "hello ") && client.marked == "我好");
-  assert(!client.panelVisible || client.panel.keyHint.empty());
+  assert(!client.panelVisible || client.panel.replacedText.empty());
   assert(controller.handleKey(Press("r")));  // back in 中
 
   // The reverse: English typed in 中 shows what Tab turns it into,
@@ -452,16 +452,16 @@ int main(int argc, char** argv) {
   TapShift(controller);
   assert(HasSuffix(client.committed, "ji3") && client.marked.empty() && !controller.englishMode());
   EscapeAll(controller, client);
-  // Turned off in settings: no preview, and Tab opens candidates as usual.
+  // Turned off in settings: no preview, and Tab sends the sentence as usual.
   settings.set(Setting::kZhuyinToEnglish, 0);
   Type(controller, "hello");
-  assert(!client.panelVisible || client.panel.keyHint.empty());
-  assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && !client.marked.empty());
+  assert(!client.panelVisible || client.panel.replacedText.empty());
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && client.marked.empty());
   EscapeAll(controller, client);
   settings.remove(Setting::kZhuyinToEnglish);
   // Real Zhuyin is left alone, even when it spells something: "su " is ㄋㄧ as well as "su".
   Type(controller, "su ");
-  assert(!client.panelVisible || client.panel.keyHint.empty());
+  assert(!client.panelVisible || client.panel.replacedText.empty());
   EscapeAll(controller, client);
 
   // The English must still be right before the caret: if the app moved it, Tab is a Tab.
@@ -477,16 +477,15 @@ int main(int argc, char** argv) {
 
   // Keys a Shift ended by committing are not behind the next composition: "hello" in 中,
   // Shift, ji3 and Tab in 英 make 我, with no offer to turn it into "hello", and the next
-  // Tab opens the candidates instead of typing it.
+  // Tab sends 我 instead of typing it.
   Type(controller, "hello");
   TapShift(controller);
   assert(controller.englishMode() && client.marked.empty());
   for (std::string key : {"j", "i", "3"}) controller.handleKey(Press(key)), client.committed += key;
   assert(controller.handleKey(Special(ProjectKey::Key::kTab)));
-  assert(client.marked == "我" && (!client.panelVisible || client.panel.keyHint.empty()));
-  size_t beforeTab = client.committed.size();
+  assert(client.marked == "我" && (!client.panelVisible || client.panel.replacedText.empty()));
   assert(controller.handleKey(Special(ProjectKey::Key::kTab)));
-  assert(client.marked == "我" && client.committed.size() == beforeTab && !controller.englishMode());
+  assert(client.marked.empty() && HasSuffix(client.committed, "我") && !controller.englishMode());
   EscapeAll(controller, client);
 
   // Off by default, Caps Lock leaves 中/英 alone.
@@ -607,6 +606,22 @@ int main(int argc, char** argv) {
   assert(client.marked == "金天");
   EscapeAll(controller, client);
   settings.remove(Setting::kCandidatePosition);
+
+  // Tab sends the sentence as the proof row has it, which ends in the Tab keycap: 你好 for 你ㄏㄠ.
+  settings.set(Setting::kAbbreviated, 1);
+  settings.set(Setting::kProofPreview, 0);  // always show the proof row
+  Type(controller, "sucl");
+  assert(client.marked == "你ㄏㄠ" && client.panel.showsProof && client.panel.keyHint == "Tab");
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && HasSuffix(client.committed, "你好") && client.marked.empty());
+  // While Tab offers English, in a window of its own, Shift+Tab sends the sentence.
+  env.hintWindow = true;
+  Type(controller, "ja");
+  assert(client.hint && client.panel.keyHint == "Shift+Tab");
+  KeyEvent shiftTab = Special(ProjectKey::Key::kTab);
+  shiftTab.shift = true;
+  assert(controller.handleKey(shiftTab) && HasSuffix(client.committed, "我們") && client.marked.empty());
+  env.hintWindow = false;
+  settings.remove(Setting::kProofPreview);
 
   std::printf("ControllerTest passed\n");
   return 0;
