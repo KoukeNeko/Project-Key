@@ -85,6 +85,40 @@ def run_engine(command, rows):
     return outputs
 
 
+# Spellings the Ministry of Education dictionary accepts either way. Word pairs
+# rather than characters where the characters are not interchangeable everywhere
+# (作業 is never 做業, 里 is never 裡).
+VARIANTS = [
+    ("臺", "台"), ("裏", "裡"), ("佔", "占"),
+    ("計劃", "計畫"), ("公佈", "公布"), ("發佈", "發布"), ("宣佈", "宣布"), ("分佈", "分布"), ("佈置", "布置"),
+    ("盡量", "儘量"), ("了解", "瞭解"), ("搜集", "蒐集"), ("寄托", "寄託"), ("禁欲", "禁慾"), ("刮風", "颳風"),
+    ("橋梁", "橋樑"), ("干貝", "乾貝"), ("做為", "作為"), ("做法", "作法"), ("黏性", "粘性"), ("帳號", "賬號"),
+]
+
+
+def accept_variants(expected, actual):
+    """`actual` with each accepted alternative spelling of `expected`'s text turned back into `expected`'s.
+
+    >>> accept_variants("臺北的計劃", "台北的計畫")
+    '臺北的計劃'
+    >>> accept_variants("內湖里的", "內湖裡的")
+    '內湖裡的'
+    """
+    # shortcut: pairs match without word boundaries, so 工做為 would pass for 工作為;
+    # no engine produces that, upgrade to segmented matching if one does.
+    if len(actual) != len(expected):
+        return actual
+    out = list(actual)
+    for a, b in VARIANTS:
+        for x, y in ((a, b), (b, a)):
+            start = expected.find(x)
+            while start >= 0:
+                if actual[start:start + len(y)] == y:
+                    out[start:start + len(x)] = x
+                start = expected.find(x, start + 1)
+    return "".join(out)
+
+
 def error_spans(expected, actual):
     """Contiguous wrong stretches; each one costs the user roughly one correction."""
     return sum(tag != "equal" for tag, *_ in difflib.SequenceMatcher(None, expected, actual, autojunk=False).get_opcodes())
@@ -102,11 +136,12 @@ def percentile(values, p):
 
 def summarize(rows, outputs):
     chars = sum(len(row["sentence"]) for row in rows)
+    pairs = [(row["sentence"], accept_variants(row["sentence"], text)) for row, (text, _) in zip(rows, outputs)]
     return {
         "sentences": len(rows),
-        "exact": sum(row["sentence"] == text for row, (text, _) in zip(rows, outputs)),
-        "char_acc": 1 - sum(char_errors(row["sentence"], text) for row, (text, _) in zip(rows, outputs)) / chars,
-        "corrections": sum(error_spans(row["sentence"], text) for row, (text, _) in zip(rows, outputs)),
+        "exact": sum(expected == text for expected, text in pairs),
+        "char_acc": 1 - sum(char_errors(expected, text) for expected, text in pairs) / chars,
+        "corrections": sum(error_spans(expected, text) for expected, text in pairs),
     }
 
 
@@ -132,7 +167,7 @@ def report(rows, results, slip=None):
         lines.append(f"| {domain} | " + " | ".join(cells) + " |")
     lines += ["", "## 錯誤句", ""]
     for i, row in enumerate(rows):
-        wrong = {name: outputs[i][0] for name, outputs in results.items() if outputs[i][0] != row["sentence"]}
+        wrong = {name: outputs[i][0] for name, outputs in results.items() if accept_variants(row["sentence"], outputs[i][0]) != row["sentence"]}
         if wrong:
             lines.append(f"- {row['sentence']}（{row['domain']}）")
             lines += [f"  - {name}：{text}" for name, text in wrong.items()]
