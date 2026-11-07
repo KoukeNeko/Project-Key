@@ -12,9 +12,9 @@
 
 namespace ProjectKey::Protocol {
 
-// 2: kShowHint, kHideHint. A text service and server of different versions refuse
+// 2: kShowHint, kHideHint. 3: PanelContent::expanded. A text service and server of different versions refuse
 // each other's messages rather than misread them.
-constexpr uint32_t kVersion = 2;
+constexpr uint32_t kVersion = 3;
 
 enum class Request : uint8_t {
   kKeyDown = 1,       // KeyEvent
@@ -155,6 +155,7 @@ inline void WritePanel(Writer& w, const PanelContent& p) {
   w.i32(p.selectedRow);
   w.i32(p.selection);
   w.str(p.pageLabel);
+  w.boolean(p.expanded);
 }
 
 inline PanelContent ReadPanel(Reader& r) {
@@ -174,6 +175,7 @@ inline PanelContent ReadPanel(Reader& r) {
   p.selectedRow = r.i32();
   p.selection = r.i32();
   p.pageLabel = r.str();
+  p.expanded = r.boolean();
   return p;
 }
 

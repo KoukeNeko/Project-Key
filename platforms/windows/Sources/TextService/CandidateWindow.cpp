@@ -195,6 +195,16 @@ float CandidateWindow::keyWidth() const {
   return std::max(kKeyHeight, fonts_.widthOf(Widen(content_->keyHint), fonts_.key()) + 2 * kKeyPadding);
 }
 
+// The first row's end: a down chevron while folded with more rows; unfolded, the page label
+// and an up chevron. Every row keeps room for them and for the widest label (999/999, or
+// wider for more rows), so the window keeps its width from typing to choosing, folded or not.
+float CandidateWindow::tailWidth() const {
+  std::string total = content_->pageLabel.substr(content_->pageLabel.find('/') + 1);
+  if (total.size() < 3) total = "999";
+  float label = fonts_.widthOf(Widen(total + "/" + total), fonts_.page());
+  return kPageLeft + label + kChevronGap + kChevronWidth + kChevronInset;
+}
+
 D2D1_SIZE_F CandidateWindow::fittingSize() const {
   float width = 0;
   if (content_->showsProof) {
@@ -206,16 +216,8 @@ D2D1_SIZE_F CandidateWindow::fittingSize() const {
     width = std::max(width, kProofLeft + fonts_.widthOf(Widen(sentence), fonts_.proof()) + key + kProofRight);
   }
   if (!content_->rows.empty()) {
-    // As wide as the fullest visible row, so a short single row stays compact.
-    int columns = 0;
-    for (const auto& row : content_->rows) {
-      int used = 0;
-      for (const std::string& candidate : row) used += fonts_.span(Widen(candidate));
-      columns = std::max(columns, used);
-    }
-    float row = kRowLeft + columns * (fonts_.columnWidth() + kCellGap) + kRowRight;
-    if (!content_->pageLabel.empty()) row += kPageLeft + fonts_.widthOf(Widen(content_->pageLabel), fonts_.page()) + kPageRight;
-    width = std::max(width, row);
+    float row = kRowLeft + kGridColumns * (fonts_.columnWidth() + kCellGap);
+    width = std::max(width, row + tailWidth());
   }
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
   return D2D1::SizeF(width, proofHeight() + separator + rowHeight());
@@ -229,15 +231,18 @@ float CandidateWindow::rowTop() const {
 D2D1_RECT_F CandidateWindow::selectionRect() const {
   if (!content_) return {};
   const auto& rows = content_->rows;
-  if (content_->selectedRow < 0 || content_->selectedRow >= static_cast<int>(rows.size())) return {};
-  const auto& row = rows[content_->selectedRow];
+  // While typing (selectedRow -1), the one row, drawn as when choosing though its digits type
+  // Zhuyin, so choosing from it changes nothing on screen.
+  int labeledRow = std::max(0, content_->selectedRow);
+  if (labeledRow >= static_cast<int>(rows.size())) return {};
+  const auto& row = rows[labeledRow];
   if (content_->selection < 0 || content_->selection >= static_cast<int>(row.size())) return {};
   float cellHeight = kCellTop + kCellLine + kCellBottom;
   int column = 0;
   for (int i = 0; i < content_->selection; i++) column += fonts_.span(Widen(row[i]));
   int span = fonts_.span(Widen(row[content_->selection]));
   float left = kRowLeft + column * (fonts_.columnWidth() + kCellGap);
-  float top = rowTop() + kRowTop + content_->selectedRow * (cellHeight + kCellGap);
+  float top = rowTop() + kRowTop + labeledRow * (cellHeight + kCellGap);
   return D2D1::RectF(left, top, left + span * fonts_.columnWidth() + (span - 1) * kCellGap, top + cellHeight);
 }
 
@@ -495,7 +500,7 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
   float labelWidth = fonts_.widthOf(L"6", fonts_.label());
   for (size_t r = 0; r < content_->rows.size(); r++) {
     float cellTop = top + kRowTop + r * (cellHeight + kCellGap);
-    bool labeled = static_cast<int>(r) == content_->selectedRow;
+    bool labeled = static_cast<int>(r) == std::max(0, content_->selectedRow);  // as selectionRect says
     int column = 0;
     const auto& row = content_->rows[r];
     for (size_t i = 0; i < row.size(); i++) {
@@ -514,17 +519,26 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
                                  on ? onLabel.Get() : muted.Get());
         }
       }
-      bool typing = content_->selectedRow < 0;  // no digits: the word centered in its cell
-      float wordLeft = typing ? x + (span * fonts_.columnWidth() + (span - 1) * kCellGap - word.width) / 2 : x + kCellSide + labelWidth + kLabelGap;
+      float wordLeft = x + kCellSide + labelWidth + kLabelGap;
       if (word.layout) {
-        bool dim = typing && static_cast<int>(i) != content_->selection;
-        target->DrawTextLayout(D2D1::Point2F(wordLeft, wordTop), word.layout.Get(), on ? white.Get() : dim ? muted.Get() : text.Get());
+        target->DrawTextLayout(D2D1::Point2F(wordLeft, wordTop), word.layout.Get(), on ? white.Get() : text.Get());
       }
     }
   }
-  if (!content_->pageLabel.empty()) {  // the page label sits on the first row
-    Line page = Measure(fonts_, Widen(content_->pageLabel), fonts_.page());
-    DrawLine(target, page, width - kRowRight - kPageRight - page.width, top + kRowTop + kCellTop, kCellLine, muted.Get());
+  if (!content_->pageLabel.empty()) {  // the chevron and page label sit on the first row
+    float x = width - kChevronInset - kChevronWidth, middle = top + kChevronMiddle;
+    float tip = content_->expanded ? -kChevronHeight / 2 : kChevronHeight / 2;  // up or down
+    Microsoft::WRL::ComPtr<ID2D1StrokeStyle> roundCaps;
+    factory_->CreateStrokeStyle(D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                                            D2D1_LINE_JOIN_ROUND),
+                                nullptr, 0, &roundCaps);
+    D2D1_POINT_2F apex = D2D1::Point2F(x + kChevronWidth / 2, middle + tip);
+    target->DrawLine(D2D1::Point2F(x, middle - tip), apex, muted.Get(), kChevronLine, roundCaps.Get());
+    target->DrawLine(apex, D2D1::Point2F(x + kChevronWidth, middle - tip), muted.Get(), kChevronLine, roundCaps.Get());
+    if (content_->expanded) {
+      Line page = Measure(fonts_, Widen(content_->pageLabel), fonts_.page());
+      DrawLine(target, page, x - kChevronGap - page.width, top + kRowTop + kCellTop, kCellLine, muted.Get());
+    }
   }
 }
 

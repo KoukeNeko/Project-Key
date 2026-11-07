@@ -239,6 +239,7 @@ void Controller::toggleMode() {
 bool Controller::handleKey(const KeyEvent& original) {
   KeyEvent event = original;
   shiftAlone_ = false;
+  typed_ = false;
   if (composer_->isEmpty()) {
     makeComposer();
     // With both switches turned off there is no way back to 中.
@@ -454,6 +455,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
     case Key::kSpace:
       if (composer_->hasPendingReading()) {
         if (composer_->completeWithFirstTone() == Composer::KeyResult::kInvalid) client_.beep();
+        typed_ = true;
         refresh();
         return true;
       }
@@ -479,6 +481,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
     case Key::kBackspace:
       if (empty) return false;
       composer_->backspace();
+      typed_ = !cursorMoved_;
       refresh();
       return true;
     case Key::kEscape:
@@ -520,6 +523,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
   char key = SingleCharacter(event);
   if (key < 0x20 || key > 0x7e) return !empty;
   cursorMoved_ = false;
+  typed_ = true;
   if (!event.shift && composer_->isReadingKey(key)) {
     if (empty) composer_->setTextBefore(client_.textBeforeCaret());
     if (composer_->typeReadingKey(key) == Composer::KeyResult::kInvalid) client_.beep();
@@ -661,9 +665,14 @@ size_t Controller::defaultSegment() const {
 
 std::optional<size_t> Controller::openSegment() const {
   if (composer_->shownReading().empty()) return std::nullopt;
-  size_t open = composer_->cursor() - 1;
+  return segmentBeforeCursor();
+}
+
+std::optional<size_t> Controller::segmentBeforeCursor() const {
+  if (composer_->cursor() == 0) return std::nullopt;
+  size_t before = composer_->cursor() - 1;
   for (const Segment& segment : composer_->segments()) {
-    if (open >= segment.start && open < segment.start + segment.length) return segment.start;
+    if (before >= segment.start && before < segment.start + segment.length) return segment.start;
   }
   return std::nullopt;
 }
@@ -697,26 +706,30 @@ std::optional<size_t> Controller::doubtfulAfter(size_t start, bool backwards) co
   return doubtful.front();
 }
 
-void Controller::startChoosingAt(size_t start) {
-  std::optional<Segment> segment = composer_->segmentFrom(start);
-  if (!segment) return;
-  std::vector<std::string> candidates = composer_->candidates(*segment);
-  if (candidates.empty()) return;
+std::vector<std::string> Controller::choicesFor(const Segment& segment, int* readingIndex) const {
+  std::vector<std::string> candidates = composer_->candidates(segment);
   // The syllables' Zhuyin itself, as the system keyboards offer it: last in the first row when
   // all six columns hold one candidate each (iOS) and it fits that column, otherwise right after
   // the first row, which keeps the candidates' digits and leaves no column empty.
-  readingIndex_ = -1;
-  if (segment->reading.rfind("_", 0) != 0) {  // punctuation readings start with _
-    std::string zhuyin;
-    for (char c : segment->reading) {
-      if (c != '-' && c != Composer::kAnyTone) zhuyin += c;  // the grid's separator
-    }
-    if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
-      int firstRow = static_cast<int>(firstRowSize(candidates));
-      readingIndex_ = firstRow < kGridColumns || span(zhuyin) > 1 ? firstRow : kGridColumns - 1;
-      candidates.insert(candidates.begin() + readingIndex_, zhuyin);
-    }
+  *readingIndex = -1;
+  if (candidates.empty() || segment.reading.rfind("_", 0) == 0) return candidates;  // punctuation readings start with _
+  std::string zhuyin;
+  for (char c : segment.reading) {
+    if (c != '-' && c != Composer::kAnyTone) zhuyin += c;  // the grid's separator
   }
+  if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
+    int firstRow = static_cast<int>(firstRowSize(candidates));
+    *readingIndex = firstRow < kGridColumns || span(zhuyin) > 1 ? firstRow : kGridColumns - 1;
+    candidates.insert(candidates.begin() + *readingIndex, zhuyin);
+  }
+  return candidates;
+}
+
+void Controller::startChoosingAt(size_t start) {
+  std::optional<Segment> segment = composer_->segmentFrom(start);
+  if (!segment) return;
+  std::vector<std::string> candidates = choicesFor(*segment, &readingIndex_);
+  if (candidates.empty()) return;
   choosing_ = true;
   expanded_ = false;
   firstRow_ = 0;
@@ -822,8 +835,11 @@ void Controller::refresh() {
   // in the candidates. Not while choosing, where the text is what is chosen.
   std::u16string open = choosing_ ? u"" : ToUtf16(composer_->shownReading());
   uint32_t openGrowth = 0;
-  // That word is a guess, so the proof row shows it marked in the sentence.
+  // That word is a guess, so the proof row shows it marked in the sentence. With no syllable
+  // open, the word just typed takes its place, so the panel stays up from one syllable to the
+  // next instead of fading out at each tone.
   std::optional<size_t> typing = choosing_ ? std::nullopt : openSegment();
+  if (!typing && !choosing_ && typed_) typing = segmentBeforeCursor();
   for (const Segment& segment : composer_->segments()) {
     std::u16string text = ToUtf16(segment.text);
     uint32_t length = static_cast<uint32_t>(text.size());
@@ -865,8 +881,11 @@ void Controller::refresh() {
   std::vector<std::string> guesses;
   int guessAt = -1;
   if (typing) {
-    if (std::optional<Segment> segment = composer_->segmentFrom(*typing)) {
-      std::vector<std::string> all = composer_->candidates(*segment);
+    std::optional<Segment> segment = composer_->segmentFrom(*typing);
+    if (segment && segment->reading[0] != '_') {  // punctuation keeps the proof row alone
+      // The grid's first row, as choosing shows it, so a digit means the same word in both.
+      int readingIndex;
+      std::vector<std::string> all = choicesFor(*segment, &readingIndex);
       guesses.assign(all.begin(), all.begin() + static_cast<std::ptrdiff_t>(firstRowSize(all)));
       auto at = std::find(guesses.begin(), guesses.end(), segment->text);
       if (at != guesses.end()) guessAt = static_cast<int>(at - guesses.begin());
@@ -897,14 +916,16 @@ void Controller::refresh() {
     showPanel(*hint);
     return;
   }
+  // While typing, the row of guesses stands alone, as the grid does once chosen from; the
+  // proof row joins it as the setting says (by default when something is doubtful).
   bool showsProof = proofVisible();
-  if (!choosing_ && !showsProof && !typing) {
+  if (!choosing_ && !showsProof && guesses.empty()) {
     hidePanel();
     return;
   }
   content.pendingReading = ToUtf8(reading);
   content.caret = caret - static_cast<uint32_t>(reading.size()) - openGrowth;
-  content.showsProof = showsProof || typing;
+  content.showsProof = showsProof;
   if (choosing_) {
     int row = rowOf(selection_), rows = static_cast<int>(rowStarts_.size());
     // Collapsed: the selection's row. Expanded: up to kExpandedRows rows, scrolled to the selection.
@@ -922,6 +943,7 @@ void Controller::refresh() {
     content.selectedRow = row - first;
     content.selection = selection_ - rowStarts_[row];
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
+    content.expanded = expanded_;
   } else {
     showRow(content);
   }

@@ -39,8 +39,10 @@ int main(int argc, const char *argv[]) {
       content.selectedRow = 1;
       content.selection = 1;
       content.pageLabel = @"2/9";
+      content.expanded = YES;
       [[PKCandidatePanel pngForContent:content proofBelow:NO] writeToFile:[dir stringByAppendingPathComponent:@"expanded.png"] atomically:YES];
       content.rows = nil;
+      content.expanded = NO;
       content.activeSegment = -1;
       content.segments = @[ @"我們", @"把", @"舊的", @"程式", @"重構", @"成" ];
       content.pendingReading = @"ㄇㄛˊ";

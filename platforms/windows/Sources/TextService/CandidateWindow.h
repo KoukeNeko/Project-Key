@@ -39,6 +39,7 @@ class CandidateWindow {
   D2D1_SIZE_F fittingSize() const;
   float proofHeight() const;
   float rowHeight() const;
+  float tailWidth() const;
   float rowTop() const;
   D2D1_RECT_F selectionRect() const;
   D2D1_RECT_F shownSelectionRect() const;

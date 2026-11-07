@@ -73,6 +73,7 @@ class Panel {
   float keyWidth(const PanelContent& content) const;
   float proofWidth(const PanelContent& content) const;
   float fittingWidth() const;
+  float tailWidth() const;
   Rect selectionRect() const;
   Rect shownSelectionRect() const;
   void drawProof(cairo_t* cr, const PanelContent& content, float top, float width);

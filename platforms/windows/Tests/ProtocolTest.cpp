@@ -20,6 +20,7 @@ int main() {
   show.panel.doubtful = {false, true};
   show.panel.rows = {{"好", "號"}, {"耗"}};
   show.panel.pageLabel = "1/2";
+  show.panel.expanded = true;
   Protocol::Operation compose;
   compose.op = Protocol::Op::kSetComposition;
   compose.composition.text = "我們好";
@@ -36,6 +37,7 @@ int main() {
   assert(read.operations.size() == 5 && read.operations[0].text == "ㄅ");
   assert(read.operations[1].composition.text == "我們好" && read.operations[1].composition.caret == 3);
   assert(read.operations[2].panel.rows == show.panel.rows && read.operations[2].panel.doubtful == show.panel.doubtful);
+  assert(read.operations[2].panel.expanded);
   assert(read.operations[3].op == Protocol::Op::kShowHint && read.operations[3].panel.replacedText == "我ㄇ");
   assert(read.operations[4].op == Protocol::Op::kHideHint);
   for (size_t length = 0; length < bytes.size(); length++) {

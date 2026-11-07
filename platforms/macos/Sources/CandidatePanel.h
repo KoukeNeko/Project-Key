@@ -24,6 +24,7 @@ FOUNDATION_EXPORT BOOL PKGlassAvailable(void);  // C linkage, for SettingsForm.s
 @property(nonatomic) NSInteger selectedRow;  // index into rows; only this row carries the 1-6 labels
 @property(nonatomic) NSInteger selection;    // index within the selected row
 @property(nonatomic, copy, nullable) NSString *pageLabel;               // "1/3", nil for a single page
+@property(nonatomic) BOOL expanded;  // several rows unfold; otherwise a page label means ↓ unfolds them
 @end
 
 extern const NSInteger PKGridColumns;

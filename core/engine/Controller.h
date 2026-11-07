@@ -33,6 +33,7 @@ struct PanelContent {
   int selectedRow = 0;          // only this row carries the 1-6 labels; -1 while typing, none does
   int selection = 0;            // index within the selected row; while typing, the guess in row 0 (-1 for none)
   std::string pageLabel;        // "1/3", empty for a single page
+  bool expanded = false;        // several rows unfold; otherwise a page label means ↓ unfolds them
 };
 
 // The marked text in the document.
@@ -198,10 +199,13 @@ class Controller {
   size_t defaultSegment() const;
   // The segment holding the syllable still open without a tone, while its word shows.
   std::optional<size_t> openSegment() const;
+  std::optional<size_t> segmentBeforeCursor() const;
   int span(const std::string& candidate) const;
   // How many of words, from the first, fit one grid row.
   size_t firstRowSize(const std::vector<std::string>& words) const;
   std::optional<size_t> doubtfulAfter(size_t start, bool backwards) const;
+  // The segment's candidates as the grid lists them, with its Zhuyin at *readingIndex (-1 for none).
+  std::vector<std::string> choicesFor(const Segment& segment, int* readingIndex) const;
   void startChoosingAt(size_t start);
   void pick(int index);
 
@@ -228,6 +232,7 @@ class Controller {
   int firstRow_ = 0;       // first grid row on screen
   bool shiftAlone_ = false;
   bool cursorMoved_ = false;  // arrows moved the cursor since the last typed key
+  bool typed_ = false;        // this key typed or deleted at the cursor
   std::string shown_;  // the composition as last shown, pending reading included
   bool abbreviated_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   // What English mode let through since the last other key, so Tab

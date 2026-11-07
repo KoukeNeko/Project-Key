@@ -181,12 +181,12 @@ int main(int argc, char** argv) {
   assert(HasSuffix(client.committed, "你ㄏㄠ") && client.marked.empty());
 
   // The open syllable shows as its Zhuyin, the closed one before it as its word. The guess
-  // (你好) is marked in the proof row and in the row without digits that holds the words
-  // there, and Down opens all of them.
+  // (你好) is marked in the row without digits that holds the words there, alone: the proof
+  // row joins it only as its setting says. Down opens all of them.
   Type(controller, "sucl");
   assert(client.marked == "你ㄏㄠ");
   const PanelContent& typing = client.panel;
-  assert(client.panelVisible && typing.showsProof && typing.segments[typing.activeSegment] == "你好");
+  assert(client.panelVisible && !typing.showsProof && typing.segments[typing.activeSegment] == "你好");
   assert(typing.selectedRow == -1 && typing.rows.size() == 1 && !typing.rows[0].empty());
   assert(typing.selection >= 0 && typing.rows[0][typing.selection] == "你好");
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
@@ -293,6 +293,7 @@ int main(int argc, char** argv) {
   assert(client.panel.caret == 1);
   Type(controller, "c");
   assert(client.panel.caret == 2 && client.panel.pendingReading.empty());
+  assert(client.panel.showsProof && client.panel.selectedRow == -1);  // the proof row as set, while typing too
   Type(controller, "l3");
   assert(client.panel.caret == 2);
   assert(client.marked == "今好天");
@@ -357,7 +358,7 @@ int main(int argc, char** argv) {
   // its first row, and closes the candidates after that.
   Type(controller, "rup wu0 ");
   assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
-  assert(client.panel.rows.size() == 1);
+  assert(client.panel.rows.size() == 1 && !client.panel.pageLabel.empty() && !client.panel.expanded);
   for (const auto& row : client.panel.rows) {
     int columns = 0;
     for (const std::string& candidate : row) columns += Span(candidate);
@@ -365,10 +366,11 @@ int main(int argc, char** argv) {
   }
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
   assert(client.panel.rows.size() > 1 && client.panel.selectedRow == 1 && client.panel.pageLabel.rfind("2/", 0) == 0);
+  assert(client.panel.expanded);
   assert(controller.handleKey(Special(ProjectKey::Key::kUp)));
   assert(client.panel.rows.size() > 1 && client.panel.selectedRow == 0);
   assert(controller.handleKey(Special(ProjectKey::Key::kUp)));
-  assert(client.panel.rows.size() == 1);
+  assert(client.panel.rows.size() == 1 && !client.panel.expanded);
   assert(controller.handleKey(Special(ProjectKey::Key::kUp)));
   assert((!client.panelVisible || client.panel.rows.empty()) && client.marked == "今天");
 
@@ -541,9 +543,22 @@ int main(int argc, char** argv) {
   Type(controller, "c");  // ㄋㄧ then ㄏ is ㄏㄧ
   assert(client.marked == "ㄏㄧ");
   EscapeAll(controller, client);
+  // Once a syllable ends, the panel shows its word and stays while the next one is typed.
+  Type(controller, "su3c");
+  assert(client.marked == "你ㄏ" && client.panelVisible && client.panel.rows[0][0] == "你");
+  EscapeAll(controller, client);
   settings.set(Setting::kAbbreviated, 1);
   Type(controller, "ja");
   assert(client.marked == "我ㄇ");
+  EscapeAll(controller, client);
+  // A tone ends the syllable but not the panel: it shows the word just typed, without
+  // digits, rather than fading out until the next key. Arrows put it away.
+  Type(controller, "ji3");
+  assert(client.marked == "我" && client.panelVisible && client.panel.rows[0][0] == "我" && client.panel.selectedRow == -1);
+  Type(controller, "ap7");
+  assert(client.marked == "我們" && client.panelVisible && client.panel.rows[0][0] == "我們");
+  controller.handleKey(Special(ProjectKey::Key::kLeft));
+  assert(!client.panelVisible || client.panel.rows.empty());
   EscapeAll(controller, client);
 
   std::printf("ControllerTest passed\n");

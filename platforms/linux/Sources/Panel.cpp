@@ -230,32 +230,36 @@ float Panel::proofWidth(const PanelContent& c) const {
 float Panel::fittingWidth() const {
   float result = content_->showsProof ? proofWidth(*content_) : 0;
   if (!content_->rows.empty()) {
-    // As wide as the fullest visible row, so a short single row stays compact.
-    int columns = 0;
-    for (const auto& row : content_->rows) {
-      int used = 0;
-      for (const std::string& candidate : row) used += span(candidate);
-      columns = std::max(columns, used);
-    }
-    float row = kRowLeft + columns * (columnWidth_ + kCellGap) + kRowRight;
-    if (!content_->pageLabel.empty()) row += kPageLeft + width(content_->pageLabel, pageFont_) + kPageRight;
-    result = std::max(result, row);
+    float row = kRowLeft + kGridColumns * (columnWidth_ + kCellGap);
+    result = std::max(result, row + tailWidth());
   }
   return result;
+}
+
+// The first row's end: a down chevron while folded with more rows; unfolded, the page label
+// and an up chevron. Every row keeps room for them and for the widest label (999/999, or
+// wider for more rows), so the window keeps its width from typing to choosing, folded or not.
+float Panel::tailWidth() const {
+  std::string total = content_->pageLabel.substr(content_->pageLabel.find('/') + 1);
+  if (total.size() < 3) total = "999";
+  return kPageLeft + width(total + "/" + total, pageFont_) + kChevronGap + kChevronWidth + kChevronInset;
 }
 
 Panel::Rect Panel::selectionRect() const {
   if (!content_) return {};
   const auto& rows = content_->rows;
-  if (content_->selectedRow < 0 || content_->selectedRow >= static_cast<int>(rows.size())) return {};
-  const auto& row = rows[content_->selectedRow];
+  // While typing (selectedRow -1), the one row, drawn as when choosing though its digits type
+  // Zhuyin, so choosing from it changes nothing on screen.
+  int labeledRow = std::max(0, content_->selectedRow);
+  if (labeledRow >= static_cast<int>(rows.size())) return {};
+  const auto& row = rows[labeledRow];
   if (content_->selection < 0 || content_->selection >= static_cast<int>(row.size())) return {};
   float cellHeight = kCellTop + kCellLine + kCellBottom;
   int column = 0;
   for (int i = 0; i < content_->selection; i++) column += span(row[i]);
   int cells = span(row[content_->selection]);
   float left = kRowLeft + column * (columnWidth_ + kCellGap);
-  float top = rowTop() + kRowTop + content_->selectedRow * (cellHeight + kCellGap);
+  float top = rowTop() + kRowTop + labeledRow * (cellHeight + kCellGap);
   return {left, top, left + cells * columnWidth_ + (cells - 1) * kCellGap, top + cellHeight};
 }
 
@@ -562,7 +566,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
   float labelWidth = width("6", labelFont_);
   for (size_t r = 0; r < content_->rows.size(); r++) {
     float cellTop = top + kRowTop + r * (cellHeight + kCellGap);
-    bool labeled = static_cast<int>(r) == content_->selectedRow;
+    bool labeled = static_cast<int>(r) == std::max(0, content_->selectedRow);  // as selectionRect says
     int column = 0;
     const auto& row = content_->rows[r];
     for (size_t i = 0; i < row.size(); i++) {
@@ -582,20 +586,31 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
         }
         label.draw(cr, x + kCellSide, wordTop + word.baseline - label.baseline);
       }
-      bool typing = content_->selectedRow < 0;  // no digits: the word centered in its cell
       if (on) {
         cairo_set_source_rgb(cr, 1, 1, 1);
       } else {
-        SetColor(cr, typing && static_cast<int>(i) != content_->selection ? kMuted : kText);
+        SetColor(cr, kText);
       }
-      float wordLeft = typing ? x + (cells * columnWidth_ + (cells - 1) * kCellGap - word.width) / 2 : x + kCellSide + labelWidth + kLabelGap;
-      word.draw(cr, wordLeft, wordTop);
+      word.draw(cr, x + kCellSide + labelWidth + kLabelGap, wordTop);
     }
   }
-  if (!content_->pageLabel.empty()) {  // the page label sits on the first row
-    Line page(layout(content_->pageLabel, pageFont_));
+  if (!content_->pageLabel.empty()) {  // the chevron and page label sit on the first row
+    float x = windowWidth - kChevronInset - kChevronWidth, middle = top + kChevronMiddle;
+    float tip = content_->expanded ? -kChevronHeight / 2 : kChevronHeight / 2;  // up or down
     SetColor(cr, kMuted);
-    page.draw(cr, windowWidth - kRowRight - kPageRight - page.width, top + kRowTop + kCellTop, kCellLine);
+    cairo_save(cr);
+    cairo_move_to(cr, x, middle - tip);
+    cairo_line_to(cr, x + kChevronWidth / 2, middle + tip);
+    cairo_line_to(cr, x + kChevronWidth, middle - tip);
+    cairo_set_line_width(cr, kChevronLine);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+    cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
+    cairo_stroke(cr);
+    cairo_restore(cr);
+    if (content_->expanded) {
+      Line page(layout(content_->pageLabel, pageFont_));
+      page.draw(cr, x - kChevronGap - page.width, top + kRowTop + kCellTop, kCellLine);
+    }
   }
 }
 

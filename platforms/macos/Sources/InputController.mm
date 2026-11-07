@@ -50,6 +50,7 @@ PKPanelContent *Content(const ProjectKey::PanelContent &panel) {
   content.selectedRow = panel.selectedRow;
   content.selection = panel.selection;
   content.pageLabel = OptionalString(panel.pageLabel);
+  content.expanded = panel.expanded;
   return content;
 }
 

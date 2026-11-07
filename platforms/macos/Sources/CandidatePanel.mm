@@ -174,19 +174,21 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + key + kProofRight);
   }
   if (self.content.rows) {
-    // As wide as the fullest visible row, so a short single row stays compact.
-    NSInteger columns = 0;
-    for (NSArray<NSString *> *row in self.content.rows) {
-      NSInteger used = 0;
-      for (NSString *candidate in row) used += Span(candidate);
-      columns = MAX(columns, used);
-    }
-    CGFloat row = kRowLeft + columns * (ColumnWidth() + kCellGap) + kRowRight;
-    if (self.content.pageLabel) row += kPageLeft + [self widthOf:self.content.pageLabel font:_pageFont] + kPageRight;
+    CGFloat row = kRowLeft + PKGridColumns * (ColumnWidth() + kCellGap) + self.tailWidth;
     width = MAX(width, row);
   }
   CGFloat separator = self.content.showsProof && self.content.rows ? 1 : 0;
   return NSMakeSize(width, self.proofHeight + separator + self.rowHeight);
+}
+
+// The first row's end: a down chevron while folded with more rows; unfolded, the page label
+// and an up chevron. Every row keeps room for them and for the widest label (999/999, or
+// wider for more rows), so the window keeps its width from typing to choosing, folded or not.
+- (CGFloat)tailWidth {
+  NSString *total = [self.content.pageLabel componentsSeparatedByString:@"/"].lastObject;
+  if (total.length < 3) total = @"999";
+  CGFloat label = [self widthOf:[NSString stringWithFormat:@"%@/%@", total, total] font:_pageFont];
+  return kPageLeft + label + kChevronGap + kChevronWidth + kChevronInset;
 }
 
 - (CGFloat)rowTop {
@@ -194,17 +196,23 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return self.proofBelow ? 0 : self.proofHeight + (both ? 1 : 0);
 }
 
+// The row with digits and the highlight; while typing (selectedRow -1), the one row, which looks
+// the same though its digits type Zhuyin, so choosing from it changes nothing on screen.
+- (NSInteger)labeledRow {
+  return MAX(0, self.content.selectedRow);
+}
+
 - (NSRect)selectionRect {
   NSArray<NSArray<NSString *> *> *rows = self.content.rows;
-  if (self.content.selectedRow < 0 || self.content.selectedRow >= (NSInteger)rows.count) return NSZeroRect;
-  NSArray<NSString *> *row = rows[self.content.selectedRow];
+  if (self.labeledRow >= (NSInteger)rows.count) return NSZeroRect;
+  NSArray<NSString *> *row = rows[self.labeledRow];
   if (self.content.selection < 0 || self.content.selection >= (NSInteger)row.count) return NSZeroRect;
   CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
   NSInteger column = 0;
   for (NSInteger i = 0; i < self.content.selection; i++) column += Span(row[i]);
   NSInteger span = Span(row[self.content.selection]);
   return NSMakeRect(kRowLeft + column * (ColumnWidth() + kCellGap),
-                    self.rowTop + kRowTop + self.content.selectedRow * (cellHeight + kCellGap),
+                    self.rowTop + kRowTop + self.labeledRow * (cellHeight + kCellGap),
                     span * ColumnWidth() + (span - 1) * kCellGap, cellHeight);
 }
 
@@ -379,7 +387,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     CGFloat cellTop = top + kRowTop + r * (cellHeight + kCellGap);
     CGFloat textTop = TextTop(_candidateFont, cellTop + kCellTop, kCellLine);
     CGFloat labelTop = textTop + _candidateFont.ascender - _labelFont.ascender;  // share the baseline
-    BOOL labeled = (NSInteger)r == self.content.selectedRow;
+    BOOL labeled = (NSInteger)r == self.labeledRow;
     NSInteger column = 0;
     NSArray<NSString *> *row = self.content.rows[r];
     for (NSUInteger i = 0; i < row.count; i++) {
@@ -393,19 +401,29 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
             withAttributes:Attributes(_labelFont, on ? [NSColor colorWithWhite:1 alpha:0.72] : self.mutedColor)];
       }
       CGFloat textX = x + kCellSide + [self widthOf:@"6" font:_labelFont] + kLabelGap;
-      BOOL typing = self.content.selectedRow < 0;  // no digits: the word centered in its cell
-      if (typing) textX = x + (span * ColumnWidth() + (span - 1) * kCellGap - [self widthOf:row[i] font:_candidateFont]) / 2;
-      BOOL dim = typing && (NSInteger)i != self.content.selection;
-      NSColor *color = on ? NSColor.whiteColor : dim ? self.mutedColor : self.textColor;
+      NSColor *color = on ? NSColor.whiteColor : self.textColor;
       [row[i] drawAtPoint:NSMakePoint(textX, textTop) withAttributes:Attributes(_candidateFont, color)];
     }
   }
-  CGFloat cellTop = top + kRowTop;  // the page label sits on the first row
+  CGFloat cellTop = top + kRowTop;  // the chevron and page label sit on the first row
   if (self.content.pageLabel) {
-    CGFloat labelWidth = [self widthOf:self.content.pageLabel font:_pageFont];
-    CGFloat pageTop = TextTop(_pageFont, cellTop + kCellTop, kCellLine);
-    [self.content.pageLabel drawAtPoint:NSMakePoint(width - kRowRight - kPageRight - labelWidth, pageTop)
-                         withAttributes:Attributes(_pageFont, self.mutedColor)];
+    CGFloat x = width - kChevronInset - kChevronWidth, middle = top + kChevronMiddle;
+    CGFloat tip = self.content.expanded ? -kChevronHeight / 2 : kChevronHeight / 2;  // up or down
+    NSBezierPath *chevron = [NSBezierPath bezierPath];
+    [chevron moveToPoint:NSMakePoint(x, middle - tip)];
+    [chevron lineToPoint:NSMakePoint(x + kChevronWidth / 2, middle + tip)];
+    [chevron lineToPoint:NSMakePoint(x + kChevronWidth, middle - tip)];
+    chevron.lineWidth = kChevronLine;
+    chevron.lineCapStyle = NSLineCapStyleRound;
+    chevron.lineJoinStyle = NSLineJoinStyleRound;
+    [self.mutedColor setStroke];
+    [chevron stroke];
+    if (self.content.expanded) {
+      CGFloat labelWidth = [self widthOf:self.content.pageLabel font:_pageFont];
+      CGFloat pageTop = TextTop(_pageFont, cellTop + kCellTop, kCellLine);
+      [self.content.pageLabel drawAtPoint:NSMakePoint(x - kChevronGap - labelWidth, pageTop)
+                           withAttributes:Attributes(_pageFont, self.mutedColor)];
+    }
   }
 }
 
@@ -500,17 +518,17 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   }];
 }
 
-// What the window is showing, apart from the words: the typing row or the choice, the proof row, the keycap.
+// What the window is showing, apart from the words: the rows, the proof row, the keycap. Typing
+// and choosing look alike, so going from one to the other is no change of layout.
 static NSString *Layout(PKPanelContent *content) {
   if (!content) return @"";
-  return [NSString stringWithFormat:@"%d%d%d%d", content.rows != nil, content.rows && content.selectedRow >= 0,
-                                    content.showsProof, content.keyHint != nil];
+  return [NSString stringWithFormat:@"%d%d%d", content.rows != nil, content.showsProof, content.keyHint != nil];
 }
 
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect {
   [self useCurrentAppearance];
   // Changes within one list move: the highlight slides and the window resizes. A change of
-  // layout (typing to choosing, the proof row coming or going) also crossfades the content,
+  // layout (the proof row coming or going) also crossfades the content,
   // which is laid out for the final size at once.
   BOOL shown = self.isVisible;
   BOOL relayout = shown && ![Layout(_view.content) isEqualToString:Layout(content)] && !ReducesMotion();

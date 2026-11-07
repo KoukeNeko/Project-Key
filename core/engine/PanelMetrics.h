@@ -16,12 +16,18 @@ constexpr float kProofPad = 9, kProofLeft = 19, kProofRight = 19, kProofLine = 2
 constexpr float kMarkGap = 3, kMarkHeight = 2, kMarkInset = 1;
 // Keycap after the proof text: 20px tall, 6px side padding, 10px from the text.
 constexpr float kKeyGap = 10, kKeyHeight = 20, kKeyPadding = 6, kKeyRadius = 5, kKeyLip = 1.5;
-// Candidate row: padding 6 on every side; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
-constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 6, kRowRight = 6;
+// Candidate row: padding 6 on the left, top and bottom; cells padding 5 11 6, 25px line, 5px label gap, 2px apart.
+constexpr float kRowTop = 6, kRowBottom = 6, kRowLeft = 6;
 constexpr float kCellTop = 5, kCellBottom = 6, kCellSide = 11, kCellLine = 25, kLabelGap = 5, kCellGap = 2;
-constexpr float kPageLeft = 12, kPageRight = 0;  // the page label sits kRowRight from the edge
-// The row shown while typing (selectedRow -1) keeps the grid's cells, without digits:
-// each word centered in its cell, in the muted color but for the guess (selection).
+constexpr float kPageLeft = 12;  // after the grid's last column
+// A chevron at the first row's end: down while folded with more rows (instead of the page
+// label), up after the page label while unfolded. 10 x 5, 1.5px strokes, 8px after the label,
+// centered in the row and as far from the window's right edge as from the row's top and bottom.
+constexpr float kChevronWidth = 10, kChevronHeight = 5, kChevronLine = 1.5f, kChevronGap = 8;
+constexpr float kChevronMiddle = kRowTop + (kCellTop + kCellLine + kCellBottom) / 2;  // below the row's top
+constexpr float kChevronInset = kChevronMiddle - kChevronHeight / 2;
+// The row shown while typing (selectedRow -1) looks as when choosing from it: digits, and the
+// guess (selection) highlighted.
 // The Tab hint's own window (Environment::hintWindow), this far from the candidate
 // window, on the side away from the text.
 constexpr float kHintGap = 6;
