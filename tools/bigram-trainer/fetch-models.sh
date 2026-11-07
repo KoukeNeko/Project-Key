@@ -1,6 +1,7 @@
 #!/bin/sh
 # Downloads the published dictionary and context models (MODELS-NOTICE.txt) into .cache/,
-# where the platform builds pick them up, and checks them against models.sha256.
+# where the platform builds pick them up, checks them against models.sha256, and records
+# the tag's date in .cache/models-version.txt.
 # They are published once per training run as the GitHub release $TAG. To ship newly trained ones:
 # 1. Run train.sh.
 # 2. Publish them as a pre-release under a new date tag, so the settings window's update check
@@ -21,3 +22,5 @@ done
 cd .cache
 # Git Bash on Windows has sha256sum but no shasum; macOS has shasum.
 if command -v sha256sum >/dev/null; then sha256sum -c ../models.sha256; else shasum -a 256 -c ../models.sha256; fi
+# The builds install it with the models; the settings window shows it.
+echo "${TAG#models-}" > models-version.txt

@@ -5,6 +5,9 @@
 // write through Fcitx5's controller on D-Bus.
 #pragma once
 
+#include <filesystem>
+#include <fstream>
+#include <string>
 #include <vector>
 
 namespace ProjectKey::SettingsRows {
@@ -13,6 +16,15 @@ constexpr char kFcitx[] = "org.fcitx.Fcitx5";
 constexpr char kConfig[] = "fcitx://config/addon/projectkey";
 constexpr char kReleases[] = "https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest";
 constexpr char kEngineUrl[] = "https://github.com/openvanilla/McBopomofo";
+
+// The trained models CMakeLists.txt installed, by the date fetch-models.sh or train.sh recorded.
+inline std::string ModelsVersion() {
+  const std::filesystem::path dir = PROJECTKEY_DATA_DIR;
+  if (!std::filesystem::exists(dir / "bigram.bin") || !std::filesystem::exists(dir / "chars.bin")) return "未安裝";
+  std::string date;
+  if (std::ifstream file(dir / "models-version.txt"); !(file >> date)) return "已安裝";
+  return date;
+}
 
 struct Row {
   enum Kind { kToggle, kChoice, kClearChoices } kind;

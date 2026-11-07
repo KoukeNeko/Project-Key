@@ -240,6 +240,7 @@ int main(int argc, char** argv) {
   auto* update = new QLabel("檢查中…");
   update->setOpenExternalLinks(true);
   about->addRow("更新：", update);
+  about->addRow("選字模型：", new QLabel(QString::fromStdString(ModelsVersion())));
   about->addRow("授權：", new QLabel("MIT"));
   auto* engine = new QLabel(QString("<a href=\"%1\">McBopomofo</a>").arg(kEngineUrl));
   engine->setOpenExternalLinks(true);

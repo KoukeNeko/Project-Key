@@ -1,9 +1,16 @@
 #!/bin/sh
 # Builds build/ProjectKey.app and runs the engine and controller tests. Needs Xcode command
 # line tools and CMake. The McBopomofo engine and dictionary (MIT) are fetched
-# at a pinned commit into build/.
+# at a pinned commit into build/. With --require-models it stops unless the trained models
+# (tools/bigram-trainer/fetch-models.sh) are there, as releases need them.
 set -eu
 cd "$(dirname "$0")"
+TRAINED=../../tools/bigram-trainer/.cache
+if [ "${1:-}" = --require-models ]; then
+  for file in data.txt bigram.bin chars.bin models-version.txt; do
+    [ -f "$TRAINED/$file" ] || { echo "no $TRAINED/$file: run tools/bigram-trainer/fetch-models.sh" >&2; exit 1; }
+  done
+fi
 BUILD=build
 MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)
 CORE=../../core/engine  # the engine shared with Windows
@@ -58,10 +65,10 @@ cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp "$MCB/LICENSE.txt" "$APP/Contents/Resources/McBopomofo-LICENSE.txt"
 # From tools/bigram-trainer: the dictionary with the words McBopomofo lacks, replacing
 # McBopomofo's, and the context ranking model; the app falls back to unigrams without it.
-TRAINED=../../tools/bigram-trainer/.cache
 if [ -f "$TRAINED/data.txt" ]; then cp "$TRAINED/data.txt" "$APP/Contents/Resources/"; fi
 if [ -f "$TRAINED/bigram.bin" ]; then cp "$TRAINED/bigram.bin" "$APP/Contents/Resources/"; else echo "no $TRAINED/bigram.bin: building without context ranking"; fi
 if [ -f "$TRAINED/chars.bin" ]; then cp "$TRAINED/chars.bin" "$APP/Contents/Resources/"; fi
+if [ -f "$TRAINED/models-version.txt" ]; then cp "$TRAINED/models-version.txt" "$APP/Contents/Resources/"; fi
 # Their licenses and sources go with them.
 if [ -f "$TRAINED/data.txt" ] || [ -f "$TRAINED/bigram.bin" ]; then
   cp ../../tools/bigram-trainer/MODELS-NOTICE.txt ../../tools/bigram-trainer/LICENSE-LGPL-2.1.txt "$APP/Contents/Resources/"

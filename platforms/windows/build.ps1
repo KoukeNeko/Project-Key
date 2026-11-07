@@ -1,9 +1,18 @@
 # Builds the Windows input method into build\out and runs the tests. Needs
 # Visual Studio with the C++ desktop workload (MSVC and the Windows SDK) and
 # uv (for the Python that generates McBopomofo's dictionary). The McBopomofo
-# engine and dictionary (MIT) are fetched at a pinned commit into build\.
+# engine and dictionary (MIT) are fetched at a pinned commit into build\. With
+# -RequireModels it stops unless the trained models (tools/bigram-trainer/fetch-models.sh)
+# are there, as releases need them.
+param([switch]$RequireModels)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
+$Trained = "$PSScriptRoot\..\..\tools\bigram-trainer\.cache"
+if ($RequireModels) {
+  foreach ($file in 'data.txt', 'bigram.bin', 'chars.bin', 'models-version.txt') {
+    if (-not (Test-Path "$Trained\$file")) { throw "no $Trained\$file`: run tools/bigram-trainer/fetch-models.sh" }
+  }
+}
 $Build = Join-Path $PSScriptRoot 'build'
 $McbCommit = (Get-Content "$PSScriptRoot\..\..\MCBOPOMOFO_COMMIT").Trim()
 $Mcb = Join-Path $Build 'mcbopomofo'
@@ -163,12 +172,12 @@ Invoke-Native $dotnet build "$PSScriptRoot\Settings\ProjectKeySettings.csproj" -
 # The dictionary, McBopomofo's license, and from tools/bigram-trainer if it was
 # trained, the dictionary with the words McBopomofo lacks (replacing McBopomofo's)
 # and the context ranking model; the server falls back to unigrams without it.
-$Trained = "$PSScriptRoot\..\..\tools\bigram-trainer\.cache"
 if (Test-Path "$Trained\data.txt") { Copy-Item "$Trained\data.txt" $Out } else { Copy-Item $Data $Out }
 Copy-Item "$Mcb\LICENSE.txt" "$Out\McBopomofo-LICENSE.txt"
 Copy-Item "$PSScriptRoot\..\..\LICENSE" "$Out\LICENSE.txt"
 if (Test-Path "$Trained\bigram.bin") { Copy-Item "$Trained\bigram.bin" $Out } else { Write-Host "no $Trained\bigram.bin`: building without context ranking" }
 if (Test-Path "$Trained\chars.bin") { Copy-Item "$Trained\chars.bin" $Out }
+if (Test-Path "$Trained\models-version.txt") { Copy-Item "$Trained\models-version.txt" $Out }
 # Their licenses and sources go with them.
 if ((Test-Path "$Trained\data.txt") -or (Test-Path "$Trained\bigram.bin")) {
   Copy-Item "$PSScriptRoot\..\..\tools\bigram-trainer\MODELS-NOTICE.txt", "$PSScriptRoot\..\..\tools\bigram-trainer\LICENSE-LGPL-2.1.txt" $Out

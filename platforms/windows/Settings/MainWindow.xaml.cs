@@ -46,6 +46,7 @@ public sealed partial class MainWindow : Window {
     Bind(CandidatePosition, "CandidatePosition", 0);
     // The text service's version (ProjectKey.rc); build.ps1 puts this app in Settings\ beside it.
     Version.Text = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "..", "ProjectKey.dll")).ProductVersion ?? "";
+    Models.Text = ModelsVersion(Path.Combine(AppContext.BaseDirectory, ".."));
     CheckForUpdate();
 
     Root.SizeChanged += (_, _) => FitToContent();
@@ -58,6 +59,13 @@ public sealed partial class MainWindow : Window {
   private static void Write(string name, int value) {
     using RegistryKey key = Registry.CurrentUser.CreateSubKey(Key);
     key.SetValue(name, value, RegistryValueKind.DWord);
+  }
+
+  // The trained models build.ps1 installed beside the text service, by the date fetch-models.sh or train.sh recorded.
+  private static string ModelsVersion(string dir) {
+    if (!File.Exists(Path.Combine(dir, "bigram.bin")) || !File.Exists(Path.Combine(dir, "chars.bin"))) return "未安裝";
+    string version = Path.Combine(dir, "models-version.txt");
+    return File.Exists(version) ? File.ReadAllText(version).Trim() : "已安裝";
   }
 
   private static void Bind(ToggleSwitch toggle, string name, bool fallback = true) {

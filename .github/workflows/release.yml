@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
       # The trained dictionary and context models (tools/bigram-trainer/MODELS-NOTICE.txt).
       - run: tools/bigram-trainer/fetch-models.sh
-      - run: platforms/macos/build.sh
+      - run: platforms/macos/build.sh --require-models
       - run: ditto -c -k --keepParent platforms/macos/build/ProjectKey.app "ProjectKey-${{ needs.version.outputs.version }}-macos.zip"
       - uses: actions/upload-artifact@v4
         with:
@@ -58,7 +58,7 @@ jobs:
           dotnet-version: 10.0.x
       - run: tools/bigram-trainer/fetch-models.sh
         shell: bash
-      - run: platforms/windows/build.ps1
+      - run: platforms/windows/build.ps1 -RequireModels
         shell: pwsh
       # The Scoop package runs install.ps1 -Source from the unpacked files.
       - shell: pwsh
@@ -166,7 +166,7 @@ jobs:
             models="$models  resource \"$file\" do\n    url \"https://github.com/KoukeNeko/Project-Key/releases/download/$models_tag/$file\"\n    sha256 \"$sum\"\n  end\n\n"
           done < <(curl -sSfL "$raw/models.sha256")
           mkdir -p tap/Formula
-          sed -e "s/@VERSION@/$VERSION/g" -e "s/@SHA256@/$src_sha/" -e "s/@MCBOPOMOFO@/$mcb/" -e "s/@MCBOPOMOFO_SHA256@/$mcb_sha/" \
+          sed -e "s/@VERSION@/$VERSION/g" -e "s/@MODELS_VERSION@/${models_tag#models-}/" -e "s/@SHA256@/$src_sha/" -e "s/@MCBOPOMOFO@/$mcb/" -e "s/@MCBOPOMOFO_SHA256@/$mcb_sha/" \
             > tap/Formula/fcitx5-projectkey.rb.in <<'EOF'
           class Fcitx5Projectkey < Formula
             desc "Zhuyin input method for Fcitx5"
@@ -200,10 +200,11 @@ jobs:
               (buildpath/"mcbopomofo").install resource("mcbopomofo")
               # CMakeLists.txt installs them, with their notice, from the trainer's cache.
               %w[data.txt bigram.bin chars.bin].each { |file| (buildpath/"tools/bigram-trainer/.cache").install resource(file) }
+              (buildpath/"tools/bigram-trainer/.cache/models-version.txt").write "@MODELS_VERSION@\n"  # as fetch-models.sh records it
               system "make", "-C", "mcbopomofo/Source/Data", "data.txt"
               system "cmake", "-S", "platforms/linux", "-B", "build", "-G", "Ninja",
                      "-DCMAKE_C_COMPILER=/usr/bin/cc", "-DCMAKE_CXX_COMPILER=/usr/bin/c++",
-                     "-DMCBOPOMOFO=#{buildpath}/mcbopomofo", *std_cmake_args
+                     "-DMCBOPOMOFO=#{buildpath}/mcbopomofo", "-DREQUIRE_MODELS=ON", *std_cmake_args
               system "cmake", "--build", "build"
               %w[ComposerTest ControllerTest].each { |test| system "build/#{test}", "mcbopomofo/Source/Data/data.txt" }
               system "cmake", "--install", "build"

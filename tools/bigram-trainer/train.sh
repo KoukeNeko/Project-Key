@@ -53,4 +53,5 @@ python3 -I supplement.py merge "$CACHE/data-mined.txt" "$CACHE/places.txt" > "$C
 wc -l "$CACHE/chewing.txt" "$CACHE/mined.txt" "$CACHE/places.txt"
 "$CACHE/train" "$CACHE/data.txt" "$MIN_COUNT" "$CACHE/bigram.bin" < "$TEXT"
 "$CACHE/chars" "$CHAR_MIN_COUNT" "$CACHE/chars.bin" < "$TEXT"
+date +%F > "$CACHE/models-version.txt"  # what the settings window shows, as fetch-models.sh records a release
 ls -l "$CACHE/data.txt" "$CACHE/bigram.bin" "$CACHE/chars.bin"

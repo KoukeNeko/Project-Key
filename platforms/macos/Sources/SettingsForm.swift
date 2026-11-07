@@ -80,6 +80,7 @@ struct SettingsForm: View {
           case .failed: Text("無法檢查")
           }
         }
+        LabeledContent("選字模型", value: modelsVersion)
         LabeledContent("授權", value: "MIT")
         LabeledContent("引擎與詞庫") {
           Link("McBopomofo", destination: URL(string: "https://github.com/openvanilla/McBopomofo")!)
@@ -95,6 +96,17 @@ struct SettingsForm: View {
 }
 
 private let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+
+// The trained models build.sh put in Resources, by the date fetch-models.sh or train.sh recorded.
+private let modelsVersion: String = {
+  let resources = Bundle.main.resourceURL!
+  let installed = ["bigram.bin", "chars.bin"].allSatisfy {
+    FileManager.default.fileExists(atPath: resources.appendingPathComponent($0).path)
+  }
+  guard installed else { return "未安裝" }
+  let date = try? String(contentsOf: resources.appendingPathComponent("models-version.txt"), encoding: .utf8)
+  return date?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "已安裝"
+}()
 
 private enum UpdateState {
   case checking, current, available(String, URL), failed

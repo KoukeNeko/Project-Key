@@ -220,6 +220,8 @@ void Activate(GtkApplication* app) {
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("更新", &value, "檢查中…"));
   gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
   CheckForUpdate(GTK_LABEL(value));
+  const std::string models = ModelsVersion();
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("選字模型", &value, models.c_str()));
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("授權", &value, "MIT"));
   GtkWidget* engine = adw_action_row_new();
   adw_preferences_row_set_title(ADW_PREFERENCES_ROW(engine), "引擎與詞庫");
