@@ -559,7 +559,11 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
   float cellHeight = kCellTop + kCellLine + kCellBottom;
   Rect pill = shownSelectionRect();
   if (!pill.empty()) {
-    SetColor(cr, kAccent);
+    if (content_->selectedRow >= 0) {
+      SetColor(cr, kAccent);
+    } else {
+      SetColor(cr, kText, kGuessAlpha);
+    }
     RoundedRect(cr, pill.left, pill.top, pill.right, pill.bottom, kPillRadius);
     cairo_fill(cr);
   }
@@ -573,7 +577,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
       float x = kRowLeft + column * (columnWidth_ + kCellGap);
       int cells = span(row[i]);
       column += cells;
-      bool on = labeled && static_cast<int>(i) == content_->selection;
+      bool on = labeled && content_->selectedRow >= 0 && static_cast<int>(i) == content_->selection;  // on the accent
       Line word(layout(row[i], candidateFont_));
       float wordTop = cellTop + kCellTop + (kCellLine - word.height) / 2;
       if (labeled) {

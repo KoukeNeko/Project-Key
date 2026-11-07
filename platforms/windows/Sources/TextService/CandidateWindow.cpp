@@ -490,8 +490,8 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
   float cellHeight = kCellTop + kCellLine + kCellBottom;
   D2D1_RECT_F pill = shownSelectionRect();
   if (!IsEmpty(pill)) {
-    auto accent = Brush(target, Color(kAccent));
-    target->FillRoundedRectangle(D2D1::RoundedRect(pill, kPillRadius, kPillRadius), accent.Get());
+    auto fill = Brush(target, content_->selectedRow >= 0 ? Color(kAccent) : Color(kText, kGuessAlpha));
+    target->FillRoundedRectangle(D2D1::RoundedRect(pill, kPillRadius, kPillRadius), fill.Get());
   }
   auto text = Brush(target, Color(kText));
   auto white = Brush(target, D2D1::ColorF(1, 1, 1, 1));
@@ -508,7 +508,7 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
       int span = fonts_.span(candidate);
       float x = kRowLeft + column * (fonts_.columnWidth() + kCellGap);
       column += span;
-      bool on = labeled && static_cast<int>(i) == content_->selection;
+      bool on = labeled && content_->selectedRow >= 0 && static_cast<int>(i) == content_->selection;  // on the accent
       Line word = Measure(fonts_, candidate, fonts_.candidate());
       float wordTop = cellTop + kCellTop + (kCellLine - word.height) / 2;
       if (labeled) {

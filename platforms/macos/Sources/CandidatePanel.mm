@@ -380,7 +380,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
   NSRect pill = self.shownSelectionRect;
   if (!NSIsEmptyRect(pill)) {
-    [kAccent setFill];
+    BOOL chosen = self.content.selectedRow >= 0;
+    [(chosen ? kAccent : [self.textColor colorWithAlphaComponent:Colors::kGuessAlpha]) setFill];
     [[NSBezierPath bezierPathWithRoundedRect:pill xRadius:kPillRadius yRadius:kPillRadius] fill];
   }
   for (NSUInteger r = 0; r < self.content.rows.count; r++) {
@@ -394,7 +395,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
       NSInteger span = Span(row[i]);
       CGFloat x = kRowLeft + column * (ColumnWidth() + kCellGap);
       column += span;
-      BOOL on = labeled && (NSInteger)i == self.content.selection;
+      BOOL on = labeled && self.content.selectedRow >= 0 && (NSInteger)i == self.content.selection;  // on the accent
       NSString *label = [NSString stringWithFormat:@"%lu", i + 1];
       if (labeled) {
         [label drawAtPoint:NSMakePoint(x + kCellSide, labelTop)

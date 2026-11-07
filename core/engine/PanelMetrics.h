@@ -44,6 +44,8 @@ namespace Colors {
 constexpr uint32_t kBackground = 0x23282c, kLine = 0x343b40, kText = 0xe8ecee, kMuted = 0x8e9aa3;
 constexpr uint32_t kAccent = 0x14806f, kAccentSoft = 0x3fb9a3;
 constexpr float kDoubtMarkAlpha = 0.7f;
+// While typing, the guess sits on a highlight of kText at this alpha, not the accent of a choice.
+constexpr float kGuessAlpha = 0.12f;
 }  // namespace Colors
 
 }  // namespace ProjectKey::Metrics
