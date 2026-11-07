@@ -124,18 +124,25 @@ int main(int argc, char** argv) {
   composer.clear();
   type(composer, "rup w");
   assert(composer.text() == "今天");
-  // Without 簡拼, a lone symbol is no syllable and each key edits the open syllable:
-  // ㄨ then ㄇ is ㄇㄨ, ㄅ then ㄆ is ㄆ, and ㄋㄧ then ㄏ is ㄏㄧ.
+  // Without 簡拼, a lone symbol is no syllable, and each key edits the open syllable until it is a
+  // whole one (ㄅ then ㄆ is ㄆ); then a key that cannot extend it starts the next, so syllables
+  // chain without tones: ㄨ then ㄇ is a word for ㄨ and an open ㄇ, never 我們.
   Composer plain(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight,
                  nullptr, Composer::kCharWeight, nullptr, /*abbreviated=*/false);
   type(plain, "ja");
-  assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄇㄨ");
+  assert(plain.readingCount() == 1 && plain.pendingReading() == "ㄇ" && plain.text() != "我");
   plain.clear();
   type(plain, "1q");
   assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄆ");
   plain.clear();
   type(plain, "suc");
-  assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄏㄧ");
+  assert(plain.readingCount() == 1 && plain.pendingReading() == "ㄏ");
+  // ㄖㄣㄨㄟ: the open ㄨㄟ shows as its symbols until it ends, here as Tab ends it, as its word.
+  plain.clear();
+  type(plain, "bpjo");
+  assert(plain.readingCount() == 1 && plain.pendingReading() == "ㄨㄟ");
+  plain.endOpenSyllable();
+  assert(plain.readingCount() == 2 && !plain.hasPendingReading() && ProjectKey::Utf16Length(plain.text()) == 2);
   // A syllable still ends with a tone key or Space: ㄋㄧˇ ㄏㄠˇ is 你好.
   plain.clear();
   type(plain, "su3cl3");

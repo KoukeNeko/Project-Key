@@ -536,19 +536,24 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && env.personal->empty());
   settings.remove(Setting::kRememberChoices);
 
-  // 簡拼 off, the default: Zhuyin keys edit the open syllable, as in an ordinary Zhuyin input method.
+  // 簡拼 off, the default: Zhuyin keys edit the open syllable until it is a whole one, and then
+  // chain without tones; a lone symbol stands for no syllable.
   settings.remove(Setting::kAbbreviated);
-  Type(controller, "ja");  // ㄨ then ㄇ is ㄇㄨ, not 我ㄇ
-  assert(client.marked == "ㄇㄨ");
+  Type(controller, "ja");  // ㄨ is a whole syllable (無, 五...), so ㄇ starts the next; never 我ㄇ
+  assert(HasSuffix(client.marked, "ㄇ") && !Contains(client.marked, "我"));
   EscapeAll(controller, client);
   Type(controller, "1q");  // ㄅ then ㄆ is ㄆ
   assert(client.marked == "ㄆ");
   EscapeAll(controller, client);
   Type(controller, "su");  // no guess row for the open syllable, which would come and go with each key
   assert(client.marked == "ㄋㄧ" && !client.panelVisible);
-  Type(controller, "c");  // ㄋㄧ then ㄏ is ㄏㄧ
-  assert(client.marked == "ㄏㄧ");
+  Type(controller, "c");  // ㄋㄧ is whole, so ㄏ starts the next syllable
+  assert(HasSuffix(client.marked, "ㄏ") && Utf16Length(client.marked) == 2);
   EscapeAll(controller, client);
+  // ㄖㄣㄨㄟ without tones: Tab sends a word for each, ㄨㄟ last too.
+  Type(controller, "bpjo");
+  assert(HasSuffix(client.marked, "ㄨㄟ") && controller.handleKey(Special(ProjectKey::Key::kTab)));
+  assert(client.marked.empty() && !Contains(client.committed.substr(client.committed.size() - 6), "ㄨ"));
   // Once a syllable ends, the panel shows its word and stays while the next one is typed.
   Type(controller, "su3c");
   assert(client.marked == "你ㄏ" && client.panelVisible && client.panel.rows[0][0] == "你");

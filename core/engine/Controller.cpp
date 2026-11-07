@@ -507,6 +507,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
       // The sentence as the proof row has it: guesses for syllables still shown as Zhuyin. Shift+Tab
       // when Tab offers English instead.
       if (empty) return false;
+      composer_->endOpenSyllable();  // 為 for ㄨㄟ typed last without a tone, where 簡拼 is off
       std::string sentence = composer_->text() + composer_->pendingReading();
       client_.insertText(sentence);
       learn(sentence);

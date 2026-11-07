@@ -174,7 +174,11 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
 Composer::KeyResult Composer::typeReadingKey(char key) {
   if (!reading_.isValidKey(key)) return KeyResult::kInvalid;
   bool shown = readingShown_;
-  if (readingShown_ && startsSyllable(key)) endReading();
+  if ((readingShown_ || !abbreviated_) && !reading_.isEmpty() && startsSyllable(key)) {
+    if (!readingShown_) showReading(/*ending=*/true);  // without abbreviated, the syllable goes in as its word now
+    shown = shown || readingShown_;
+    endReading();
+  }
   Formosa::Mandarin::BopomofoReadingBuffer untoned = reading_;
   hideReading();
   reading_.combineKey(key);
@@ -211,7 +215,9 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
 // it goes in the place of a symbol already there or before one (the order is
 // consonant, medial, vowel), or it makes a syllable the dictionary lacks.
 bool Composer::startsSyllable(char key) const {
-  if (!abbreviated_) return false;
+  // Without abbreviated, only once the open syllable is a whole one (ㄖㄣ, not ㄅ): until then
+  // each key edits it (ㄅ then ㄆ is ㄆ).
+  if (!abbreviated_ && !dictionary_->hasUnigrams(reading_.syllable().composedString() + kAnyTone)) return false;
   BopomofoSyllable typed = BopomofoKeyboardLayout::StandardLayout()->syllableFromKeySequence(std::string(1, key));
   if (typed.hasToneMarker()) return false;
   auto lastPlace = [](const BopomofoSyllable& s) { return s.hasVowel() ? 3 : s.hasMiddleVowel() ? 2 : s.hasConsonant() ? 1 : 0; };
@@ -258,6 +264,14 @@ void Composer::clearPendingReading() {
   hideReading();
   reading_.clear();
   if (shown) walk();
+}
+
+void Composer::endOpenSyllable() {
+  if (readingShown_ || reading_.isEmpty()) return;
+  showReading(/*ending=*/true);
+  if (!readingShown_) return;  // symbols that make no syllable stay as they are
+  endReading();
+  walk();
 }
 
 bool Composer::insertPunctuation(char key) {

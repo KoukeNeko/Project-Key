@@ -52,8 +52,9 @@ class Composer {
   // trigramWeight when the model has that triple.
   // With a user model, choices are remembered by the word before them and the
   // reading, and a remembered word wins the walk the next time.
-  // Without abbreviated, a lone symbol is no syllable of its own and every Zhuyin key edits
-  // the open syllable (ㄅ then ㄆ is ㄆ), so a syllable ends only with a tone key or Space.
+  // Without abbreviated, a lone symbol is no syllable of its own and a Zhuyin key edits the open
+  // syllable (ㄅ then ㄆ is ㄆ) until it is a whole one; then a key that cannot extend it starts
+  // the next (ㄖㄣㄨㄟ for 認為), and the open syllable shows as its symbols until it ends.
   explicit Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram = nullptr,
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
@@ -99,6 +100,9 @@ class Composer {
   void clearPendingReading();
   // Shows the open syllable as its symbols rather than as a word, as Enter sends it.
   void showSymbols();
+  // Puts a whole syllable still open without a tone, and shown as its symbols, in as its word,
+  // as a key starting the next syllable would.
+  void endOpenSyllable();
   // The app's text before the caret where the composition starts. When it ends in a Han
   // character the first word follows the word there instead of starting a phrase.
   void setTextBefore(const std::string& text);
