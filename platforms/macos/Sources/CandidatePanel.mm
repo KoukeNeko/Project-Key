@@ -119,13 +119,23 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 - (NSSize)fittingSize;
 // Moves the selection highlight to the content's selection, sliding there when animated.
 - (void)moveSelectionAnimated:(BOOL)animated;
+// Where the rows start, as drawn now.
+- (CGFloat)shownRowTop;
+// A change of shape, as the window moves and resizes to the new content: the rows move from
+// rowTop to where the content puts them, and a proof row that comes, goes or changes sides
+// fades out of its old place and into its new one. progress runs from 0 to 1.
+- (void)morphFrom:(PKPanelContent *)old proofBelow:(BOOL)oldProofBelow rowTop:(CGFloat)rowTop;
+@property(nonatomic) CGFloat progress;
 @end
 
 @implementation PKCandidateView {
   NSFont *_proofFont, *_candidateFont, *_labelFont, *_pageFont;
-  NSRect _pillFrom, _pillTo;  // the highlight slides from one to the other
+  NSRect _pillFrom, _pillTo;  // the highlight slides from one to the other, relative to the rows
   NSTimeInterval _slideStart;
   NSTimer *_slideTimer;
+  PKPanelContent *_oldContent;  // what morphFrom: started from
+  BOOL _oldProofBelow;
+  CGFloat _oldRowTop;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -134,8 +144,31 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     _candidateFont = CandidateFont();
     _labelFont = LabelFont();
     _pageFont = [NSFont monospacedDigitSystemFontOfSize:13 weight:NSFontWeightRegular];
+    _progress = 1;
   }
   return self;
+}
+
+- (void)morphFrom:(PKPanelContent *)old proofBelow:(BOOL)oldProofBelow rowTop:(CGFloat)rowTop {
+  _oldContent = old;
+  _oldProofBelow = oldProofBelow;
+  _oldRowTop = rowTop;
+  self.progress = 0;
+}
+
+- (void)setProgress:(CGFloat)progress {
+  _progress = progress;
+  if (progress >= 1) _oldContent = nil;
+  self.needsDisplay = YES;
+}
+
+- (CGFloat)shownRowTop {
+  return _oldRowTop + (self.rowTop - _oldRowTop) * _progress;
+}
+
+// Whether the proof row fades between two places rather than staying where it is.
+- (BOOL)proofMoves {
+  return _oldContent && (_oldContent.showsProof != self.content.showsProof || _oldProofBelow != self.proofBelow);
 }
 
 - (BOOL)isFlipped {
@@ -211,8 +244,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   NSInteger column = 0;
   for (NSInteger i = 0; i < self.content.selection; i++) column += Span(row[i]);
   NSInteger span = Span(row[self.content.selection]);
-  return NSMakeRect(kRowLeft + column * (ColumnWidth() + kCellGap),
-                    self.rowTop + kRowTop + self.labeledRow * (cellHeight + kCellGap),
+  return NSMakeRect(kRowLeft + column * (ColumnWidth() + kCellGap), kRowTop + self.labeledRow * (cellHeight + kCellGap),
                     span * ColumnWidth() + (span - 1) * kCellGap, cellHeight);
 }
 
@@ -259,23 +291,42 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     [shape stroke];
   }
 
-  BOOL both = self.content.showsProof && self.content.rows;
-  // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
-  CGFloat proofTop = self.proofBelow ? NSHeight(bounds) - self.proofHeight : 0;
-  CGFloat rowTop = self.rowTop;
-  if (both) {
-    [(self.glass ? NSColor.separatorColor : kLine) setFill];
-    NSRectFill(NSMakeRect(0, self.proofBelow ? proofTop - 1 : self.proofHeight, NSWidth(bounds), 1));
-  }
-  if (self.content.showsProof) [self drawProofAt:proofTop];
+  // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
+  // the window resizes; when it comes, goes or changes sides, it fades between its places.
+  BOOL moves = self.proofMoves;
+  if (moves && _oldContent.showsProof) [self drawProofOf:_oldContent below:_oldProofBelow alpha:1 - _progress];
+  if (self.content.showsProof) [self drawProofOf:self.content below:self.proofBelow alpha:moves ? _progress : 1];
   if (self.content.rows) {
     // While the window grows above the text, rows laid out for the final size
     // would run over the pinned proof row; keep them above it.
     [NSGraphicsContext saveGraphicsState];
-    if (self.proofBelow && self.content.showsProof) NSRectClip(NSMakeRect(0, 0, NSWidth(bounds), proofTop - 1));
-    [self drawCandidatesAt:rowTop width:NSWidth(bounds)];
+    if (!moves && self.proofBelow && self.content.showsProof) {
+      NSRectClip(NSMakeRect(0, 0, NSWidth(bounds), NSHeight(bounds) - self.proofHeight - 1));
+    }
+    [self drawCandidatesAt:self.shownRowTop width:NSWidth(bounds)];
     [NSGraphicsContext restoreGraphicsState];
   }
+}
+
+// A proof row, with the line between it and the rows, at the edge next to the text.
+- (void)drawProofOf:(PKPanelContent *)content below:(BOOL)below alpha:(CGFloat)alpha {
+  CGFloat height = kProofPad + kProofLine + kProofPad;
+  CGFloat top = below ? NSHeight(self.bounds) - height : 0;
+  CGContextRef context = NSGraphicsContext.currentContext.CGContext;
+  CGContextSaveGState(context);
+  CGContextSetAlpha(context, alpha);
+  CGContextBeginTransparencyLayer(context, NULL);
+  if (content.rows) {
+    [(self.glass ? NSColor.separatorColor : kLine) setFill];
+    NSRectFill(NSMakeRect(0, below ? top - 1 : height, NSWidth(self.bounds), 1));
+  }
+  // drawProofAt: draws self.content; an old proof row fading out is drawn from the old content.
+  PKPanelContent *shown = _content;
+  _content = content;
+  [self drawProofAt:top];
+  _content = shown;
+  CGContextEndTransparencyLayer(context);
+  CGContextRestoreGState(context);
 }
 
 - (CGFloat)keyWidth {
@@ -378,7 +429,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 - (void)drawCandidatesAt:(CGFloat)top width:(CGFloat)width {
   CGFloat cellHeight = kCellTop + kCellLine + kCellBottom;
-  NSRect pill = self.shownSelectionRect;
+  NSRect pill = NSOffsetRect(self.shownSelectionRect, 0, top);
   if (!NSIsEmptyRect(pill)) {
     BOOL chosen = self.content.selectedRow >= 0;
     [(chosen ? kAccent : [self.textColor colorWithAlphaComponent:Colors::kGuessAlpha]) setFill];
@@ -436,6 +487,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   NSRect _target;  // where the last show put the window, before any resize animation ends
   BOOL _hiding;     // fading out; a show before it ends fades back in
   NSUInteger _fades;  // counts fades, so a fade-out that ends after a show does not order the window out
+  NSTimer *_morphTimer;  // moves and resizes the window to _target, with the view's progress
 }
 
 + (instancetype)shared {
@@ -519,29 +571,16 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   }];
 }
 
-// What the window is showing, apart from the words: the rows, the proof row. Typing and
-// choosing look alike, so going from one to the other, Tab keycap and all, is no change of layout.
-static NSString *Layout(PKPanelContent *content) {
-  if (!content) return @"";
-  return [NSString stringWithFormat:@"%d%d", content.rows != nil, content.showsProof];
-}
-
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect {
   [self useCurrentAppearance];
-  // Changes within one list move: the highlight slides and the window resizes. A change of
-  // layout (the proof row coming or going) also crossfades the content,
-  // which is laid out for the final size at once.
-  BOOL shown = self.isVisible;
-  BOOL relayout = shown && ![Layout(_view.content) isEqualToString:Layout(content)] && !ReducesMotion();
-  BOOL animate = (shown && _view.content.rows && content.rows && !ReducesMotion()) || relayout;
-  if (relayout) {
-    _view.wantsLayer = YES;
-    CATransition *fade = [CATransition animation];
-    fade.type = kCATransitionFade;
-    fade.duration = kResizeDuration;
-    fade.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-    [_view.layer addAnimation:fade forKey:@"layout"];
-  }
+  // One window changing shape: it moves and resizes to the new content, across the text when it
+  // changes sides, while the highlight slides, the rows move with it and the proof row fades
+  // between its places.
+  BOOL animate = self.isVisible && !_hiding && !ReducesMotion();
+  NSRect from = _panel.frame;
+  PKPanelContent *old = _view.content;
+  BOOL oldProofBelow = _view.proofBelow;
+  CGFloat oldRowTop = _view.shownRowTop;
   _view.content = content;
   NSSize size = [_view fittingSize];
   NSScreen *screen = NSScreen.mainScreen;
@@ -550,30 +589,35 @@ static NSString *Layout(PKPanelContent *content) {
   }
   NSRect visible = screen.visibleFrame;
   NSRect frame = NSMakeRect(NSMinX(lineRect) - kAnchorInset, NSMinY(lineRect) - kGapToText - size.height, size.width, size.height);
-  BOOL wasBelow = _view.proofBelow;
   _view.proofBelow = NSMinY(frame) < NSMinY(visible);
   if (_view.proofBelow) frame.origin.y = NSMaxY(lineRect) + kGapToText;
   frame.origin.x = MAX(NSMinX(visible), MIN(NSMinX(frame), NSMaxX(visible) - size.width));
   _target = frame;
   [PKModeIndicator.shared avoid:frame];  // both sit under the caret
   [_view moveSelectionAnimated:animate];
-  if (animate && wasBelow != _view.proofBelow) {
-    // Changing sides of the text (the grid no longer fits below it): jump there at the old
-    // size, the proof row next to the text, and grow or shrink away from it, rather than
-    // sliding the whole window across the text.
-    NSSize old = _panel.frame.size;
-    CGFloat y = _view.proofBelow ? NSMinY(frame) : NSMaxY(frame) - old.height;
-    [_panel setFrame:NSMakeRect(NSMinX(frame), y, old.width, old.height) display:YES];
-  }
-  if (animate && !NSEqualSizes(_panel.frame.size, frame.size)) {
-    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
-      context.duration = kResizeDuration;
-      context.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-      [self->_panel.animator setFrame:frame display:YES];
-    } completionHandler:^{
-      [self->_panel invalidateShadow];
+  [_morphTimer invalidate];
+  _morphTimer = nil;
+  if (animate) {
+    [_view morphFrom:old proofBelow:oldProofBelow rowTop:oldRowTop];
+    NSTimeInterval start = NSDate.timeIntervalSinceReferenceDate;
+    __weak PKCandidatePanel *weakSelf = self;
+    _morphTimer = [NSTimer timerWithTimeInterval:1.0 / 120 repeats:YES block:^(NSTimer *timer) {
+      PKCandidatePanel *panel = weakSelf;
+      CGFloat t = MIN(1, (NSDate.timeIntervalSinceReferenceDate - start) / kResizeDuration);
+      if (!panel || t >= 1) [timer invalidate];
+      if (!panel) return;
+      CGFloat e = Ease(t);
+      NSRect to = panel->_target;
+      [panel->_panel setFrame:NSMakeRect(NSMinX(from) + (NSMinX(to) - NSMinX(from)) * e, NSMinY(from) + (NSMinY(to) - NSMinY(from)) * e,
+                                         NSWidth(from) + (NSWidth(to) - NSWidth(from)) * e, NSHeight(from) + (NSHeight(to) - NSHeight(from)) * e)
+                      display:YES];
+      [panel->_panel invalidateShadow];
+      panel->_view.progress = e;
+      if (t >= 1) panel->_morphTimer = nil;
     }];
+    [NSRunLoop.currentRunLoop addTimer:_morphTimer forMode:NSRunLoopCommonModes];
   } else {
+    _view.progress = 1;
     [_panel setFrame:frame display:NO];
     [_panel invalidateShadow];
   }
