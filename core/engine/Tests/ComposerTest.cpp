@@ -150,6 +150,18 @@ int main(int argc, char** argv) {
   composer.clear();
   type(composer, "1q");
   assert(composer.readingCount() == 2);
+  // For the word before the cursor, the shorter candidates end where it ends: 打字 offers 自
+  // for its ㄗˋ, not 打, and choosing it changes that syllable alone.
+  composer.clear();
+  type(composer, "283y4");
+  const Segment typed = composer.segments().back();
+  assert(typed.text == "打字" && typed.length == 2);
+  std::vector<std::string> fromEnd = composer.candidates(typed, /*fromEnd=*/true);
+  assert(fromEnd[0] == "打字" && std::find(fromEnd.begin(), fromEnd.end(), "自") != fromEnd.end());
+  assert(std::find(fromEnd.begin(), fromEnd.end(), "打") == fromEnd.end());
+  std::vector<std::string> fromStart = composer.candidates(typed);
+  assert(std::find(fromStart.begin(), fromStart.end(), "打") != fromStart.end());
+  assert(composer.choose(typed, "自", /*fromEnd=*/true) && composer.text().ends_with("自") && composer.readingCount() == 2);
   // Keys typed in English are Zhuyin only when they spell a syllable, which a lone letter does not.
   assert(!composer.isSyllableKeys("x") && composer.isSyllableKeys("su"));
 

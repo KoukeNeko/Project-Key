@@ -721,8 +721,12 @@ std::optional<size_t> Controller::doubtfulAfter(size_t start, bool backwards) co
   return doubtful.front();
 }
 
+bool Controller::choosesFromEnd() const {
+  return env_.settings->get(Setting::kCandidatePosition) == 1;
+}
+
 std::vector<std::string> Controller::choicesFor(const Segment& segment, int* readingIndex) const {
-  std::vector<std::string> candidates = composer_->candidates(segment);
+  std::vector<std::string> candidates = composer_->candidates(segment, choosesFromEnd());
   // The syllables' Zhuyin itself, as the system keyboards offer it: last in the first row when
   // all six columns hold one candidate each (iOS) and it fits that column, otherwise right after
   // the first row, which keeps the candidates' digits and leaves no column empty.
@@ -754,15 +758,33 @@ void Controller::pack(const std::vector<std::string>& words, std::vector<int>* r
   }
 }
 
+std::optional<Segment> Controller::activeSegment() const {
+  std::optional<Segment> segment = composer_->segmentFrom(activeStart_);
+  if (!segment || activeEnd_ >= segment->start + segment->length) return segment;
+  size_t length = activeEnd_ - segment->start;
+  size_t cut = 0;
+  for (size_t i = 0; i < length; i++) cut = segment->reading.find('-', cut) + 1;  // the grid's separator
+  // Its characters too when the phrase has one per syllable.
+  std::u16string text = ToUtf16(segment->text);
+  return Segment{text.size() == segment->length ? ToUtf8(text.substr(0, length)) : "", segment->reading.substr(0, cut - 1),
+                 segment->start, length, false};
+}
+
 void Controller::startChoosingAt(size_t start) {
-  std::optional<Segment> segment = composer_->segmentFrom(start);
+  activeStart_ = start;
+  activeEnd_ = SIZE_MAX;
+  std::optional<Segment> whole = composer_->segmentFrom(start);
+  size_t cursor = composer_->cursor();
+  // Choosing the word before the cursor, with the cursor inside a phrase, is choosing the
+  // phrase's part before it: 打 of 打|字.
+  if (choosesFromEnd() && whole && start < cursor && cursor < whole->start + whole->length) activeEnd_ = cursor;
+  std::optional<Segment> segment = activeSegment();
   if (!segment) return;
   std::vector<std::string> candidates = choicesFor(*segment, &readingIndex_);
   if (candidates.empty()) return;
   choosing_ = true;
   expanded_ = false;
   firstRow_ = 0;
-  activeStart_ = start;
   candidates_ = std::move(candidates);
   pack(candidates_, &rowStarts_, &columns_);
   auto current = std::find(candidates_.begin(), candidates_.end(), segment->text);
@@ -776,7 +798,7 @@ void Controller::choose(int index) {
 
 void Controller::pick(int index, bool moveOn) {
   zhuyinEdited_ = true;  // also when picked by a click, which passes no key
-  std::optional<Segment> segment = composer_->segmentFrom(activeStart_);
+  std::optional<Segment> segment = activeSegment();
   if (segment && index == readingIndex_) {
     // The grid holds only words, so the Zhuyin goes in with the rest of the composition, ending it.
     std::string before, after;
@@ -785,11 +807,14 @@ void Controller::pick(int index, bool moveOn) {
         before += other.text;
       } else if (other.start >= segment->start + segment->length) {
         after += other.text;
-      } else if (other.start < segment->start) {
-        // A phrase the chosen part starts inside keeps its characters before that part.
+      } else {
+        // A phrase the chosen part is inside keeps its characters before and after that part.
         // shortcut: a phrase without one character per syllable drops them; such phrases are rare.
         std::u16string text = ToUtf16(other.text);
-        if (text.size() == other.length) before += ToUtf8(text.substr(0, segment->start - other.start));
+        if (text.size() != other.length) continue;
+        size_t end = segment->start + segment->length;
+        if (other.start < segment->start) before += ToUtf8(text.substr(0, segment->start - other.start));
+        if (other.start + other.length > end) after += ToUtf8(text.substr(end - other.start));
       }
     }
     client_.insertText(before + candidates_[index] + after);
@@ -799,7 +824,7 @@ void Controller::pick(int index, bool moveOn) {
     hidePanel();
     return;
   }
-  if (segment) composer_->choose(*segment, candidates_[index]);
+  if (segment) composer_->choose(*segment, candidates_[index], choosesFromEnd());
   std::optional<size_t> next;
   if (moveOn && env_.settings->flag(Setting::kNextDoubtful)) next = doubtfulAfter(activeStart_, false);
   if (next) {
@@ -876,6 +901,10 @@ void Controller::refresh() {
       hasActive = true;
       activeStart = static_cast<uint32_t>(marked.size());
       activeLength = length;
+      // Only the part before the cursor, when that is what is chosen (one character per syllable).
+      if (activeEnd_ < segment.start + segment.length && length == segment.length) {
+        activeLength = static_cast<uint32_t>(activeEnd_ - segment.start);
+      }
     }
     if (typing && segment.start == *typing) content.activeSegment = static_cast<int>(content.segments.size());
     content.segments.push_back(segment.text);

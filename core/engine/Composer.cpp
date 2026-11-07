@@ -566,22 +566,39 @@ bool Composer::startsWithSegment(const Segment& segment, const std::string& read
   return reading == segment.reading || segment.reading.rfind(reading + grid_.readingSeparator(), 0) == 0;
 }
 
-std::vector<std::string> Composer::candidates(const Segment& segment) {
-  std::vector<std::string> values;
+std::vector<std::pair<size_t, ReadingGrid::Candidate>> Composer::choices(const Segment& segment, bool fromEnd) {
+  std::vector<std::pair<size_t, ReadingGrid::Candidate>> found;
+  const std::string& separator = grid_.readingSeparator();
   for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(segment.start)) {
-    if (startsWithSegment(segment, candidate.reading) &&
-        std::find(values.begin(), values.end(), candidate.value) == values.end()) {
-      values.push_back(candidate.value);
+    if (fromEnd ? candidate.reading == segment.reading : startsWithSegment(segment, candidate.reading)) {
+      found.emplace_back(segment.start, candidate);
     }
+  }
+  if (!fromEnd) return found;
+  // The readings that end where the segment ends, longest first: ㄗˋ of ㄉㄚˇ-ㄗˋ.
+  std::string rest = segment.reading;
+  for (size_t at = segment.start + 1; at < segment.start + segment.length; at++) {
+    rest.erase(0, rest.find(separator) + separator.size());
+    for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(at)) {
+      if (candidate.reading == rest) found.emplace_back(at, candidate);
+    }
+  }
+  return found;
+}
+
+std::vector<std::string> Composer::candidates(const Segment& segment, bool fromEnd) {
+  std::vector<std::string> values;
+  for (const auto& [at, candidate] : choices(segment, fromEnd)) {
+    if (std::find(values.begin(), values.end(), candidate.value) == values.end()) values.push_back(candidate.value);
   }
   return values;
 }
 
-bool Composer::choose(const Segment& segment, const std::string& value) {
-  const size_t start = segment.start;  // walk() rebuilds segments_, which `segment` may belong to
-  for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(segment.start)) {
-    if (candidate.value != value || !startsWithSegment(segment, candidate.reading)) continue;
-    if (grid_.overrideCandidate(segment.start, candidate)) {
+bool Composer::choose(const Segment& segment, const std::string& value, bool fromEnd) {
+  // Found before walk() rebuilds segments_, which `segment` may belong to.
+  for (const auto& [start, candidate] : choices(segment, fromEnd)) {
+    if (candidate.value != value) continue;
+    if (grid_.overrideCandidate(start, candidate)) {
       endReading();  // a word chosen ends the syllable being typed
       walk();
       if (userModel_) {

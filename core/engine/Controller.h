@@ -208,6 +208,11 @@ class Controller {
   std::optional<size_t> doubtfulAfter(size_t start, bool backwards) const;
   // The segment's candidates as the grid lists them, with its Zhuyin at *readingIndex (-1 for none).
   std::vector<std::string> choicesFor(const Segment& segment, int* readingIndex) const;
+  // Choosing the word before the cursor (Setting::kCandidatePosition 1), whose shorter
+  // candidates are the ones that end at the cursor.
+  bool choosesFromEnd() const;
+  // The segment being chosen: from activeStart_, up to activeEnd_.
+  std::optional<Segment> activeSegment() const;
   // words packed into grid rows: where each row starts, and the column each word starts at.
   void pack(const std::vector<std::string>& words, std::vector<int>* rowStarts, std::vector<int>* columns) const;
   void startChoosingAt(size_t start);
@@ -226,6 +231,7 @@ class Controller {
   std::unique_ptr<Composer> composer_;
   bool choosing_ = false;
   size_t activeStart_ = 0;  // start reading of the segment being chosen
+  size_t activeEnd_ = SIZE_MAX;  // where it ends, when only its part before the cursor is chosen
   std::vector<std::string> candidates_;
   int readingIndex_ = -1;  // where the syllables' Zhuyin sits in candidates_; -1 for none
   int selection_ = 0;

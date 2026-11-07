@@ -276,11 +276,15 @@ int main(int argc, char** argv) {
   assert(Utf16Length(client.panel.rows[0][0]) == 1);
   EscapeAll(controller, client);
 
-  // Set to the word before the cursor (macOS), the same cursor offers the whole 今天.
+  // Set to the word before the cursor (macOS), the same cursor (今|天) offers the part of 今天
+  // before it, 今, and at the end the whole 今天.
   settings.set(Setting::kCandidatePosition, 1);
   Type(controller, "rup wu0 ");
   assert(controller.handleKey(Special(ProjectKey::Key::kHome)));
   assert(controller.handleKey(Special(ProjectKey::Key::kRight)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(Utf16Length(client.panel.rows[0][0]) == 1);
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && controller.handleKey(Special(ProjectKey::Key::kEnd)));
   assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
   assert(Utf16Length(client.panel.rows[0][0]) == 2);
   EscapeAll(controller, client);
@@ -581,6 +585,28 @@ int main(int argc, char** argv) {
   Type(controller, "su3");
   assert(controller.handleKey(keypad) && HasSuffix(client.marked, "ㄉ"));  // 妳ㄉ: the choice above is remembered
   EscapeAll(controller, client);
+
+  // Choosing the word before the cursor, as macOS does, the shorter candidates end at the cursor:
+  // 打字 offers 自 for its ㄗˋ, which replaces that syllable alone.
+  settings.set(Setting::kCandidatePosition, 1);
+  Type(controller, "283y4");
+  assert(client.marked == "打字" && controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const std::vector<std::string>& endings = controller.candidates();
+  auto self = std::find(endings.begin(), endings.end(), "自");
+  assert(self != endings.end() && std::find(endings.begin(), endings.end(), "打") == endings.end());
+  controller.choose(static_cast<int>(self - endings.begin()));
+  assert(HasSuffix(client.marked, "自") && Utf16Length(client.marked) == 2);
+  EscapeAll(controller, client);
+  // With the cursor inside the word, the word before it is the part before the cursor: 今 of 今|天.
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kLeft)) && controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const std::vector<std::string>& firsts = controller.candidates();
+  auto gold = std::find(firsts.begin(), firsts.end(), "金");
+  assert(gold != firsts.end() && std::find(firsts.begin(), firsts.end(), "今天") == firsts.end());
+  controller.choose(static_cast<int>(gold - firsts.begin()));
+  assert(client.marked == "金天");
+  EscapeAll(controller, client);
+  settings.remove(Setting::kCandidatePosition);
 
   std::printf("ControllerTest passed\n");
   return 0;
