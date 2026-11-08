@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <cctype>
 #include <memory>
 #include <optional>
@@ -634,6 +635,13 @@ class Engine : public fcitx::InputMethodEngineV2 {
   void activate(const fcitx::InputMethodEntry&, fcitx::InputContextEvent& event) override {
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settingsAction_);
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &checkAction_);
+  }
+
+  // COSMIC's panel tints a tray icon with its text color, which turns the colored icon into
+  // a blank square: there it gets the one-color icon with the ㄅ cut out.
+  std::string subModeIconImpl(const fcitx::InputMethodEntry&, fcitx::InputContext&) override {
+    const char* desktop = std::getenv("XDG_CURRENT_DESKTOP");
+    return desktop && std::strstr(desktop, "COSMIC") ? "fcitx-projectkey-symbolic" : "";
   }
 
   std::string subMode(const fcitx::InputMethodEntry&, fcitx::InputContext&) override {

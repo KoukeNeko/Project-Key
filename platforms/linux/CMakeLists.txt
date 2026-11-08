@@ -95,7 +95,7 @@ configure_file(projectkey-settings.desktop.in projectkey-settings.desktop @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-settings.desktop" DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 # The icon (tools/icon/make-icons.ps1), for the input method and the settings launcher. Desktops read
 # icons through hicolor's cache, so refresh it as a package's trigger would.
-install(FILES fcitx-projectkey.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
+install(FILES fcitx-projectkey.svg fcitx-projectkey-symbolic.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
 # The GNOME Shell extension that shows Project Key's windows on GNOME (Sources/GnomeScreen.cpp),
 # where Mutter lets no input method place them; it is turned on in GNOME's Extensions app.
 install(DIRECTORY gnome-shell/project-key@koukeneko.github.io DESTINATION "${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions")

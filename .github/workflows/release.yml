@@ -217,7 +217,8 @@ jobs:
                 data=${XDG_DATA_HOME:-$HOME/.local/share}
                 for file in fcitx5/addon/projectkey.conf fcitx5/inputmethod/projectkey.conf fcitx5/themes/projectkey \\
                             gnome-shell/extensions/project-key@koukeneko.github.io applications/projectkey-settings.desktop \\
-                            icons/hicolor/scalable/apps/fcitx-projectkey.svg; do
+                            icons/hicolor/scalable/apps/fcitx-projectkey.svg \\
+                            icons/hicolor/scalable/apps/fcitx-projectkey-symbolic.svg; do
                   mkdir -p "$data/$(dirname "$file")"
                   rm -rf "${data:?}/$file"
                   ln -s "#{opt_share}/$file" "$data/$file"
