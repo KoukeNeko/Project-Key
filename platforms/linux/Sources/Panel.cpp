@@ -291,7 +291,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
                                      if (owner_ && content_ && panel_->mapped) show(*owner_, PanelContent(*content_), anchor_);
                                    });
   }
-  bool wasVisible = panel_->mapped;
+  bool wasVisible = panel_->mapped && !panelFade_.hiding;
   // One window changing shape: it moves and resizes to the new content, across the text when it
   // changes sides, while the highlight slides, the rows move with it and the proof row fades
   // between its places.
@@ -307,6 +307,10 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   if (!wasVisible) {
     rounded_ = screen_->composited();
     panel_->setBlur(blurs());
+    panelFade_.hiding = false;
+    // Without a compositor a window cannot fade. One fading out turns back from where it is.
+    if (!panel_->mapped) panelFade_.alpha = rounded_ ? 0 : 1;
+    if (rounded_) startFade(panelFade_);
   }
 
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
@@ -317,7 +321,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   int left = caret.left() - static_cast<int>(std::lround(kAnchorInset * scale_));
   int top = caret.bottom() + gap;
   // A Tab hint goes under the window too, so it needs the room as well.
-  int hintRoom = hintContent_ ? hintHeight() + static_cast<int>(std::lround(kHintGap * scale_)) : 0;
+  int hintRoom = hintContent_ && !hintFade_.hiding ? hintHeight() + static_cast<int>(std::lround(kHintGap * scale_)) : 0;
   proofBelow_ = panel_->above() || top + height + hintRoom > screen_->height();
   if (proofBelow_) top = caret.top() - gap - height;
   left = std::max(0, std::min(left, screen_->width() - width));
@@ -331,6 +335,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   pillTo_ = to;
 
   Frame target{left, top, width, height};
+  panelPlaced_ = target;
   bool moved = frameFrom.x != left || frameFrom.y != top || frameFrom.width != width || frameFrom.height != height;
   resizing_ = animate && (moved || oldRowTop != rowTop() || old->showsProof != content_->showsProof || oldProofBelow != proofBelow_);
   if (resizing_) {
@@ -345,6 +350,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
     oldContent_.reset();
     progress_ = 1;
     panel_->place(target);
+    if (panelFade_.running) reveal(*panel_, target, panelFade_.alpha);
   }
   panel_->map(ic);
   paintPanel();
@@ -356,8 +362,28 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
     placeHint();
     paintHint();
   }
-  if (sliding_ || resizing_) startTimer(panelTimer_, &Panel::tickPanel);
+  if (sliding_ || resizing_ || panelFade_.running) startTimer(panelTimer_, &Panel::tickPanel);
   screen_->sync();
+}
+
+void Panel::startFade(Fade& fade) {
+  fade.running = true;
+  fade.from = fade.alpha;
+  fade.start = NowMs();
+}
+
+void Panel::advanceFade(Fade& fade) {
+  float t = std::min(1.f, static_cast<float>(NowMs() - fade.start) / kWindowFadeMs);
+  fade.alpha = fade.from + ((fade.hiding ? 0 : 1) - fade.from) * t;
+  if (t >= 1) fade.running = false;
+}
+
+// A blur stays at full strength under a fading window and goes all at once, so a blurred window
+// also grows and shrinks, from the edge next to the text, and takes its blur with it.
+void Panel::reveal(Window& window, const Frame& placed, float alpha) {
+  if (!window.blurred) return;
+  int height = std::max(1, static_cast<int>(std::lround(placed.height * alpha)));
+  window.place({placed.x, proofBelow_ ? placed.y + placed.height - height : placed.y, placed.width, height});
 }
 
 bool Panel::tickPanel() {
@@ -378,20 +404,39 @@ bool Panel::tickPanel() {
       oldContent_.reset();
     }
   }
+  if (panelFade_.running) {
+    advanceFade(panelFade_);
+    if (!panelFade_.running && panelFade_.hiding) {
+      finishHiding();
+      return false;
+    }
+    if (!resizing_) reveal(*panel_, panelPlaced_, panelFade_.alpha);
+  }
   paintPanel();
-  return sliding_ || resizing_;
+  return sliding_ || resizing_ || panelFade_.running;
 }
 
 void Panel::hide(const fcitx::InputContext& ic) {
   if (!panel_ || &ic != owner_) return;
-  if (panelTimer_) panelTimer_->setEnabled(false);
   sliding_ = resizing_ = false;
   oldContent_.reset();
   progress_ = 1;
+  owner_ = nullptr;  // ic may go while the window fades
+  hideHint();
+  if (rounded_ && panel_->mapped) {
+    panelFade_.hiding = true;
+    startFade(panelFade_);
+    startTimer(panelTimer_, &Panel::tickPanel);
+    return;
+  }
+  if (panelTimer_) panelTimer_->setEnabled(false);
+  finishHiding();
+}
+
+void Panel::finishHiding() {
+  panelFade_.running = panelFade_.hiding = false;
   panel_->unmap();
   content_.reset();
-  owner_ = nullptr;
-  hideHint();
 }
 
 // MARK: Tab hint
@@ -400,20 +445,50 @@ void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
   if (!ok() || !panel_ || !panel_->mapped || &ic != owner_) return;
   if (!hint_) hint_ = screen_->createWindow([this] { paintHint(); }, [this] { paintHint(); });
   if (!hint_->mapped) hint_->setBlur(blurs());
-  bool hadHint = hintContent_.has_value();
+  bool hadHint = hintContent_.has_value() && !hintFade_.hiding;
   hintContent_ = hint;
+  if (!hint_->mapped || hintFade_.hiding) {
+    hintFade_.hiding = false;
+    if (!hint_->mapped) hintFade_.alpha = rounded_ ? 0 : 1;
+    if (rounded_) startFade(hintFade_);
+  }
   // Placed without room for a hint under it, the window may have to go above the text now.
   if (!hadHint && !proofBelow_) show(ic, PanelContent(*content_), anchor_);
   placeHint();
   hint_->map(ic);
   paintHint();
+  if (hintFade_.running) startTimer(hintTimer_, &Panel::tickHint);
   screen_->sync();
 }
 
 void Panel::hideHint() {
-  if (!hint_) return;
+  if (!hint_ || hintFade_.hiding) return;
+  if (rounded_ && hint_->mapped && hintContent_) {
+    hintFade_.hiding = true;
+    startFade(hintFade_);
+    startTimer(hintTimer_, &Panel::tickHint);
+    return;
+  }
+  if (hintTimer_) hintTimer_->setEnabled(false);
+  finishHidingHint();
+}
+
+void Panel::finishHidingHint() {
+  hintFade_.running = hintFade_.hiding = false;
   hint_->unmap();
   hintContent_.reset();
+}
+
+bool Panel::tickHint() {
+  if (!hint_->mapped) return false;
+  advanceFade(hintFade_);
+  if (!hintFade_.running && hintFade_.hiding) {
+    finishHidingHint();
+    return false;
+  }
+  reveal(*hint_, hintPlaced_, hintFade_.alpha);
+  paintHint();
+  return hintFade_.running;
 }
 
 int Panel::hintHeight() const {
@@ -431,7 +506,9 @@ void Panel::placeHint() {
   int gap = static_cast<int>(std::lround(kHintGap * scale_));
   int left = std::max(0, std::min(next.x, screen_->width() - width));
   int top = proofBelow_ ? next.y - gap - height : next.y + next.height + gap;
-  hint_->place({left, top, width, height});
+  hintPlaced_ = {left, top, width, height};
+  hint_->place(hintPlaced_);
+  if (hintFade_.running) reveal(*hint_, hintPlaced_, hintFade_.alpha);
 }
 
 void Panel::paintHint() {
@@ -448,7 +525,7 @@ void Panel::paintHint() {
   drawProof(cr, *hintContent_, 0, width);
   cairo_pop_group_to_source(cr);
   cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-  cairo_paint(cr);
+  cairo_paint_with_alpha(cr, hintFade_.alpha);
   hint_->endPaint(cr);
 }
 
@@ -485,7 +562,7 @@ void Panel::paintPanel() {
 
   cairo_pop_group_to_source(cr);
   cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-  cairo_paint(cr);
+  cairo_paint_with_alpha(cr, panelFade_.alpha);
   panel_->endPaint(cr);
 }
 

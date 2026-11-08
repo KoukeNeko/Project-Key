@@ -58,6 +58,16 @@ class Panel {
     bool operator==(const Rect&) const = default;
   };
 
+  // A window fading in as it opens and, hiding, out as it closes; only with a compositor.
+  struct Fade {
+    bool running = false, hiding = false;
+    float alpha = 1, from = 1;
+    uint64_t start = 0;
+  };
+  void startFade(Fade& fade);
+  void advanceFade(Fade& fade);
+  void reveal(Window& window, const Frame& placed, float alpha);
+
   // Whether the windows should blur what is behind them: the setting asks for
   // it and the compositor (KWin) offers it.
   bool blurs();
@@ -67,6 +77,9 @@ class Panel {
   // Candidate window.
   void paintPanel();
   bool tickPanel();
+  bool tickHint();
+  void finishHiding();
+  void finishHidingHint();
   float proofHeight() const;
   float rowHeight() const;
   float rowTop() const;
@@ -122,10 +135,15 @@ class Panel {
   std::optional<PanelContent> oldContent_;
   bool oldProofBelow_ = false;
   float oldRowTop_ = 0, progress_ = 1;
+  Fade panelFade_;
+  Frame panelPlaced_;  // where the last show put the window, before any animation ends
   std::unique_ptr<fcitx::EventSourceTime> panelTimer_;
 
   std::unique_ptr<Window> hint_;
   std::optional<PanelContent> hintContent_;
+  Fade hintFade_;
+  Frame hintPlaced_;
+  std::unique_ptr<fcitx::EventSourceTime> hintTimer_;
 
   std::unique_ptr<Window> badge_;
   std::string badgeLabel_;
