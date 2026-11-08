@@ -11,6 +11,8 @@
 #include <fcitx/addonmanager.h>
 #include <fcitx/instance.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 #include <wayland-client.h>
 #include <wayland_public.h>
@@ -18,13 +20,16 @@
 #include <algorithm>
 #include <array>
 #include <climits>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "Screen.h"
+#include "ext-background-effect-v1-client-protocol.h"
 #include "input-method-unstable-v2-client-protocol.h"
 
 namespace fcitx::wayland {
@@ -74,7 +79,37 @@ struct Globals {
   wl_compositor* compositor = nullptr;
   uint32_t compositorVersion = 0;
   wl_shm* shm = nullptr;
+  ext_background_effect_manager_v1* effects = nullptr;  // KWin 6.7, Mutter 51, niri 26.04
+  bool blur = false;                                    // effects says it can blur
 };
+
+// Hyprland blurs input method popups itself while its decoration:blur:input_methods is on;
+// it has no protocol for asking, so its socket (hyprctl's) is asked whether it is on.
+bool HyprlandBlursInputMethods() {
+  const char* signature = std::getenv("HYPRLAND_INSTANCE_SIGNATURE");
+  const char* runtime = std::getenv("XDG_RUNTIME_DIR");
+  if (!signature || !runtime) return false;
+  std::string path = std::string(runtime) + "/hypr/" + signature + "/.socket.sock";
+  sockaddr_un address{};
+  if (path.size() >= sizeof(address.sun_path)) return false;
+  address.sun_family = AF_UNIX;
+  std::memcpy(address.sun_path, path.c_str(), path.size() + 1);
+  auto on = [&](const std::string& option) {
+    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd < 0) return false;
+    std::string request = "j/getoption " + option, reply;
+    if (connect(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0 &&
+        write(fd, request.data(), request.size()) == static_cast<ssize_t>(request.size())) {
+      char buffer[256];
+      for (ssize_t n; (n = read(fd, buffer, sizeof(buffer))) > 0;) reply.append(buffer, n);
+    }
+    close(fd);
+    // {"option": "...", "int": 1, "set": true}
+    size_t value = reply.find("\"int\":");
+    return value != std::string::npos && reply.find_first_not_of(' ', value + 6) == reply.find('1', value + 6);
+  };
+  return on("decoration:blur:enabled") && on("decoration:blur:input_methods");
+}
 
 class WaylandWindow;
 
@@ -97,7 +132,10 @@ class WaylandScreen final : public Screen {
   // Frames are in surface coordinates; each window scales its buffers.
   float scale() const override { return 1; }
   bool composited() override { return true; }
-  bool blurs() override { return false; }
+  bool blurs() override {
+    return std::any_of(connections_.begin(), connections_.end(), [](const auto& connection) { return connection.second.blur; }) ||
+           HyprlandBlursInputMethods();
+  }
 
   zwp_input_method_v2* inputMethod(fcitx::InputContext& ic) const {
     if (!waylandim_ || ic.frontendName() != "wayland_v2") return nullptr;
@@ -122,6 +160,7 @@ class WaylandScreen final : public Screen {
  private:
   friend class WaylandWindow;
   static const wl_registry_listener kRegistryListener;
+  static const ext_background_effect_manager_v1_listener kEffectsListener;
 
   void connect(wl_display* display, fcitx::FocusGroup* group);
   void disconnect(wl_display* display);
@@ -152,7 +191,8 @@ class WaylandWindow final : public Window {
   void place(const Frame& to) override { frame = to; }
   void map(fcitx::InputContext& ic) override;
   void unmap() override;
-  void setBlur(bool) override { blurred = false; }
+  // The blur itself goes with each frame (endPaint), as the frame moves in the surface.
+  void setBlur(bool on) override { blurred = on; }
   cairo_t* beginPaint() override;
   void endPaint(cairo_t* cr) override;
   bool above() const override { return above_; }
@@ -179,6 +219,7 @@ class WaylandWindow final : public Window {
   static const zwp_input_popup_surface_v2_listener kPopupListener;
 
   void flush() { wl_display_flush(globals_->display); }
+  void setBlurRegion(int x, int y);
 
   WaylandScreen& screen_;
   std::function<void()> exposed_, moved_;
@@ -186,6 +227,8 @@ class WaylandWindow final : public Window {
   wl_surface* surface_ = nullptr;
   zwp_input_method_v2* im_ = nullptr;
   zwp_input_popup_surface_v2* popup_ = nullptr;
+  ext_background_effect_surface_v1* effect_ = nullptr;
+  std::array<int, 5> blurRegion_{};  // what effect_ was last given: on, x, y, width, height
   std::array<Buffer, 2> buffers_;
   Buffer* painting_ = nullptr;
   int scale_ = 1;       // the surface's preferred buffer scale
@@ -194,6 +237,12 @@ class WaylandWindow final : public Window {
 };
 
 // MARK: Screen
+
+const ext_background_effect_manager_v1_listener WaylandScreen::kEffectsListener = {
+    .capabilities = [](void* data, ext_background_effect_manager_v1*, uint32_t flags) {
+      static_cast<Globals*>(data)->blur = flags & EXT_BACKGROUND_EFFECT_MANAGER_V1_CAPABILITY_BLUR;
+    },
+};
 
 const wl_registry_listener WaylandScreen::kRegistryListener = {
     .global =
@@ -206,6 +255,10 @@ const wl_registry_listener WaylandScreen::kRegistryListener = {
                 static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, globals->compositorVersion));
           } else if (std::strcmp(interface, wl_shm_interface.name) == 0 && !globals->shm) {
             globals->shm = static_cast<wl_shm*>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
+          } else if (std::strcmp(interface, ext_background_effect_manager_v1_interface.name) == 0 && !globals->effects) {
+            globals->effects = static_cast<ext_background_effect_manager_v1*>(
+                wl_registry_bind(registry, name, &ext_background_effect_manager_v1_interface, 1));
+            ext_background_effect_manager_v1_add_listener(globals->effects, &kEffectsListener, globals);
           }
         },
     .global_remove = [](void*, wl_registry*, uint32_t) {},
@@ -249,6 +302,7 @@ void WaylandScreen::disconnect(wl_display* display) {
     if (window->display() == display) window->release();
   }
   Globals& globals = found->second;
+  if (globals.effects) ext_background_effect_manager_v1_destroy(globals.effects);
   if (globals.shm) wl_shm_destroy(globals.shm);
   if (globals.compositor) wl_compositor_destroy(globals.compositor);
   wl_registry_destroy(globals.registry);
@@ -340,6 +394,9 @@ void WaylandWindow::unmap() {
 
 void WaylandWindow::release() {
   for (Buffer& buffer : buffers_) buffer.clear();
+  if (effect_) ext_background_effect_surface_v1_destroy(effect_);
+  effect_ = nullptr;
+  blurRegion_ = {};
   if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
   if (surface_) wl_surface_destroy(surface_);
   if (globals_) flush();
@@ -377,12 +434,38 @@ void WaylandWindow::endPaint(cairo_t* cr) {
   if (!painting_) return;
   cairo_surface_flush(painting_->surface);
   if (globals_->compositorVersion >= 3) wl_surface_set_buffer_scale(surface_, scale_);
+  setBlurRegion(frame.x - std::min(0, frame.x), frame.y - std::min(0, frame.y));  // where beginPaint put the frame
   wl_surface_attach(surface_, painting_->buffer, 0, 0);
   wl_surface_damage(surface_, 0, 0, INT32_MAX, INT32_MAX);
   wl_surface_commit(surface_);
   painting_->busy = true;
   painting_ = nullptr;
   flush();
+}
+
+// The frame's rounded rectangle at (x, y) in the surface, one row at a time through the
+// corners, so no blur shows outside them; as X11Window::setBlur gives KWin.
+void WaylandWindow::setBlurRegion(int x, int y) {
+  if (!globals_->effects) return;
+  std::array<int, 5> wanted{blurred && globals_->blur, x, y, frame.width, frame.height};
+  if (wanted == blurRegion_) return;
+  blurRegion_ = wanted;
+  if (!effect_) effect_ = ext_background_effect_manager_v1_get_background_effect(globals_->effects, surface_);
+  if (!wanted[0]) {
+    ext_background_effect_surface_v1_set_blur_region(effect_, nullptr);
+    return;
+  }
+  wl_region* region = wl_compositor_create_region(globals_->compositor);
+  int radius = std::min({static_cast<int>(kWindowRadius), frame.width / 2, frame.height / 2});
+  for (int row = 0; row < radius; row++) {
+    double dy = radius - row - 0.5;
+    int inset = static_cast<int>(std::lround(radius - std::sqrt(radius * radius - dy * dy)));
+    wl_region_add(region, x + inset, y + row, frame.width - 2 * inset, 1);
+    wl_region_add(region, x + inset, y + frame.height - 1 - row, frame.width - 2 * inset, 1);
+  }
+  wl_region_add(region, x, y + radius, frame.width, frame.height - 2 * radius);
+  ext_background_effect_surface_v1_set_blur_region(effect_, region);
+  wl_region_destroy(region);
 }
 
 bool WaylandWindow::Buffer::make(wl_shm* shm, int w, int h) {

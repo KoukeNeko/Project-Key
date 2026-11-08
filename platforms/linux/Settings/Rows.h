@@ -146,7 +146,7 @@ inline const std::vector<Group>& Groups() {
        }},
       {"外觀",
        {
-           {Row::kChoice, "Appearance", "候選視窗", "模糊需要 KWin 的模糊特效；沒有時是深色。", {"深色", "模糊"}},
+           {Row::kChoice, "Appearance", "候選視窗", "模糊需要 KDE、GNOME、niri，或開了輸入法模糊的 Hyprland；沒有時是深色。", {"深色", "模糊"}},
            {Row::kChoice, "ProofPreview", "輸入時的整句預覽", nullptr, proofModes},
            {Row::kChoice, "ChoosingProof", "選字時的整句預覽", nullptr, proofModes},
        }},

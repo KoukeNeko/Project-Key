@@ -99,11 +99,13 @@ function ThemeImage([string]$name, [int]$width, [int]$height, [scriptblock]$draw
 }
 $muted = [Drawing.Color]::FromArgb(0x8e, 0x9a, 0xa3)
 # The window: 8px corners, a 1px edge. Fcitx5 stretches the middle and keeps the 8px corners.
+# Translucent over the blur behind it (theme.conf's EnableBlur), as Panel.cpp draws over one:
+# the background at 0.85, the edge at 0.6.
 ThemeImage 'panel.png' 24 24 {
   param($g)
   $shape = RoundedRect 0.5 0.5 23 23 7.5
-  $g.FillPath([Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(0x23, 0x28, 0x2c)), $shape)
-  $g.DrawPath([Drawing.Pen]::new([Drawing.Color]::FromArgb(0x34, 0x3b, 0x40), 1), $shape)
+  $g.FillPath([Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(217, 0x23, 0x28, 0x2c)), $shape)
+  $g.DrawPath([Drawing.Pen]::new([Drawing.Color]::FromArgb(153, 0x34, 0x3b, 0x40), 1), $shape)
 }
 # The selection: 4px corners in the accent color, big enough for the 11/5/6 margins it is cut at.
 ThemeImage 'highlight.png' 24 24 { param($g) $g.FillPath([Drawing.SolidBrush]::new($accent), (RoundedRect 0 0 24 24 4)) }

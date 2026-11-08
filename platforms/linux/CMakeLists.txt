@@ -61,8 +61,15 @@ add_custom_command(
   COMMAND "${WAYLAND_SCANNER}" client-header "${IM_PROTOCOL}" input-method-unstable-v2-client-protocol.h
   COMMAND "${WAYLAND_SCANNER}" private-code "${IM_PROTOCOL}" input-method-unstable-v2-protocol.c
   DEPENDS "${IM_PROTOCOL}")
+# The blur behind them, where the compositor offers it (wayland-protocols' staging, newer than the distributions').
+set(EFFECT_PROTOCOL "${CMAKE_CURRENT_SOURCE_DIR}/protocols/ext-background-effect-v1.xml")
+add_custom_command(
+  OUTPUT ext-background-effect-v1-client-protocol.h ext-background-effect-v1-protocol.c
+  COMMAND "${WAYLAND_SCANNER}" client-header "${EFFECT_PROTOCOL}" ext-background-effect-v1-client-protocol.h
+  COMMAND "${WAYLAND_SCANNER}" private-code "${EFFECT_PROTOCOL}" ext-background-effect-v1-protocol.c
+  DEPENDS "${EFFECT_PROTOCOL}")
 add_library(projectkey MODULE Sources/ProjectKey.cpp Sources/Panel.cpp Sources/X11Screen.cpp Sources/GnomeScreen.cpp Sources/WaylandScreen.cpp
-  "${CMAKE_CURRENT_BINARY_DIR}/input-method-unstable-v2-protocol.c")
+  "${CMAKE_CURRENT_BINARY_DIR}/input-method-unstable-v2-protocol.c" "${CMAKE_CURRENT_BINARY_DIR}/ext-background-effect-v1-protocol.c")
 target_include_directories(projectkey PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(projectkey PRIVATE engine Fcitx5::Core Fcitx5::Utils Fcitx5::Module::DBus Fcitx5::Module::Wayland Fcitx5::Module::Notifications
   PkgConfig::ENCHANT PkgConfig::PANEL)
