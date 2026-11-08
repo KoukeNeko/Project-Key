@@ -77,7 +77,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 設定
 
-設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、簡拼、數字鍵盤選字（預設關）、記住選過的字（可清除紀錄；開著時也從送出的文字學習）、候選視窗外觀（深色、Acrylic（預設）、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock（預設關）與單按 Shift 切換中英、Tab 的英文轉注音與注音轉英文，以及「關於」（版本取自 `ProjectKey.dll`，並查 GitHub 最新發行版有無新版）。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
+設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、簡拼、數字鍵盤選字（預設關）、記住選過的字（可清除紀錄；開著時也從送出的文字學習）、候選視窗外觀（深色、Acrylic（預設）、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock（預設關）與單按 Shift 切換中英、Tab 的英文轉注音與注音轉英文，以及「關於」（版本取自 `ProjectKey.dll`，並查 GitHub 最新發行版有無新版；「選字模型」顯示模型日期，有新模型時可以直接下載，存在 `%LOCALAPPDATA%\Project Key`，核對 SHA-256 後不必重新安裝就生效）。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
 
 ## 測試
 
@@ -106,7 +106,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 候選清單的 UI Automation 支援（讓朗讀程式讀出候選字）；目前只送出 `EVENT_OBJECT_IME_SHOW／HIDE／CHANGE`。
 - 避開觸控鍵盤、遊戲全螢幕用的 UI Element（`ITfUIElement`）。
 - 聯想詞、滑鼠點選候選。
-- macOS 的視窗動畫：候選視窗與 Tab 提示的淡入淡出、輸入列與選字切換時的交叉淡化，以及展開後放不下、移到文字另一側時從文字旁往外展開。
+- 候選視窗與 Tab 提示出現、消失時的淡入淡出；內容改變時的移動與縮放已與 macOS 相同。
 - 自行建置的上下文模型：`tools/bigram-trainer` 的訓練腳本是 shell script，在 Windows 上需要另外執行，或用 Git Bash 執行 `fetch-models.sh` 下載發行版那一組；有 `bigram.bin`、`chars.bin` 時 `build.ps1` 會一併安裝；有補詞後的 `data.txt` 時，以它取代 McBopomofo 的詞庫。沒有它時選字與 McBopomofo 相同。發行版已附上。
 - 選過的字只存在伺服器記憶體，登出或重新安裝後清空（同 macOS）；從送出的文字學到的字串次數存在 `%LOCALAPPDATA%\Project Key\personal.txt`，設定的「清除」一併清空。
 - 組字一律當成句首：文字服務只在英文模式按 Tab 時把游標前的文字傳給伺服器，macOS 則接著游標前的漢字選字。

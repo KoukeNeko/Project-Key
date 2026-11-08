@@ -120,7 +120,7 @@ tools/bigram-trainer/train.sh       # 下載訓練文字並訓練，約 10 分�
 platforms/macos/build.sh            # 再建置一次，把模型放進 App
 ```
 
-不想自行訓練時，`tools/bigram-trainer/fetch-models.sh` 下載發行版使用的同一組檔案。
+不想自行訓練時，`tools/bigram-trainer/fetch-models.sh` 下載發行版使用的同一組檔案。發布新一組模型後，macOS、Windows、Linux 的設定在「關於 > 選字模型」提供下載，不必重新安裝。
 
 選字的評測工具在 [tools/corpus-evaluator](tools/corpus-evaluator/)。
 
