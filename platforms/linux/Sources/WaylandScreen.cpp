@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <climits>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <unordered_map>
@@ -87,8 +88,9 @@ class WaylandScreen final : public Screen {
     return im && globals(ic);
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
-  // The compositor knows the caret; frames start from it.
-  fcitx::Rect caret(const fcitx::InputContext&, const fcitx::Rect&) const override { return fcitx::Rect(); }
+  // The compositor knows the caret; frames start from it. COSMIC puts a popup's corner at the
+  // caret's top instead of below it, so frames start a caret's height down.
+  fcitx::Rect caret(const fcitx::InputContext&, const fcitx::Rect&) const override { return fcitx::Rect(0, 0, 0, caretHeight_); }
   // And keeps the popups on screen.
   int width() const override { return INT_MAX / 2; }
   int height() const override { return INT_MAX / 2; }
@@ -125,6 +127,11 @@ class WaylandScreen final : public Screen {
   void disconnect(wl_display* display);
 
   mutable fcitx::AddonInstance* waylandim_;  // dropped once it turns out not to offer the call
+  // COSMIC (smithay) places a popup with its corner at the caret's top-left and sends the
+  // caret in the app's window, not in the popup, as wlroots does; it never flips one above.
+  // shortcut: told by XDG_CURRENT_DESKTOP; tell by the rectangle if another smithay compositor does this.
+  bool cornerAtCaret_ = false;
+  int caretHeight_ = 0;
   std::unordered_map<wl_display*, Globals> connections_;
   std::vector<WaylandWindow*> windows_;
   std::unique_ptr<fcitx::HandlerTableEntry<fcitx::WaylandConnectionCreated>> created_;
@@ -205,6 +212,8 @@ const wl_registry_listener WaylandScreen::kRegistryListener = {
 };
 
 WaylandScreen::WaylandScreen(fcitx::AddonInstance* wayland, fcitx::AddonInstance* waylandim) : waylandim_(waylandim) {
+  const char* desktop = std::getenv("XDG_CURRENT_DESKTOP");
+  cornerAtCaret_ = desktop && std::strstr(desktop, "COSMIC");
   // Called at once for the connections Fcitx5 already has.
   created_ = wayland->call<fcitx::IWaylandModule::addConnectionCreatedCallback>(
       [this](const std::string&, wl_display* display, fcitx::FocusGroup* group) { connect(display, group); });
@@ -279,8 +288,14 @@ const wl_surface_listener WaylandWindow::kSurfaceListener = {
 // compositor put it below the caret, at its bottom when above.
 const zwp_input_popup_surface_v2_listener WaylandWindow::kPopupListener = {
     .text_input_rectangle =
-        [](void* data, zwp_input_popup_surface_v2*, int32_t, int32_t y, int32_t, int32_t) {
+        [](void* data, zwp_input_popup_surface_v2*, int32_t, int32_t y, int32_t, int32_t height) {
           auto* window = static_cast<WaylandWindow*>(data);
+          if (window->screen_.cornerAtCaret_) {
+            if (height == window->screen_.caretHeight_) return;
+            window->screen_.caretHeight_ = height;
+            if (window->mapped) window->moved_();
+            return;
+          }
           bool above = y > 0;
           if (above == window->above_) return;
           window->above_ = above;
