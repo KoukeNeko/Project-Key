@@ -310,6 +310,15 @@ int main(int argc, char** argv) {
   reranked.setSentenceModel(favoring);
   type(reranked, "c.4vm03y4");
   assert(reranked.text() == "候選自");
+  // One syllable alone has no sentence to read: the walk's word stays.
+  Composer unranked(lm, contextModel);
+  type(unranked, "y4");
+  assert(unranked.text() == "自");
+  WriteSentenceModel(sentencePath, {"候", "選", "字", "自"}, "字");
+  auto favoringOther = std::make_shared<ProjectKey::SentenceModel>();
+  assert(favoringOther->load(sentencePath));
+  unranked.setSentenceModel(favoringOther);
+  assert(unranked.text() == "自");
   reranked.setSentenceModel(uniform);
   assert(reranked.text() == "候選字");
   reranked.setSentenceModel(nullptr);

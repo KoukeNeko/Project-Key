@@ -587,7 +587,7 @@ void Composer::walk() {
   // the best kSentencePaths of them are reranked by how each reads as a whole: the walk sees only
   // two words back, so a rare pair can win (網液態 for 網頁太). A sentence with a character outside
   // the model's vocabulary keeps its walk score only when it is the walk's own.
-  if (sentences_ && !path.empty()) {
+  if (sentences_ && n > 1) {  // one syllable has no sentence to read
     std::vector<int> slot(choices.size());  // a choice's index in endingAt[its end]: its state in each successor
     for (size_t e = 0; e <= n; e++) {
       for (size_t j = 0; j < endingAt[e].size(); j++) slot[endingAt[e][j]] = static_cast<int>(j);
