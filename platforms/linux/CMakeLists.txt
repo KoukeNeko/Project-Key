@@ -122,6 +122,25 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-addon.conf" RENAME project
 install(FILES projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmethod")
 install(FILES "${MCBOPOMOFO}/Source/Data/data.txt" DESTINATION "${DATA_DIR}")
 install(FILES "${MCBOPOMOFO}/LICENSE.txt" RENAME McBopomofo-LICENSE.txt DESTINATION "${DATA_DIR}")
+# English for the Tab conversion, where the system's Enchant has no en_US (Spelling in
+# ProjectKey.cpp). Without the download the conversion only depends on the system's dictionary.
+set(ENGLISH_URL "https://raw.githubusercontent.com/LibreOffice/dictionaries/c0865a85eb67dc377f2cf8e8fe2c4fa9e53f0dcb/en")
+foreach(entry
+    "en_US.aff:e746c882dd6f303c2c46e7452804b9201115a6942cfeb15f18f8edf774d2e24e"
+    "en_US.dic:f0b1a234bd178bdd01875b2a392a9647f888b8fe879f79c52aae62c2759b3647"
+    "README_en_US.txt:168b4c01cb841f766a72f310b065c04d09cff46376c37a81d799593ce751c371")
+  string(REPLACE ":" ";" entry "${entry}")
+  list(GET entry 0 file)
+  list(GET entry 1 sha256)
+  set(path "${CMAKE_CURRENT_BINARY_DIR}/english/${file}")
+  file(DOWNLOAD "${ENGLISH_URL}/${file}" "${path}" EXPECTED_HASH "SHA256=${sha256}" STATUS status)
+  list(GET status 0 code)
+  if(code EQUAL 0)
+    install(FILES "${path}" DESTINATION "${DATA_DIR}")
+  else()
+    message(WARNING "could not download ${file}: ${status}")
+  endif()
+endforeach()
 # From tools/bigram-trainer when it was run: the dictionary with the words McBopomofo
 # lacks (it replaces McBopomofo's) and the context ranking models.
 # REQUIRE_MODELS stops the build without them, as releases need them; models-version.txt is

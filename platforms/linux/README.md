@@ -11,7 +11,7 @@ Fcitx5 注音輸入法（大千鍵盤），按鍵與 [macOS 版](../macos/README
 | 組字區 | preedit，可疑字以外的段落加底線，選字中的段落反白 |
 | 候選字窗、中／英標記 | Project Key 自己畫的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同：X11 上是 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上是輸入法的 popup（`Sources/WaylandScreen.cpp`），GNOME 上由 Project Key 的 GNOME Shell 擴充功能顯示（`Sources/GnomeScreen.cpp`） |
 | 前文（Tab 英文轉注音、組字接著游標前的字選字） | surrounding text；App 不提供時 Tab 照常輸入，選字當成句首 |
-| 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
+| 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典；系統沒有時，複製隨附的字典到 `~/.config/enchant/hunspell` |
 
 「候選視窗外觀」有深色與模糊（預設）兩種，模糊是模糊視窗後方的內容再疊一層深色。中／英標記跟著用同一種外觀。有合成器時視窗是圓角，沒有時是直角。各桌面的模糊：
 

@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <cctype>
 #include <memory>
 #include <optional>
@@ -159,7 +160,9 @@ int Span(const std::string& candidate) {
 class Spelling {
  public:
   Spelling() : broker_(enchant_broker_init()) {
-    if (broker_) dict_ = enchant_broker_request_dict(broker_, "en_US");
+    if (!broker_) return;
+    dict_ = enchant_broker_request_dict(broker_, "en_US");
+    if (!dict_ && copyDictionary()) dict_ = enchant_broker_request_dict(broker_, "en_US");
   }
   ~Spelling() {
     if (dict_) enchant_broker_free_dict(broker_, dict_);
@@ -185,6 +188,28 @@ class Spelling {
   }
 
  private:
+  // The system has no en_US: the one installed with Project Key goes where Enchant looks for
+  // the user's own, which needs no root and works on every distribution.
+  static bool copyDictionary() {
+    namespace fs = std::filesystem;
+    const fs::path bundled = PROJECTKEY_DATA_DIR;
+    if (!fs::exists(bundled / "en_US.dic")) return false;
+    const char* config = std::getenv("XDG_CONFIG_HOME");
+    const char* home = std::getenv("HOME");
+    if ((!config || !*config) && !home) return false;
+    const fs::path folder = (config && *config ? fs::path(config) : fs::path(home) / ".config") / "enchant" / "hunspell";
+    std::error_code error;
+    fs::create_directories(folder, error);
+    for (const char* name : {"en_US.aff", "en_US.dic"}) {
+      fs::copy_file(bundled / name, folder / name, fs::copy_options::overwrite_existing, error);
+      if (error) {
+        FCITX_WARN() << "Project Key: cannot copy " << name << " to " << folder.string() << ": " << error.message();
+        return false;
+      }
+    }
+    return true;
+  }
+
   EnchantBroker* broker_ = nullptr;
   EnchantDict* dict_ = nullptr;
 };

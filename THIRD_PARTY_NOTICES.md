@@ -36,6 +36,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### Linux 隨附的英文字典
+
+Linux 版安裝時隨附 [LibreOffice dictionaries](https://github.com/LibreOffice/dictionaries) 固定 commit 的 `en/en_US.aff`、`en/en_US.dic`（源自 SCOWL 與 Hunspell），僅在系統的 Enchant 沒有 en_US 字典時使用。著作權與授權條款見一併安裝的 `README_en_US.txt`。
+
 ### 發行版隨附的詞庫與上下文模型
 
 發行版（macOS、Windows 與 Homebrew 的 Linux formula）隨附 `tools/bigram-trainer` 訓練出的三個資料檔，建置時由 `tools/bigram-trainer/fetch-models.sh` 從 GitHub 發行檔下載並以 `models.sha256` 核對。它們與程式分開授權，安裝在同一個資料夾，旁邊附上來源與授權說明 [`MODELS-NOTICE.txt`](tools/bigram-trainer/MODELS-NOTICE.txt) 與 LGPL 條文 [`LICENSE-LGPL-2.1.txt`](tools/bigram-trainer/LICENSE-LGPL-2.1.txt)。
