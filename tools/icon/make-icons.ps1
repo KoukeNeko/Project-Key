@@ -4,8 +4,8 @@
 # fifth of its size. Run on Windows, which has the font; commit the results.
 #   platforms/linux/fcitx-projectkey.svg   64x64, the ㄅ as outlines so no font is needed
 #   platforms/linux/fcitx-projectkey-symbolic.svg   the same in one color, the ㄅ cut out
-#   platforms/macos/Resources/icon.tiff    a 22x16 pt input source icon: the shape inset 1 pt, as
-#                                          macOS's own ones are, at 1x and 2x
+#   platforms/macos/Resources/icon.tiff    a 22x16 pt input source icon: the shape fills the frame, as
+#                                          macOS's own ones do, at 1x and 2x
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $root = Join-Path $PSScriptRoot '..\..'
@@ -70,8 +70,8 @@ function MacFrame([int]$scale) {
   $g = [Drawing.Graphics]::FromImage($bitmap)
   $g.SmoothingMode = 'AntiAlias'
   $g.ScaleTransform($scale, $scale)
-  $g.FillPath([Drawing.SolidBrush]::new($accent), (RoundedRect 1 1 20 14 3))
-  $g.FillPath([Drawing.Brushes]::White, (Glyph 1 1 20 14))
+  $g.FillPath([Drawing.SolidBrush]::new($accent), (RoundedRect 0 0 22 16 3))
+  $g.FillPath([Drawing.Brushes]::White, (Glyph 0 0 22 16))
   $g.Dispose()
   $bitmap
 }
