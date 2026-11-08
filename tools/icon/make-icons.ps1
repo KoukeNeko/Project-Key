@@ -13,11 +13,11 @@ $accent = [Drawing.Color]::FromArgb(0x14, 0x80, 0x6f)
 $bopomofo = [string][char]0x3105
 
 # The ㄅ as a path, centered in a box as build.ps1 centers it (nudged down 4% of the size).
-function Glyph([float]$x, [float]$y, [float]$width, [float]$height) {
+function Glyph([float]$x, [float]$y, [float]$width, [float]$height, [float]$em = 0.62) {
   $path = [Drawing.Drawing2D.GraphicsPath]::new()
   $format = [Drawing.StringFormat]::new(); $format.Alignment = 'Center'; $format.LineAlignment = 'Center'
   $family = [Drawing.FontFamily]::new('Microsoft JhengHei UI')
-  $path.AddString($bopomofo, $family, [int][Drawing.FontStyle]::Bold, $height * 0.62,
+  $path.AddString($bopomofo, $family, [int][Drawing.FontStyle]::Bold, $height * $em,
     [Drawing.RectangleF]::new($x, $y + $height * 0.04, $width, $height), $format)
   $path
 }
@@ -69,9 +69,13 @@ function MacFrame([int]$scale) {
   $bitmap.SetResolution(72 * $scale, 72 * $scale)
   $g = [Drawing.Graphics]::FromImage($bitmap)
   $g.SmoothingMode = 'AntiAlias'
+  $g.PixelOffsetMode = 'Half'  # or the frame's first row and column come out half covered
   $g.ScaleTransform($scale, $scale)
   $g.FillPath([Drawing.SolidBrush]::new($accent), (RoundedRect 0 0 22 16 3))
-  $g.FillPath([Drawing.Brushes]::White, (Glyph 0 0 22 16))
+  # Larger than elsewhere: at 16 pt the ㄅ should match the system's input source glyphs.
+  $glyph = Glyph 0 0 22 16 0.95
+  $g.FillPath([Drawing.Brushes]::White, $glyph)
+  $g.DrawPath([Drawing.Pen]::new([Drawing.Color]::White, 0.3), $glyph)
   $g.Dispose()
   $bitmap
 }
