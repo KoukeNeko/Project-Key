@@ -547,11 +547,11 @@
     chars.forEach(c => {
       [...c.dataset.zy].forEach((_, k) => {
         tl.call(() => { c.textContent = c.dataset.zy.slice(0, k + 1); c.classList.add('zy'); }, null, at);
-        at += .1;
+        at += .075;
       });
-      at += .16;
+      at += .13;
       tl.call(() => { c.textContent = c.dataset.char; c.classList.remove('zy'); }, null, at);
-      at += .08;
+      at += .06;
     });
     // 「城市」先停在畫面上，標記長出來，讓人看出它選錯了。
     tl.to(doubt, { '--mark': 1, duration: .3, ease: 'power2.out' }, '+=.3');
