@@ -13,14 +13,22 @@ if ($Elevated) {
   try {
     # Apps keep the old DLL loaded and the server and settings keep their files
     # open: stop those and move loaded DLLs aside; they are deleted once unused.
+    # The server moves aside first: an open app starts it again the moment it stops,
+    # which would lock the files about to be replaced.
+    $serverExe = "$Dest\ProjectKeyServer.exe"
+    $serverAside = "$Dest\ProjectKeyServer.$([guid]::NewGuid()).old"
+    if (Test-Path $serverExe) { Move-Item $serverExe $serverAside }
     Get-Process ProjectKeyServer, ProjectKeySettings -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Milliseconds 300
     New-Item -ItemType Directory -Force $Dest | Out-Null
     Get-ChildItem $Dest -Filter '*.old' | ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
     if (Test-Path "$Dest\ProjectKey.dll") { Move-Item "$Dest\ProjectKey.dll" "$Dest\ProjectKey.$([guid]::NewGuid()).old" }
     # robocopy, not Copy-Item, which flattens subfolders into odd names when they exist.
-    & robocopy $Source $Dest /E /XF *.lib *.exp /NJH /NJS /NFL /NDL /NP | Out-Null
+    # The server goes last, so an app that starts it finds every model in place. A locked
+    # file fails the install: robocopy's default is a million retries, 30 seconds apart.
+    & robocopy $Source $Dest /E /R:3 /W:1 /XF *.lib *.exp ProjectKeyServer.exe /NJH /NJS /NFL /NDL /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE" }
+    Copy-Item "$Source\ProjectKeyServer.exe" $serverExe -Force
     # Files an earlier Copy-Item flattened out of Settings\.
     Remove-Item "$Dest\SettingsApp.xbf", "$Dest\SettingsMainWindow.xbf" -ErrorAction SilentlyContinue
     # A GUI program: & would not wait for it, nor set its exit code.
@@ -28,6 +36,8 @@ if ($Elevated) {
     if ($register.ExitCode) { throw "regsvr32 failed with exit code $($register.ExitCode)" }
   } catch {
     Set-Content $log "$_"
+    # A failed install leaves the server it found, so the input method keeps working.
+    if ($serverAside -and (Test-Path $serverAside) -and -not (Test-Path $serverExe)) { Move-Item $serverAside $serverExe }
     exit 1
   }
   exit 0

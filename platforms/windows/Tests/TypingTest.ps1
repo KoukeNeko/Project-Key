@@ -126,7 +126,7 @@ try {
   Press 0x0D
   Start-Sleep -Milliseconds 300
   "after Shift: [$(Text)]"
-  if ((Text) -notmatch 'ok今') { throw "expected English then 今, got [$(Text)]" }
+  if ((Text) -notmatch 'ok[今金]') { throw "expected English then ㄐㄧㄣ's word, got [$(Text)]" }
 
   # Zhuyin typed in English mode: the preview shows the conversion and the Tab
   # keycap; Tab turns it into a composition and switches to 中.
