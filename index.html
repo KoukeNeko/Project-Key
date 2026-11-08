@@ -547,9 +547,9 @@
     chars.forEach(c => {
       [...c.dataset.zy].forEach((_, k) => {
         tl.call(() => { c.textContent = c.dataset.zy.slice(0, k + 1); c.classList.add('zy'); }, null, at);
-        at += .14;
+        at += .1;
       });
-      at += .2;
+      at += .16;
       tl.call(() => { c.textContent = c.dataset.char; c.classList.remove('zy'); }, null, at);
       at += .08;
     });
