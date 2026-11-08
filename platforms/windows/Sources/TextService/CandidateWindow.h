@@ -26,7 +26,7 @@ class CandidateWindow {
   // The Tab hint's own window: next to `panel`, on the side away from the text.
   void showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance);
   void hide();
-  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_); }
+  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !hiding_; }
   RECT frame() const;
   const std::optional<PanelContent>& content() const { return content_; }
 
@@ -36,6 +36,11 @@ class CandidateWindow {
   void applyAppearance(int appearance);  // Setting::kAppearance
   void paint();
   void tick();
+  void setLayered(bool layered);
+  void fadeIn();
+  void startFade();
+  void reveal();
+  void finishHiding();
   D2D1_SIZE_F fittingSize() const;
   float proofHeight() const;
   float rowHeight() const;
@@ -72,6 +77,11 @@ class CandidateWindow {
   std::optional<PanelContent> oldContent_;
   bool oldProofBelow_ = false;
   float oldRowTop_ = 0, progress_ = 1;
+  // Fading in as the window opens and, hiding_, out as it closes, layered only meanwhile. A
+  // window with a material cannot be layered: its content fades and it grows and shrinks (reveal).
+  bool fading_ = false, hiding_ = false;
+  float alpha_ = 1, fadeFrom_ = 1;
+  ULONGLONG fadeStart_ = 0;
 };
 
 class ModeBadge {

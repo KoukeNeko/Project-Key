@@ -175,9 +175,52 @@ bool CandidateWindow::ensureWindow() {
 }
 
 void CandidateWindow::applyAppearance(int appearance) {
+  setLayered(false);
+  fading_ = false;
+  alpha_ = 1;
   appearance_ = ClampAppearance(appearance);
   ApplyAppearance(hwnd_, appearance_);
   target_.Reset();
+}
+
+void CandidateWindow::setLayered(bool layered) {
+  LONG_PTR style = GetWindowLongPtrW(hwnd_, GWL_EXSTYLE);
+  if (((style & WS_EX_LAYERED) != 0) == layered) return;
+  SetWindowLongPtrW(hwnd_, GWL_EXSTYLE, layered ? style | WS_EX_LAYERED : style & ~WS_EX_LAYERED);
+  target_.Reset();
+}
+
+void CandidateWindow::startFade() {
+  if (!material()) {
+    setLayered(true);
+    SetLayeredWindowAttributes(hwnd_, 0, static_cast<BYTE>(std::lround(alpha_ * 255)), LWA_ALPHA);
+  }
+  fading_ = true;
+  fadeFrom_ = alpha_;
+  fadeStart_ = GetTickCount64();
+}
+
+// Before the window shows, or turns back from fading out, from where it is.
+void CandidateWindow::fadeIn() {
+  hiding_ = false;
+  if (ReducesMotion()) {
+    setLayered(false);
+    fading_ = false;
+    alpha_ = 1;
+    return;
+  }
+  if (!IsWindowVisible(hwnd_)) alpha_ = 0;
+  startFade();
+  reveal();
+}
+
+// A material window's size follows its fade, from the edge next to the text.
+void CandidateWindow::reveal() {
+  if (!material() || resizing_) return;
+  int full = placed_.bottom - placed_.top;
+  int height = std::max(1, static_cast<int>(std::lround(full * alpha_)));
+  int top = proofBelow_ ? placed_.bottom - height : placed_.top;
+  SetWindowPos(hwnd_, HWND_TOPMOST, placed_.left, top, placed_.right - placed_.left, height, SWP_NOACTIVATE);
 }
 
 float CandidateWindow::proofHeight() const {
@@ -320,13 +363,14 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
     SetWindowPos(hwnd_, HWND_TOPMOST, frame.left, frame.top, width, height, SWP_NOACTIVATE);
   }
   if (!wasVisible) {
+    fadeIn();
     ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
     if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
   }
   NotifyWinEvent(wasVisible ? EVENT_OBJECT_IME_CHANGE : EVENT_OBJECT_IME_SHOW, hwnd_, OBJID_CLIENT, CHILDID_SELF);
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
-  if (sliding_ || resizing_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+  if (sliding_ || resizing_ || fading_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
 }
 
 void CandidateWindow::showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance) {
@@ -348,11 +392,13 @@ void CandidateWindow::showBeside(const PanelContent& content, const CandidateWin
   SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
   SetWindowPos(hwnd_, HWND_TOPMOST, placed_.left, placed_.top, width, height, SWP_NOACTIVATE);
   if (!wasVisible) {
+    fadeIn();
     ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
     if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
   }
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
+  if (fading_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
 }
 
 void CandidateWindow::tick() {
@@ -371,19 +417,49 @@ void CandidateWindow::tick() {
       oldContent_.reset();
     }
   }
+  if (fading_) {
+    float t = std::min(1.f, static_cast<float>(now - fadeStart_) / kWindowFadeMs);
+    alpha_ = fadeFrom_ + ((hiding_ ? 0 : 1) - fadeFrom_) * t;
+    if (!material()) SetLayeredWindowAttributes(hwnd_, 0, static_cast<BYTE>(std::lround(alpha_ * 255)), LWA_ALPHA);
+    if (t >= 1) {
+      fading_ = false;
+      if (hiding_) {
+        finishHiding();
+        return;
+      }
+      setLayered(false);
+    }
+    reveal();
+  }
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
-  if (!sliding_ && !resizing_) KillTimer(hwnd_, kAnimationTimer);
+  if (!sliding_ && !resizing_ && !fading_) KillTimer(hwnd_, kAnimationTimer);
 }
 
 void CandidateWindow::hide() {
   if (!visible()) return;
-  KillTimer(hwnd_, kAnimationTimer);
   sliding_ = resizing_ = false;
   oldContent_.reset();
   progress_ = 1;
-  ShowWindow(hwnd_, SW_HIDE);
   NotifyWinEvent(EVENT_OBJECT_IME_HIDE, hwnd_, OBJID_CLIENT, CHILDID_SELF);
+  if (ReducesMotion()) {
+    finishHiding();
+    return;
+  }
+  hiding_ = true;
+  startFade();
+  // Layering a showing window empties it until it paints again.
+  InvalidateRect(hwnd_, nullptr, FALSE);
+  UpdateWindow(hwnd_);
+  SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+}
+
+void CandidateWindow::finishHiding() {
+  KillTimer(hwnd_, kAnimationTimer);
+  fading_ = hiding_ = false;
+  ShowWindow(hwnd_, SW_HIDE);
+  setLayered(false);
+  alpha_ = 1;
   content_.reset();
 }
 
@@ -410,7 +486,16 @@ void CandidateWindow::paint() {
   float width = client.right / scale_, height = client.bottom / scale_;
 
   target_->BeginDraw();
-  target_->Clear(Fill(appearance_));
+  bool fadesContent = fading_ && material();  // the window itself cannot fade
+  D2D1_COLOR_F fill = Fill(appearance_);
+  if (fadesContent) fill.a *= alpha_;
+  target_->Clear(fill);
+  ComPtr<ID2D1Layer> fade;
+  if (fadesContent && SUCCEEDED(target_->CreateLayer(&fade))) {
+    target_->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                             D2D1::IdentityMatrix(), alpha_),
+                       fade.Get());
+  }
   // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
   // the window resizes; when it comes, goes or changes sides, it fades between its places.
   bool moves = proofMoves();
@@ -424,6 +509,7 @@ void CandidateWindow::paint() {
     drawCandidates(target_.Get(), shownRowTop(), width);
     if (clip) target_->PopAxisAlignedClip();
   }
+  if (fade) target_->PopLayer();
   if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
 
