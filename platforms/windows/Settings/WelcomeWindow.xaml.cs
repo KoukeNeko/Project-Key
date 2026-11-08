@@ -22,6 +22,7 @@ public sealed partial class WelcomeWindow : Window {
 
   public WelcomeWindow() {
     InitializeComponent();
+    AppWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "ProjectKey.ico"));
     ExtendsContentIntoTitleBar = true;
     SetTitleBar(TitleBar);
     if (AppWindow.Presenter is OverlappedPresenter presenter) {

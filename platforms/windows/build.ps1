@@ -167,7 +167,9 @@ $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
 if (-not $dotnet) { $dotnet = "$env:ProgramFiles\dotnet\dotnet.exe" }
 if (-not (Test-Path $dotnet)) { throw 'the .NET SDK is required for the settings window' }
 # build, not publish: publish leaves out the compiled XAML (.xbf) and resources.pri an unpackaged app loads.
-Invoke-Native $dotnet build "$PSScriptRoot\Settings\ProjectKeySettings.csproj" -c Release -nologo -v q -o "$Out\Settings"
+# The icon goes in the program for its Start menu shortcut, and beside it for the windows (AppWindow.SetIcon).
+Invoke-Native $dotnet build "$PSScriptRoot\Settings\ProjectKeySettings.csproj" -c Release -nologo -v q -o "$Out\Settings" "-p:ApplicationIcon=$Icon"
+Copy-Item $Icon "$Out\Settings"
 
 # The dictionary, McBopomofo's license, and from tools/bigram-trainer if it was
 # trained, the dictionary with the words McBopomofo lacks (replacing McBopomofo's)
