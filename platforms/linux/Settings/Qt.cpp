@@ -91,7 +91,35 @@ void Unsaved(QWidget* control) {
   QMessageBox::warning(control->window(), "Project Key 設定", "無法儲存：Fcitx5 沒有回應，設定沒有改變。");
 }
 
-// The newest GitHub release, which the other platforms' package managers install from.
+// Runs the update (UpdateCommand in Rows.h); once it is done, restarts Fcitx5, which then loads
+// the new addon, and opens the new version's settings window in place of this one.
+void StartUpdate(QLabel* label) {
+  std::filesystem::path prefix = HomebrewPrefix();
+  if (prefix.empty()) return label->setText("無法更新");
+  label->setText("更新中…（Homebrew 從原始碼建置，約需幾分鐘）");  // no link left to follow again
+  auto* update = new QProcess(label);
+  QString settings = QString::fromStdString(UpdatedSettings(prefix));
+  // Qt 5 also has a deprecated finished(int).
+  QObject::connect(update, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), label,
+                   [update, label, settings](int code, QProcess::ExitStatus status) {
+    update->deleteLater();
+    if (status != QProcess::NormalExit || code != 0) return label->setText("無法更新（記錄在 ~/.cache/projectkey-update.log）");
+    // Waited for: the application quits next, which would drop a call still being sent.
+    QDBusInterface(kFcitx, "/controller", "org.fcitx.Fcitx.Controller1").call("Restart");
+    if (!QProcess::startDetached(settings, {})) return label->setText("已更新，請重新開啟設定");
+    QApplication::quit();
+  });
+  QObject::connect(update, &QProcess::errorOccurred, label, [update, label](QProcess::ProcessError error) {
+    if (error == QProcess::FailedToStart) {
+      update->deleteLater();
+      label->setText("無法更新");
+    }
+  });
+  update->start("/bin/sh", {"-c", QString::fromStdString(UpdateCommand(prefix))});
+}
+
+// The newest GitHub release, which the other platforms' package managers install from. Installed
+// with Homebrew, a newer one is offered as an update; built from source, as its page.
 void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
   QNetworkRequest request{QUrl(kReleases)};
   request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");  // GitHub rejects requests without one
@@ -103,6 +131,10 @@ void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
     if (latest.startsWith('v')) latest.remove(0, 1);
     if (reply->error() != QNetworkReply::NoError || latest.isEmpty()) {
       label->setText("無法檢查");
+    } else if (QVersionNumber::fromString(latest) > QVersionNumber::fromString(PROJECTKEY_VERSION) && !HomebrewPrefix().empty()) {
+      label->setOpenExternalLinks(false);
+      label->setText(QString("<a href=\"#\">更新到 %1</a>").arg(latest));
+      QObject::connect(label, &QLabel::linkActivated, label, [label] { StartUpdate(label); });
     } else if (QVersionNumber::fromString(latest) > QVersionNumber::fromString(PROJECTKEY_VERSION)) {
       label->setText(QString("<a href=\"%1\">下載 %2</a>").arg(release.value("html_url").toString(), latest));
     } else {

@@ -77,7 +77,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 設定
 
-設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、簡拼、數字鍵盤選字（預設關）、記住選過的字（可清除紀錄；開著時也從送出的文字學習）、候選視窗外觀（深色、Acrylic（預設）、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock（預設關）與單按 Shift 切換中英、Tab 的英文轉注音與注音轉英文，以及「關於」（版本取自 `ProjectKey.dll`，並查 GitHub 最新發行版有無新版；「選字模型」顯示模型日期，有新模型時可以直接下載，存在 `%LOCALAPPDATA%\Project Key`，核對 SHA-256 後不必重新安裝就生效）。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
+設定視窗的內容與 macOS 相同：選字位置（游標後或游標前）、選完跳到下一個可疑處、簡拼、數字鍵盤選字（預設關）、記住選過的字（可清除紀錄；開著時也從送出的文字學習）、候選視窗外觀（深色、Acrylic（預設）、Mica、Mica Alt）、輸入時與選字時的整句預覽（永遠／有可疑字時／關閉，預設有可疑字時）、Caps Lock（預設關）與單按 Shift 切換中英、Tab 的英文轉注音與注音轉英文，以及「關於」（版本取自 `ProjectKey.dll`，並查 GitHub 最新發行版有無新版：有新版時按「更新到」會下載發行版的 zip、核對 GitHub 列出的 SHA-256，再執行其中的 `install.ps1 -Update`，經一次系統管理員確認後安裝，並重新開啟設定；開著的 App 重新開啟後才換成新版的文字服務；「選字模型」顯示模型日期，有新模型時可以直接下載，存在 `%LOCALAPPDATA%\Project Key`，核對 SHA-256 後不必重新安裝就生效）。改了立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱同 macOS 的 NSUserDefaults 鍵），下一次組字時生效。設計文件寫的是 `ApplicationData.LocalSettings`，但那只有封裝（MSIX）的 App 能用。
 
 ## 測試
 

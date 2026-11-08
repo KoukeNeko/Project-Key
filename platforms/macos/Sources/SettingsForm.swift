@@ -79,6 +79,13 @@ struct SettingsForm: View {
           case .checking: Text("檢查中…")
           case .current: Text("已是最新版本")
           case .available(let version, let page): Link("下載 \(version)", destination: page)
+          case .installable(let version, let file):
+            Button("更新到 \(version)") {
+              update = .installing(0)
+              Task { if !(await installUpdate(file, progress: { update = .installing($0) })) { update = .installFailed } }
+            }
+          case .installing(let fraction): Text(fraction < 1 ? "下載中 \(Int(fraction * 100))%" : "安裝中…")
+          case .installFailed: Text("無法更新")
           case .failed: Text("無法檢查")
           }
         }
@@ -111,14 +118,19 @@ struct SettingsForm: View {
 private let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
 
 private enum UpdateState {
-  case checking, current, available(String, URL), failed
+  case checking, current, failed
+  case available(String, URL)                  // only its page: the release has no macOS zip GitHub gives a SHA-256 for
+  case installable(String, ModelsUpdater.File)  // its macOS zip
+  case installing(Double)                       // the fraction downloaded; 1 while it is put in place
+  case installFailed
 }
 
-// The newest GitHub release, which brew and scoop install from.
+// The newest GitHub release, which brew and scoop install from. A newer one is offered as an update.
 private func checkForUpdate() async -> UpdateState {
   struct Release: Decodable {
     let tag_name: String
     let html_url: URL
+    let assets: [ModelsUpdater.File]
   }
   let api = URL(string: "https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest")!
   guard let (data, response) = try? await URLSession.shared.data(from: api),
@@ -127,8 +139,61 @@ private func checkForUpdate() async -> UpdateState {
     return .failed
   }
   let latest = release.tag_name.hasPrefix("v") ? String(release.tag_name.dropFirst()) : release.tag_name
-  return latest.compare(currentVersion, options: .numeric) == .orderedDescending
-      ? .available(latest, release.html_url) : .current
+  guard latest.compare(currentVersion, options: .numeric) == .orderedDescending else { return .current }
+  if let zip = release.assets.first(where: { $0.name == "ProjectKey-\(latest)-macos.zip" && $0.digest != nil }) {
+    return .installable(latest, zip)
+  }
+  return .available(latest, release.html_url)
+}
+
+// Downloads the release's macOS zip, checks it against GitHub's SHA-256, puts its ProjectKey.app in
+// place of this one, as the Homebrew cask installs it, and registers it. Then this input method
+// quits and the new one opens; false when it could not be updated, and nothing was replaced.
+// shortcut: written without a Mac to run it on; check it on one before relying on it.
+@MainActor
+private func installUpdate(_ zip: ModelsUpdater.File, progress: @escaping @MainActor (Double) -> Void) async -> Bool {
+  let fileManager = FileManager.default
+  let bundle = Bundle.main.bundleURL
+  do {
+    // On the bundle's volume, so the new one moves into place rather than being copied.
+    let work = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: bundle, create: true)
+    defer { try? fileManager.removeItem(at: work) }
+    let archive = work.appendingPathComponent(zip.name)
+    let response = try await fetch(zip.browser_download_url, to: archive) { received in
+      progress(min(0.99, Double(received) / Double(max(zip.size, 1))))
+    }
+    guard (response as? HTTPURLResponse)?.statusCode == 200,
+          try await Task.detached(operation: { try sha256(of: archive) }).value == zip.digest else {
+      throw URLError(.badServerResponse)
+    }
+    progress(1)
+    let app = work.appendingPathComponent("ProjectKey.app")
+    try await run("/usr/bin/ditto", ["-x", "-k", archive.path, work.path])
+    // Ad-hoc signed and not notarized: Gatekeeper refuses it while quarantined (as the cask's postflight says).
+    try? await run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", app.path])
+    _ = try fileManager.replaceItemAt(bundle, withItemAt: app)
+    try await run(bundle.appendingPathComponent("Contents/MacOS/ProjectKey").path, ["--register"])
+  } catch {
+    return false
+  }
+  // Opened again once this process has quit, as the cask's postflight opens it after installing.
+  let reopen = Process()
+  reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+  reopen.arguments = ["-c", "sleep 1; /usr/bin/open -g \"$0\"", bundle.path]
+  try? reopen.run()
+  exit(0)
+}
+
+// Runs a program to its end; throws when it fails.
+private func run(_ program: String, _ arguments: [String]) async throws {
+  try await Task.detached {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: program)
+    process.arguments = arguments
+    try process.run()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else { throw CocoaError(.executableLoad) }
+  }.value
 }
 
 // Models (tools/bigram-trainer) newer than the ones in use, from the GitHub releases

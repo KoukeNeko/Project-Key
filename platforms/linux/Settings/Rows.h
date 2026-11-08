@@ -108,6 +108,41 @@ inline void AbandonModels(const std::string& date) {
   std::filesystem::remove_all(DownloadedModels() / (date + ".partial"), error);
 }
 
+// Homebrew's prefix when this program runs from its fcitx5-projectkey keg, which updates with
+// `brew upgrade`; empty when Project Key was built and installed from source, which offers the
+// release page instead.
+inline std::filesystem::path HomebrewPrefix() {
+  std::error_code error;
+  std::string self = std::filesystem::read_symlink("/proc/self/exe", error).string();
+  size_t cellar = self.find("/Cellar/fcitx5-projectkey/");
+  if (error || cellar == std::string::npos) return {};
+  std::filesystem::path prefix = self.substr(0, cellar);
+  return std::filesystem::exists(prefix / "bin/brew", error) ? prefix : std::filesystem::path();
+}
+
+inline std::string ShellQuoted(const std::string& text) {
+  std::string quoted = "'";
+  for (char c : text) quoted += c == '\'' ? std::string("'\\''") : std::string(1, c);
+  return quoted + "'";
+}
+
+// The update as a shell command: Homebrew builds the newest release from source (a few minutes)
+// and projectkey-link links its files where Fcitx5 and GNOME read them. What they print goes to
+// ~/.cache/projectkey-update.log, for when it fails.
+inline std::string UpdateCommand(const std::filesystem::path& prefix) {
+  const char* cache = std::getenv("XDG_CACHE_HOME");
+  const char* home = std::getenv("HOME");
+  std::filesystem::path log = cache && *cache ? std::filesystem::path(cache) : std::filesystem::path(home ? home : "/tmp") / ".cache";
+  return "mkdir -p " + ShellQuoted(log.string()) + " && { " + ShellQuoted((prefix / "bin/brew").string()) +
+         " upgrade fcitx5-projectkey && " + ShellQuoted((prefix / "bin/projectkey-link").string()) + "; } > " +
+         ShellQuoted((log / "projectkey-update.log").string()) + " 2>&1";
+}
+
+// The settings window of the version just installed, to open once the update is done.
+inline std::string UpdatedSettings(const std::filesystem::path& prefix) {
+  return (prefix / "opt/fcitx5-projectkey/bin/projectkey-settings").string();
+}
+
 // The welcome window (--welcome, which projectkey-link suggests after installing): adds Project
 // Key to Fcitx5's input methods, waits for the user to switch to it, and offers a box to try
 // it in, as on macOS (WelcomeForm.swift) and Windows (WelcomeWindow.xaml).

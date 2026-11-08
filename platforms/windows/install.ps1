@@ -2,7 +2,8 @@
 # (where apps in a sandbox can read it), registers the input method, and starts
 # the engine server now and at sign-in, then opens the welcome window, which adds
 # it as a keyboard (the settings app with --welcome, which closes when it is added).
-param([string]$Source = (Join-Path $PSScriptRoot 'build\out'), [switch]$Elevated)
+# -Update: run by the settings window's 更新 button, which it stops; opens it again instead.
+param([string]$Source = (Join-Path $PSScriptRoot 'build\out'), [switch]$Elevated, [switch]$Update)
 $ErrorActionPreference = 'Stop'
 $Dest = Join-Path $env:ProgramFiles 'Project Key'
 if (-not (Test-Path "$Source\ProjectKey.dll")) { throw 'run .\build.ps1 first' }
@@ -40,7 +41,12 @@ if ($admin.ExitCode) { throw "installing into $Dest failed: $(Get-Content (Join-
 $server = Join-Path $Dest 'ProjectKeyServer.exe'
 Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'ProjectKeyServer' "`"$server`""
 Start-Process $server
-Start-Process (Join-Path $Dest 'Settings\ProjectKeySettings.exe') '--welcome'
+$settings = Join-Path $Dest 'Settings\ProjectKeySettings.exe'
+if ($Update) {
+  Start-Process $settings
+  exit 0  # nobody sees the apps still on the old version; they switch when they restart
+}
+Start-Process $settings '--welcome'
 Write-Host "installed $Dest"
 
 # A loaded DLL cannot be replaced: apps keep the version they loaded until they

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.IO.Pipes;
 using System.Linq;
 using System.Net.Http;
@@ -138,6 +139,8 @@ public sealed partial class MainWindow : Window {
     var progress = new Progress<long>(done => status.Text = $"下載中 {done * 100 / total}%");
     string partial = Path.Combine(DownloadedModels, date + ".partial");
     try {
+      Directory.CreateDirectory(DownloadedModels);
+      foreach (string left in Directory.GetDirectories(DownloadedModels, "*.partial")) Directory.Delete(left, true);  // cut short before
       // Off the UI thread: a continuation there for every read slows the download to a crawl.
       await Task.Run(() => Download(files, partial, progress));
       // Written last: a folder with it is complete.
@@ -156,8 +159,6 @@ public sealed partial class MainWindow : Window {
 
   // Each file into partial, checked against GitHub's SHA-256, reporting the bytes so far at each whole percent.
   private static async Task Download(List<ModelsFile> files, string partial, IProgress<long> progress) {
-    Directory.CreateDirectory(DownloadedModels);
-    foreach (string left in Directory.GetDirectories(DownloadedModels, "*.partial")) Directory.Delete(left, true);  // cut short before
     Directory.CreateDirectory(partial);
     using var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
     long total = files.Sum(file => file.Size), done = 0;
@@ -191,7 +192,8 @@ public sealed partial class MainWindow : Window {
     box.SelectionChanged += (_, _) => Write(name, box.SelectedIndex);
   }
 
-  // The newest GitHub release, which brew and scoop install from.
+  // The newest GitHub release, which brew and scoop install from. A newer one is offered as an
+  // update: its Windows zip, checked against the SHA-256 GitHub lists, installed by its own install.ps1.
   private async void CheckForUpdate() {
     try {
       using var client = new HttpClient();
@@ -200,15 +202,60 @@ public sealed partial class MainWindow : Window {
           await client.GetStringAsync("https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest"));
       string latest = release.RootElement.GetProperty("tag_name").GetString()!.TrimStart('v');
       // Version is the TextBlock here, hence System.Version.
-      Update.Content = System.Version.Parse(latest) > System.Version.Parse(Version.Text)
-          ? new HyperlinkButton {
-              Content = $"下載 {latest}",
-              NavigateUri = new Uri(release.RootElement.GetProperty("html_url").GetString()!),
-            }
-          : new TextBlock { Text = "已是最新版本" };
+      if (System.Version.Parse(latest) <= System.Version.Parse(Version.Text)) {
+        Update.Content = new TextBlock { Text = "已是最新版本" };
+        return;
+      }
+      string name = $"ProjectKey-{latest}-windows-x64.zip";
+      ModelsFile? zip = null;
+      foreach (JsonElement asset in release.RootElement.GetProperty("assets").EnumerateArray()) {
+        if (asset.GetProperty("name").GetString() == name && asset.TryGetProperty("digest", out JsonElement digest) &&
+            digest.ValueKind == JsonValueKind.String) {
+          zip = new ModelsFile(name, asset.GetProperty("size").GetInt64(), digest.GetString()!, asset.GetProperty("browser_download_url").GetString()!);
+        }
+      }
+      if (zip is null) {  // a release without the zip, or without GitHub's digest for it: the page to download from
+        Update.Content = new HyperlinkButton {
+          Content = $"下載 {latest}",
+          NavigateUri = new Uri(release.RootElement.GetProperty("html_url").GetString()!),
+        };
+        return;
+      }
+      var button = new Button { Content = $"更新到 {latest}" };
+      button.Click += (_, _) => InstallUpdate(zip);
+      Update.Content = button;
     } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException
                                     or KeyNotFoundException or ArgumentException or FormatException) {
       Update.Content = new TextBlock { Text = "無法檢查" };
+    }
+  }
+
+  private static readonly string UpdateFolder = Path.Combine(Path.GetTempPath(), "ProjectKey-update");
+
+  // Downloads and unpacks the release, then runs its install.ps1, which asks Windows for administrator
+  // rights, stops this window and the engine server, installs, and starts both again.
+  private async void InstallUpdate(ModelsFile zip) {
+    var status = new TextBlock { Text = "下載中 0%" };
+    Update.Content = status;
+    var progress = new Progress<long>(done => status.Text = $"下載中 {done * 100 / zip.Size}%");
+    try {
+      if (Directory.Exists(UpdateFolder)) Directory.Delete(UpdateFolder, true);
+      await Task.Run(() => Download([zip], UpdateFolder, progress));
+      string package = Path.Combine(UpdateFolder, "package");
+      await Task.Run(() => ZipFile.ExtractToDirectory(Path.Combine(UpdateFolder, zip.Name), package));
+      status.Text = "安裝中…";
+      var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true };
+      foreach (string argument in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(package, "install.ps1"),
+                                          "-Source", package, "-Update" }) {
+        start.ArgumentList.Add(argument);
+      }
+      using Process install = Process.Start(start)!;
+      await install.WaitForExitAsync();
+      // Still running: install.ps1 stopped before it replaced anything, as when the administrator prompt is declined.
+      Update.Content = new TextBlock { Text = "無法更新" };
+    } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException
+                                    or InvalidDataException or System.ComponentModel.Win32Exception) {
+      Update.Content = new TextBlock { Text = "無法更新" };
     }
   }
 

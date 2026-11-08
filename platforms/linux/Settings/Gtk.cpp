@@ -105,7 +105,55 @@ std::vector<int> VersionParts(const std::string& version) {
   return parts;
 }
 
-// The newest GitHub release, which the other platforms' package managers install from.
+// Runs f(label) once the main loop is back. From a label's activate-link: GTK still uses the
+// clicked link after the handler returns, and new text frees it.
+template <void (*f)(GtkLabel*)>
+gboolean Later(GtkLabel* label, const char*, gpointer) {
+  g_idle_add(+[](gpointer data) -> gboolean {
+               f(GTK_LABEL(data));
+               g_object_unref(data);
+               return G_SOURCE_REMOVE;
+             },
+             g_object_ref(label));
+  return true;
+}
+
+// Runs the update (UpdateCommand in Rows.h); once it is done, restarts Fcitx5, which then loads
+// the new addon, and opens the new version's settings window in place of this one.
+void StartUpdate(GtkLabel* label) {
+  std::filesystem::path prefix = HomebrewPrefix();
+  std::string command = UpdateCommand(prefix);
+  const char* argv[] = {"/bin/sh", "-c", command.c_str(), nullptr};
+  GSubprocess* update = prefix.empty() ? nullptr : g_subprocess_newv(argv, G_SUBPROCESS_FLAGS_NONE, nullptr);
+  if (!update) return gtk_label_set_text(label, "無法更新");
+  gtk_label_set_text(label, "更新中…（Homebrew 從原始碼建置，約需幾分鐘）");  // no link left to follow again
+  g_object_set_data_full(G_OBJECT(label), "settings", g_strdup(UpdatedSettings(prefix).c_str()), g_free);
+  g_object_ref(label);
+  g_subprocess_wait_check_async(
+      update, nullptr,
+      +[](GObject* source, GAsyncResult* result, gpointer data) {
+        auto* label = GTK_LABEL(data);
+        bool done = g_subprocess_wait_check_finish(G_SUBPROCESS(source), result, nullptr);
+        g_object_unref(source);
+        if (done) {
+          // Waited for: this window closes next, which would drop a call still being sent.
+          GVariant* restarted = g_dbus_connection_call_sync(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "Restart",
+                                                            nullptr, nullptr, G_DBUS_CALL_FLAGS_NONE, 3000, nullptr, nullptr);
+          if (restarted) g_variant_unref(restarted);
+          const char* settings[] = {static_cast<const char*>(g_object_get_data(G_OBJECT(label), "settings")), nullptr};
+          done = g_spawn_async(nullptr, const_cast<char**>(settings), nullptr, G_SPAWN_DEFAULT, nullptr, nullptr, nullptr, nullptr);
+          if (done) gtk_window_destroy(GTK_WINDOW(gtk_widget_get_root(GTK_WIDGET(label))));
+          else gtk_label_set_text(label, "已更新，請重新開啟設定");
+        } else {
+          gtk_label_set_text(label, "無法更新（記錄在 ~/.cache/projectkey-update.log）");
+        }
+        g_object_unref(label);
+      },
+      label);
+}
+
+// The newest GitHub release, which the other platforms' package managers install from. Installed
+// with Homebrew, a newer one is offered as an update; built from source, as its page.
 void CheckForUpdate(GtkLabel* label) {
   SoupSession* session = soup_session_new_with_options("user-agent", "ProjectKey", nullptr);  // GitHub rejects requests without one
   SoupMessage* message = soup_message_new("GET", kReleases);
@@ -133,6 +181,11 @@ void CheckForUpdate(GtkLabel* label) {
         if (!latest.empty() && latest[0] == 'v') latest.erase(0, 1);
         if (latest.empty()) {
           gtk_label_set_text(label, "無法檢查");
+        } else if (VersionParts(latest) > VersionParts(PROJECTKEY_VERSION) && !HomebrewPrefix().empty()) {
+          char* markup = g_markup_printf_escaped("<a href=\"#\">更新到 %s</a>", latest.c_str());
+          gtk_label_set_markup(label, markup);
+          g_free(markup);
+          g_signal_connect(label, "activate-link", G_CALLBACK(Later<StartUpdate>), nullptr);
         } else if (VersionParts(latest) > VersionParts(PROJECTKEY_VERSION)) {
           char* markup = g_markup_printf_escaped("<a href=\"%s\">下載 %s</a>", page.c_str(), latest.c_str());
           gtk_label_set_markup(label, markup);
@@ -234,6 +287,18 @@ void NextModelsFile(ModelsDownload* download) {
   g_object_unref(message);
 }
 
+// The models CheckForModels offered on the label.
+void StartModelsDownload(GtkLabel* label) {
+  auto* newer = static_cast<NewerModels*>(g_object_get_data(G_OBJECT(label), "models"));
+  if (!newer) return;  // already started
+  std::filesystem::path partial = StartModels(newer->date);
+  if (partial.empty()) return gtk_label_set_text(label, "無法下載");
+  gtk_label_set_text(label, "下載中 0%");  // no link left to follow again
+  g_object_ref(label);
+  NextModelsFile(new ModelsDownload{label, soup_session_new_with_options("user-agent", "ProjectKey", nullptr), *newer, partial});
+  g_object_set_data(G_OBJECT(label), "models", nullptr);
+}
+
 // Offers the newest models release (Rows.h) as a link that downloads it.
 void CheckForModels(GtkLabel* label) {
   SoupSession* session = soup_session_new_with_options("user-agent", "ProjectKey", nullptr);
@@ -277,20 +342,9 @@ void CheckForModels(GtkLabel* label) {
           char* markup = g_markup_printf_escaped("<a href=\"#\">下載 %s（%lld MB）</a>", newer.date.c_str(), newer.bytes() / 1000000);
           gtk_label_set_markup(label, markup);
           g_free(markup);
-          g_signal_connect_data(label, "activate-link", G_CALLBACK((+[](GtkLabel* label, const char*, gpointer data) -> gboolean {
-                                  const NewerModels& newer = *static_cast<NewerModels*>(data);
-                                  std::filesystem::path partial = StartModels(newer.date);
-                                  if (partial.empty()) {
-                                    gtk_label_set_text(label, "無法下載");
-                                    return true;
-                                  }
-                                  gtk_label_set_text(label, "下載中 0%");  // no link left to follow again
-                                  g_object_ref(label);
-                                  NextModelsFile(new ModelsDownload{label, soup_session_new_with_options("user-agent", "ProjectKey", nullptr), newer, partial});
-                                  return true;
-                                })),
-                                new NewerModels(std::move(newer)), +[](gpointer data, GClosure*) { delete static_cast<NewerModels*>(data); },
-                                GConnectFlags{});
+          g_object_set_data_full(G_OBJECT(label), "models", new NewerModels(std::move(newer)),
+                                 +[](gpointer data) { delete static_cast<NewerModels*>(data); });
+          g_signal_connect(label, "activate-link", G_CALLBACK(Later<StartModelsDownload>), nullptr);
         }
         if (body) g_bytes_unref(body);
         g_object_unref(label);
