@@ -531,6 +531,13 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && !env.personal->empty());
   ClearChoices(env);
   assert(env.personal->empty());
+  // A controller without personal neither learns nor ranks by it.
+  {
+    FakeClient sandboxed;
+    Controller other(env, sandboxed, false);
+    Type(other, "ji3ap7");
+    assert(other.handleKey(Special(ProjectKey::Key::kReturn)) && env.personal->empty());
+  }
   settings.set(Setting::kRememberChoices, 0);
   Type(controller, "ji3ap7");
   assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && env.personal->empty());

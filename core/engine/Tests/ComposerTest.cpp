@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 
 #include "Composer.h"
@@ -273,6 +274,12 @@ int main(int argc, char** argv) {
   // Saved and loaded, the counts score the same; a missing file loads as empty.
   std::string personalPath = tempPath("ComposerTest-personal/personal.txt");
   assert(personal->save(personalPath));
+#ifndef _WIN32
+  // Only the user may read it.
+  using std::filesystem::perms;
+  assert(std::filesystem::status(personalPath).permissions() == (perms::owner_read | perms::owner_write));
+  assert(std::filesystem::status(std::filesystem::path(personalPath).parent_path()).permissions() == perms::owner_all);
+#endif
   ProjectKey::PersonalModel loaded;
   assert(loaded.load(personalPath) && !loaded.empty());
   auto c = [](const char* utf8) { return ProjectKey::CharModel::CodePoints(utf8)[0]; };

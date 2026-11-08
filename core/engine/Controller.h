@@ -151,7 +151,9 @@ struct KeyEvent {
 
 class Controller {
  public:
-  Controller(Environment& environment, Client& client);
+  // Without personal, it neither ranks by nor learns from Environment::personal (for an app
+  // that could read what the user typed elsewhere back from the candidates).
+  Controller(Environment& environment, Client& client, bool personal = true);
 
   // A key press; true when the input method takes it, false when the app should.
   bool handleKey(const KeyEvent& event);
@@ -235,6 +237,7 @@ class Controller {
   void hidePanel();
 
   Environment& env_;
+  bool personal_;
   Client& client_;
   std::unique_ptr<Composer> composer_;
   bool choosing_ = false;

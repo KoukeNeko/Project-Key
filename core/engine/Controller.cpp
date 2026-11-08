@@ -117,7 +117,8 @@ const char* Settings::Name(Setting setting) {
   return "";
 }
 
-Controller::Controller(Environment& environment, Client& client) : env_(environment), client_(client) {
+Controller::Controller(Environment& environment, Client& client, bool personal)
+    : env_(environment), personal_(personal), client_(client) {
   makeComposer();
 }
 
@@ -131,7 +132,8 @@ void Controller::makeComposer() {
   rememberChoices_ = rememberChoices;
   models_ = env_.models;
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
-                                         Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight, rememberChoices ? env_.personal : nullptr, abbreviated);
+                                         Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight,
+                                         rememberChoices && personal_ ? env_.personal : nullptr, abbreviated);
 }
 
 void ClearChoices(Environment& env) {
@@ -175,7 +177,7 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
 }
 
 void Controller::learn(const std::string& committed) {
-  if (!rememberChoices_ || !env_.personal) return;
+  if (!rememberChoices_ || !personal_ || !env_.personal) return;
   env_.personal->learn(committed);
   // shortcut: rewrites the whole file (at most PersonalModel::kMaxTriples lines) on every commit;
   // batch the writes if that ever shows up in typing latency.

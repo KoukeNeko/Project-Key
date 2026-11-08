@@ -108,6 +108,6 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 聯想詞、滑鼠點選候選。
 - 候選視窗與 Tab 提示出現、消失時的淡入淡出；內容改變時的移動與縮放已與 macOS 相同。
 - 自行建置的上下文模型：`tools/bigram-trainer` 的訓練腳本是 shell script，在 Windows 上需要另外執行，或用 Git Bash 執行 `fetch-models.sh` 下載發行版那一組；有 `bigram.bin`、`chars.bin` 時 `build.ps1` 會一併安裝；有補詞後的 `data.txt` 時，以它取代 McBopomofo 的詞庫。沒有它時選字與 McBopomofo 相同。發行版已附上。
-- 選過的字只存在伺服器記憶體，登出或重新安裝後清空（同 macOS）；從送出的文字學到的字串次數存在 `%LOCALAPPDATA%\Project Key\personal.txt`，設定的「清除」一併清空。
+- 選過的字只存在伺服器記憶體，登出或重新安裝後清空（同 macOS）；從送出的文字學到的字串次數存在 `%LOCALAPPDATA%\Project Key\personal.txt`，設定的「清除」一併清空。Store App、沙盒中與低完整性的 App 不從這份紀錄排序，也不會加入紀錄，以免從候選順序讀出在其他 App 打過的字。
 - 組字一律當成句首：文字服務只在英文模式按 Tab 時把游標前的文字傳給伺服器，macOS 則接著游標前的漢字選字。
 - 程式碼簽章與安裝程式；目前用 PowerShell 腳本安裝，只支援 x64。

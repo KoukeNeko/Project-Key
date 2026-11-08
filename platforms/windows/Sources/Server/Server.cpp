@@ -128,13 +128,38 @@ bool FromSettings(HANDLE pipe) {
   return GetNamedPipeClientProcessId(pipe, &client) && SamePath(ProcessImage(client), ModuleDirectory(nullptr) + kSettingsExe);
 }
 
+// Whether the other end of the pipe runs outside an app container at medium integrity or
+// above. Only those rank by and teach what the user typed: anything sandboxed could read
+// it back from the candidate order. Unknown counts as sandboxed.
+bool FromPlainApp(HANDLE pipe) {
+  ULONG client = 0;
+  if (!GetNamedPipeClientProcessId(pipe, &client)) return false;
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, client);
+  if (!process) return false;
+  HANDLE token = nullptr;
+  bool opened = OpenProcessToken(process, TOKEN_QUERY, &token);
+  CloseHandle(process);
+  if (!opened) return false;
+  DWORD isAppContainer = 1, size = sizeof(isAppContainer);
+  BYTE label[64];
+  bool plain = GetTokenInformation(token, TokenIsAppContainer, &isAppContainer, size, &size) && !isAppContainer &&
+               GetTokenInformation(token, TokenIntegrityLevel, label, sizeof(label), &size);
+  if (plain) {
+    PSID sid = reinterpret_cast<TOKEN_MANDATORY_LABEL*>(label)->Label.Sid;
+    plain = *GetSidSubAuthority(sid, *GetSidSubAuthorityCount(sid) - 1) >= static_cast<DWORD>(SECURITY_MANDATORY_MEDIUM_RID);
+  }
+  CloseHandle(token);
+  return plain;
+}
+
 void Serve(HANDLE pipe) {
   CoInitializeEx(nullptr, COINIT_MULTITHREADED);
   Recorder recorder;
+  bool personal = FromPlainApp(pipe);
   std::unique_ptr<Controller> controller;
   {
     std::lock_guard lock(gLock);
-    controller = std::make_unique<Controller>(gEnvironment, recorder);
+    controller = std::make_unique<Controller>(gEnvironment, recorder, personal);
   }
   std::string bytes;
   while (ReadMessage(pipe, bytes)) {

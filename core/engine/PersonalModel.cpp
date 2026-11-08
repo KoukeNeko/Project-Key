@@ -141,8 +141,14 @@ bool PersonalModel::save(const std::string& path) const {
   std::filesystem::path temporary = PathOf(path + ".tmp");
   std::error_code error;
   std::filesystem::create_directories(temporary.parent_path(), error);
+  // What the user typed is for the user only. With the folder closed first, no one else can open
+  // the file before it is; on Windows these only clear read-only, and the per-user folder's ACL does it.
+  using std::filesystem::perms;
+  std::filesystem::permissions(temporary.parent_path(), perms::owner_all, error);
   {
     std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
+    std::filesystem::permissions(temporary, perms::owner_read | perms::owner_write, error);
+    if (error) return false;
     out << text;
     if (!out.good()) return false;
   }
