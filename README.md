@@ -87,6 +87,7 @@ flowchart TB
     direction LR
     controller["Controller<br>按鍵狀態機"] --> composer["Composer<br>注音組字、整句與候選"]
     composer --> ranking["Bigram、CharModel<br>依上下文排序、標出可疑處"]
+    composer --> sentence["SentenceModel<br>整句候選重新排序（選用）"]
     composer --> personal["PersonalModel<br>記住選過與送出過的字"]
   end
 
@@ -126,6 +127,19 @@ platforms/macos/build.sh            # 再建置一次，把模型放進 App
 不想自行訓練時，`tools/bigram-trainer/fetch-models.sh` 下載發行版使用的同一組檔案。發布新一組模型後，macOS、Windows、Linux 的設定在「關於 > 選字模型」提供下載，不必重新安裝。
 
 選字的評測工具在 [tools/corpus-evaluator](tools/corpus-evaluator/)。
+
+### 整句模型（選用）
+
+詞模型只看前兩個詞，罕見的詞對可能勝出，例如「網頁太單調了」選成「網液態單調了」。`sentence.bin` 是約 1,400 萬參數的字元級 GPT-2，組字器取前 10 個整句候選，以它評估整句的通順程度後重新排序。它與上述兩個模型放在同一個資料夾，建置時若存在就一併放入；沒有時，選字結果與先前相同。目前尚未隨發行版提供。
+
+```bash
+tools/bigram-trainer/train.sh                                               # 產生訓練文字
+python3 -I tools/lm-trainer/prepare.py <資料目錄> < tools/bigram-trainer/.cache/text-200000000.txt
+python tools/lm-trainer/train.py <資料目錄> <模型目錄> --size small            # 需要 CUDA，約 20 分鐘
+python tools/lm-trainer/export.py <模型目錄> tools/bigram-trainer/.cache/sentence.bin
+```
+
+以維基百科第一個分片的 8,100 萬字訓練時，評測語料的整句正確由 224/240 提高到 229/240，另取 2,000 句未參與訓練的維基百科句子，由 1,353 句提高到 1,448 句。在 Intel Core i7-12700K 上，每鍵處理時間的 P95 由約 1 毫秒增加到約 20 毫秒，模型最多約占 85MB 記憶體，超出鍵盤擴充的限制，因此 iOS 的建置不放入。
 
 ## 授權
 

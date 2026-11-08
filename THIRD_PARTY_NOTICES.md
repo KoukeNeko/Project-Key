@@ -47,6 +47,8 @@ SOFTWARE.
 
 程式在執行時讀取這些檔案，可以直接替換或移除；沒有它們時改用 McBopomofo 的詞庫與排序。
 
+自行建置時，若 `tools/bigram-trainer/.cache/` 另有 `tools/lm-trainer` 訓練的 `sentence.bin`（整句模型，字元級 GPT-2 的權重，以[中文維基百科](https://zh.wikipedia.org)經 OpenCC 轉為臺灣正體後訓練，不含原文），建置會一併放入。它同樣以 CC BY-SA 4.0 授權，目前不在發行版中。
+
 ### Wayland 協定定義
 
 `platforms/linux/protocols/` 內含兩份 Wayland 協定的 XML，建置時由 `wayland-scanner` 產生程式碼，連結進 Linux 的 addon。兩者都以 MIT 授權發布，條文在各檔案開頭的 `<copyright>`：

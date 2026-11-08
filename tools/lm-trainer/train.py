@@ -15,7 +15,8 @@ import numpy as np
 import torch
 from transformers import BertTokenizerFast, GPT2Config, GPT2LMHeadModel
 
-SIZES = {"small": dict(n_embd=384, n_layer=6, n_head=6), "medium": dict(n_embd=512, n_layer=8, n_head=8)}
+SIZES = {"tiny": dict(n_embd=256, n_layer=4, n_head=4), "small": dict(n_embd=384, n_layer=6, n_head=6),
+         "medium": dict(n_embd=512, n_layer=8, n_head=8)}
 CONTEXT = 64  # evaluation sentences are 5 to 16 characters
 BATCH = 256  # 512 needs 15 GiB of logits and gradients, past a 12 GB card
 PEAK_LR, WARMUP = 1e-3, 1000
