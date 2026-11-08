@@ -7,6 +7,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCryptographicHash>
+#include <QDesktopServices>
 #include <QDBusArgument>
 #include <QDBusInterface>
 #include <QDBusMetaType>
@@ -34,6 +35,7 @@
 #include <QStandardPaths>
 #include <QProcess>
 #include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QVersionNumber>
 
@@ -516,6 +518,15 @@ int main(int argc, char** argv) {
           Unsaved(combo);
         });
         form->addRow(label(row.title), combo);
+      } else if (row.kind == Row::kEditPhrases) {
+        auto* edit = new QPushButton("編輯…");
+        QObject::connect(edit, &QPushButton::clicked, [edit] {
+          std::filesystem::path file = MadeUserPhrases();
+          if (file.empty() || !QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(file.string())))) {
+            edit->setText("無法開啟");
+          }
+        });
+        form->addRow(label(row.title), edit);
       } else {
         auto* clear = new QPushButton("清除");
         clear->setEnabled(available);

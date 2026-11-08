@@ -505,7 +505,10 @@ class Engine : public fcitx::InputMethodEngineV2 {
     if (!UseNewestModels(environment_)) FCITX_ERROR() << "Project Key: cannot load " << PROJECTKEY_DATA_DIR << "/data.txt";
     environment_.userModel = NewUserModel();
     // What the user typed, learned on this computer only.
-    if (!UserData().empty()) environment_.personalPath = UserData() + "/personal.txt";
+    if (!UserData().empty()) {
+      environment_.personalPath = UserData() + "/personal.txt";
+      environment_.userPhrasesPath = UserData() + "/phrases.txt";  // edited from the settings windows
+    }
     environment_.personal = std::make_shared<PersonalModel>();
     if (!environment_.personalPath.empty()) environment_.personal->load(environment_.personalPath);
     environment_.settings = &settings_;

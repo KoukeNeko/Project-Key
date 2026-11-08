@@ -265,6 +265,21 @@ public sealed partial class MainWindow : Window {
     ClearChoices.IsEnabled = false;
   }
 
+  // Opens the user's words (core/engine Lexicon::loadUserPhrases) in their text editor, made first
+  // when missing, beside personal.txt; the engine reads them again on the next composition after a save.
+  private void OnEditPhrases(object sender, RoutedEventArgs e) {
+    string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key", "phrases.txt");
+    try {
+      if (!File.Exists(file)) {
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "# 詞 注音，例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n");  // UTF-8 without a BOM, as the engine reads it
+      }
+      Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) {
+      EditPhrases.Content = "無法開啟";
+    }
+  }
+
   // One request to the engine server. Without a server running there is nothing to tell it:
   // it starts with the choices cleared and the newest models.
   private static void SendToServer(byte request) {

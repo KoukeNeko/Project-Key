@@ -35,6 +35,9 @@
       <tk:SettingsCard Header="選字紀錄">
         <Button x:Name="ClearChoices" Click="OnClearChoices" Content="清除" />
       </tk:SettingsCard>
+      <tk:SettingsCard Header="自訂詞">
+        <Button x:Name="EditPhrases" Click="OnEditPhrases" Content="編輯…" />
+      </tk:SettingsCard>
 
       <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="外觀" />
       <tk:SettingsCard Header="候選視窗">

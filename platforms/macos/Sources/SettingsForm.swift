@@ -45,6 +45,9 @@ struct SettingsForm: View {
           }
           .disabled(cleared)
         }
+        LabeledContent("自訂詞") {
+          Button("編輯…") { PKEditUserPhrases() }
+        }
       }
       Section("外觀") {
         Picker("候選視窗", selection: $appearance) {

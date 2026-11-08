@@ -401,6 +401,25 @@ void Activate(GtkApplication* app) {
         }
         g_object_set_data(G_OBJECT(widget), "saved", GUINT_TO_POINTER(adw_combo_row_get_selected(ADW_COMBO_ROW(widget))));
         g_signal_connect(widget, "notify::selected", G_CALLBACK(ChoiceChanged), const_cast<Row*>(&row));
+      } else if (row.kind == Row::kEditPhrases) {
+        widget = adw_action_row_new();
+        GtkWidget* edit = gtk_button_new_with_label("編輯…");
+        gtk_widget_set_valign(edit, GTK_ALIGN_CENTER);
+        g_signal_connect(edit, "clicked", G_CALLBACK((+[](GtkButton* button, gpointer) {
+                           std::filesystem::path file = MadeUserPhrases();
+                           GError* error = nullptr;
+                           gchar* uri = file.empty() ? nullptr : g_filename_to_uri(file.c_str(), nullptr, &error);
+                           if (uri && g_app_info_launch_default_for_uri(uri, nullptr, &error)) {
+                             g_free(uri);
+                             return;
+                           }
+                           if (error) g_warning("Project Key: cannot open %s: %s", file.c_str(), error->message);
+                           g_clear_error(&error);
+                           g_free(uri);
+                           gtk_button_set_label(button, "無法開啟");
+                         })),
+                         nullptr);
+        adw_action_row_add_suffix(ADW_ACTION_ROW(widget), edit);
       } else {
         widget = adw_action_row_new();
         GtkWidget* clear = gtk_button_new_with_label("清除");

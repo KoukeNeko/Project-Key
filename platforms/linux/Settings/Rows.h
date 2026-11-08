@@ -22,12 +22,32 @@ constexpr char kReleases[] = "https://api.github.com/repos/KoukeNeko/Project-Key
 constexpr char kAllReleases[] = "https://api.github.com/repos/KoukeNeko/Project-Key/releases?per_page=30";
 constexpr char kEngineUrl[] = "https://github.com/openvanilla/McBopomofo";
 
-// Where the models the settings windows download go, as UserData() in Sources/ProjectKey.cpp;
-// the engine uses the newest of them and the installed ones (core/engine/Models.h).
-inline std::filesystem::path DownloadedModels() {
-  if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) return std::filesystem::path(data) / "projectkey/models";
-  if (const char* home = std::getenv("HOME")) return std::filesystem::path(home) / ".local/share/projectkey/models";
+// UserData() in Sources/ProjectKey.cpp; empty without a home.
+inline std::filesystem::path UserData() {
+  if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) return std::filesystem::path(data) / "projectkey";
+  if (const char* home = std::getenv("HOME")) return std::filesystem::path(home) / ".local/share/projectkey";
   return {};
+}
+
+// Where the models the settings windows download go; the engine uses the newest of them
+// and the installed ones (core/engine/Models.h).
+inline std::filesystem::path DownloadedModels() {
+  std::filesystem::path data = UserData();
+  return data.empty() ? data : data / "models";
+}
+
+// The user's own words (core/engine Lexicon::loadUserPhrases), which the addon reads again on the
+// next composition after a save; made first when missing. Empty when it cannot be made.
+inline std::filesystem::path MadeUserPhrases() {
+  std::filesystem::path data = UserData();
+  if (data.empty()) return {};
+  std::filesystem::path file = data / "phrases.txt";
+  std::error_code error;
+  if (std::filesystem::exists(file, error)) return file;
+  std::filesystem::create_directories(data, error);
+  std::ofstream out(file);
+  out << "# 詞 注音，例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n";
+  return out.good() ? file : std::filesystem::path();
 }
 
 inline std::filesystem::path ModelsInUse() {
@@ -154,8 +174,8 @@ inline int WelcomeStep(bool added, bool inUse, bool tried) {
 }
 
 struct Row {
-  enum Kind { kToggle, kChoice, kClearChoices } kind;
-  const char* key;  // empty for kClearChoices
+  enum Kind { kToggle, kChoice, kClearChoices, kEditPhrases } kind;
+  const char* key;  // empty for kClearChoices and kEditPhrases
   const char* title;
   const char* detail = nullptr;              // a line under the row
   std::vector<const char*> values = {};      // kChoice: the config's names for its options
@@ -178,6 +198,7 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "KeypadPicks", "數字鍵盤選字", "開啟時數字鍵盤的 1–6 直接選字；主鍵盤的 1–6 仍是注音"},
            {Row::kToggle, "RememberChoices", "記住選過的字"},
            {Row::kClearChoices, "", "選字紀錄"},
+           {Row::kEditPhrases, "", "自訂詞"},
        }},
       {"外觀",
        {

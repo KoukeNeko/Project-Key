@@ -238,7 +238,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   }
   gEnvironment.userModel = NewUserModel();
   // What the user typed, learned on this PC only, beside other per-user app data.
-  if (!UserData().empty()) gEnvironment.personalPath = Narrow(UserData() + L"personal.txt");
+  if (!UserData().empty()) {
+    gEnvironment.personalPath = Narrow(UserData() + L"personal.txt");
+    gEnvironment.userPhrasesPath = Narrow(UserData() + L"phrases.txt");  // edited from the settings app
+  }
   gEnvironment.personal = std::make_shared<PersonalModel>();
   if (!gEnvironment.personalPath.empty()) gEnvironment.personal->load(gEnvironment.personalPath);
   gEnvironment.settings = &gSettings;
