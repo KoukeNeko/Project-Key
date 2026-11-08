@@ -47,7 +47,7 @@ SOFTWARE.
 
 程式在執行時讀取這些檔案，可以直接替換或移除；沒有它們時改用 McBopomofo 的詞庫與排序。
 
-自行建置時，若 `tools/bigram-trainer/.cache/` 另有 `tools/lm-trainer` 訓練的 `sentence.bin`（整句模型，字元級 GPT-2 的權重，以[中文維基百科](https://zh.wikipedia.org)經 OpenCC 轉為臺灣正體後訓練，不含原文），建置會一併放入。它同樣以 CC BY-SA 4.0 授權，目前不在發行版中。
+自 models-2026-11-09 起，模型另附 `sentence.bin`：`tools/lm-trainer` 訓練的整句模型（字元級 GPT-2 的權重），以[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）經 OpenCC 轉為臺灣正體後訓練，不含原文，以 CC BY-SA 4.0 授權。此檔案為選用；未提供時，引擎不重新排序整句候選。
 
 ### Wayland 協定定義
 

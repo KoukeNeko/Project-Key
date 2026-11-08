@@ -173,7 +173,7 @@ jobs:
             homepage "https://github.com/KoukeNeko/Project-Key"
             url "https://github.com/KoukeNeko/Project-Key/archive/refs/tags/v@VERSION@.tar.gz"
             sha256 "@SHA256@"
-            license all_of: ["MIT", "CC-BY-SA-4.0", "LGPL-2.1-or-later"]  # the program; bigram.bin and chars.bin; data.txt
+            license all_of: ["MIT", "CC-BY-SA-4.0", "LGPL-2.1-or-later"]  # the program; bigram.bin, chars.bin and sentence.bin; data.txt
 
             livecheck do
               url :stable
@@ -199,7 +199,7 @@ jobs:
               ENV.delete "PKG_CONFIG_PATH"
               (buildpath/"mcbopomofo").install resource("mcbopomofo")
               # CMakeLists.txt installs them, with their notice, from the trainer's cache.
-              %w[data.txt bigram.bin chars.bin].each { |file| (buildpath/"tools/bigram-trainer/.cache").install resource(file) }
+              %w[data.txt bigram.bin chars.bin sentence.bin].each { |file| (buildpath/"tools/bigram-trainer/.cache").install resource(file) }
               (buildpath/"tools/bigram-trainer/.cache/models-version.txt").write "@MODELS_VERSION@\n"  # as fetch-models.sh records it
               system "make", "-C", "mcbopomofo/Source/Data", "data.txt"
               system "cmake", "-S", "platforms/linux", "-B", "build", "-G", "Ninja",

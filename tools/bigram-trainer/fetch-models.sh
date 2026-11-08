@@ -7,20 +7,20 @@
 # 2. Publish them as a pre-release under a new date tag, so the settings window's update check
 #    (GitHub's latest release) never finds it:
 #    gh release create models-YYYY-MM-DD --prerelease --latest=false --title "Models YYYY-MM-DD" \
-#      .cache/data.txt .cache/bigram.bin .cache/chars.bin MODELS-NOTICE.txt LICENSE-LGPL-2.1.txt
+#      .cache/data.txt .cache/bigram.bin .cache/chars.bin .cache/sentence.bin MODELS-NOTICE.txt LICENSE-LGPL-2.1.txt
 #    From then on the settings windows offer it to anyone with older models: they take the newest
 #    models-* release with data.txt, bigram.bin and chars.bin, check each file against the SHA-256
 #    GitHub lists, and the engine switches to it (core/engine/Models.h). The models' file formats
 #    must stay readable by the releases already installed; a format change needs a new tag prefix.
 # 3. Set TAG below to the new tag, so new installs bundle it, update the checksums with
-#    (cd .cache && shasum -a 256 data.txt bigram.bin chars.bin) > models.sha256
+#    (cd .cache && shasum -a 256 data.txt bigram.bin chars.bin sentence.bin) > models.sha256
 #    and commit both.
 set -eu
 cd "$(dirname "$0")"
-TAG=models-2026-11-07
+TAG=models-2026-11-09
 URL=https://github.com/KoukeNeko/Project-Key/releases/download/$TAG
 mkdir -p .cache
-for file in data.txt bigram.bin chars.bin; do
+for file in data.txt bigram.bin chars.bin sentence.bin; do  # sentence.bin: tools/lm-trainer
   curl -fsSL --retry 3 -o ".cache/$file" "$URL/$file"
 done
 cd .cache

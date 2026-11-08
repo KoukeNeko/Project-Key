@@ -20,6 +20,14 @@ bigram.bin, chars.bin
     (https://data.gov.tw/license).
   These two files are licensed under CC BY-SA 4.0.
 
+sentence.bin
+  The weights of a character-level GPT-2 trained by tools/lm-trainer on
+  Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard), by
+  Wikipedia contributors, under CC BY-SA 4.0
+  (https://creativecommons.org/licenses/by-sa/4.0/), converted to Taiwan
+  Traditional Chinese with OpenCC; no text is included. This file is licensed
+  under CC BY-SA 4.0.
+
 data.txt
   McBopomofo's dictionary (MIT License, see McBopomofo-LICENSE.txt), with
   words added from:
@@ -54,6 +62,12 @@ bigram.bin、chars.bin
     （https://v2.ly.govapi.tw）取得，政府資料開放授權條款第 1 版
     （https://data.gov.tw/license）。
   這兩個檔案以 CC BY-SA 4.0 授權。
+
+sentence.bin
+  由 tools/lm-trainer 訓練的字元級 GPT-2 權重，訓練文字為中文維基百科
+  （wikimedia/wikipedia 20231101.zh 第一個分片），維基百科貢獻者，CC BY-SA 4.0
+  （https://creativecommons.org/licenses/by-sa/4.0/），經 OpenCC 轉為臺灣正體，
+  不含原文。這個檔案以 CC BY-SA 4.0 授權。
 
 data.txt
   McBopomofo 的詞庫（MIT 授權，見 McBopomofo-LICENSE.txt），另加入：
