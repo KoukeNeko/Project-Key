@@ -60,7 +60,7 @@ c++ $CXXFLAGS -fobjc-arc $ENGINE Sources/*.mm $LIBS $SWIFT_LINK \
   -framework Cocoa -framework QuartzCore -framework InputMethodKit -framework Carbon \
   -o "$APP/Contents/MacOS/ProjectKey"
 cp Resources/Info.plist "$APP/Contents/"
-cp Resources/icon.tiff "$MCB/Source/Data/data.txt" "$APP/Contents/Resources/"
+cp Resources/icon.tiff Resources/AppIcon.icns "$MCB/Source/Data/data.txt" "$APP/Contents/Resources/"
 cp ../linux/fcitx-projectkey.svg "$APP/Contents/Resources/"  # the icon, drawn by the welcome window
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp "$MCB/LICENSE.txt" "$APP/Contents/Resources/McBopomofo-LICENSE.txt"

@@ -6,6 +6,8 @@
 	<string>zh_TW</string>
 	<key>CFBundleExecutable</key>
 	<string>ProjectKey</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>org.projectkey.inputmethod.ProjectKey</string>
 	<key>CFBundleInfoDictionaryVersion</key>
