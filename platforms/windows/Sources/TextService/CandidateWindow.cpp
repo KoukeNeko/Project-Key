@@ -195,8 +195,8 @@ float CandidateWindow::keyWidth(const PanelContent& c) const {
   return std::max(kKeyHeight, fonts_.widthOf(Widen(c.keyHint), fonts_.key()) + 2 * kKeyPadding);
 }
 
-// The first row's end: a down chevron while folded with more rows; unfolded, the page label
-// and an up chevron. Every row keeps room for them and for the widest label (999/999, or
+// The first row's end: with more rows, the page label and a chevron, down while folded and
+// up while unfolded. Every row keeps room for them and for the widest label (999/999, or
 // wider for more rows), so the window keeps its width from typing to choosing, folded or not.
 float CandidateWindow::tailWidth() const {
   std::string total = content_->pageLabel.substr(content_->pageLabel.find('/') + 1);
@@ -580,10 +580,8 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
     D2D1_POINT_2F apex = D2D1::Point2F(x + kChevronWidth / 2, middle + tip);
     target->DrawLine(D2D1::Point2F(x, middle - tip), apex, muted.Get(), kChevronLine, roundCaps.Get());
     target->DrawLine(apex, D2D1::Point2F(x + kChevronWidth, middle - tip), muted.Get(), kChevronLine, roundCaps.Get());
-    if (content_->expanded) {
-      Line page = Measure(fonts_, Widen(content_->pageLabel), fonts_.page());
-      DrawLine(target, page, x - kChevronGap - page.width, top + kRowTop + kCellTop, kCellLine, muted.Get());
-    }
+    Line page = Measure(fonts_, Widen(content_->pageLabel), fonts_.page());
+    DrawLine(target, page, x - kChevronGap - page.width, top + kRowTop + kCellTop, kCellLine, muted.Get());
   }
 }
 

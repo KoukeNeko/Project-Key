@@ -1008,7 +1008,7 @@ void Controller::refresh() {
       guesses.assign(all.begin(), all.begin() + static_cast<std::ptrdiff_t>(firstRowSize(all)));
       std::vector<int> rowStarts, columns;
       pack(all, &rowStarts, &columns);
-      // Folded as when choosing: with more rows, the page label (drawn as a down chevron).
+      // Folded as when choosing: with more rows, the page label, drawn with a down chevron.
       if (rowStarts.size() > 1) guessPage = "1/" + std::to_string(rowStarts.size());
       auto at = std::find(guesses.begin(), guesses.end(), segment->text);
       if (at != guesses.end()) guessAt = static_cast<int>(at - guesses.begin());

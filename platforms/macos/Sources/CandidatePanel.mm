@@ -214,8 +214,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return NSMakeSize(width, self.proofHeight + separator + self.rowHeight);
 }
 
-// The first row's end: a down chevron while folded with more rows; unfolded, the page label
-// and an up chevron. Every row keeps room for them and for the widest label (999/999, or
+// The first row's end: with more rows, the page label and a chevron, down while folded and
+// up while unfolded. Every row keeps room for them and for the widest label (999/999, or
 // wider for more rows), so the window keeps its width from typing to choosing, folded or not.
 - (CGFloat)tailWidth {
   NSString *total = [self.content.pageLabel componentsSeparatedByString:@"/"].lastObject;
@@ -470,12 +470,10 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     chevron.lineJoinStyle = NSLineJoinStyleRound;
     [self.mutedColor setStroke];
     [chevron stroke];
-    if (self.content.expanded) {
-      CGFloat labelWidth = [self widthOf:self.content.pageLabel font:_pageFont];
-      CGFloat pageTop = TextTop(_pageFont, cellTop + kCellTop, kCellLine);
-      [self.content.pageLabel drawAtPoint:NSMakePoint(x - kChevronGap - labelWidth, pageTop)
-                           withAttributes:Attributes(_pageFont, self.mutedColor)];
-    }
+    CGFloat labelWidth = [self widthOf:self.content.pageLabel font:_pageFont];
+    CGFloat pageTop = TextTop(_pageFont, cellTop + kCellTop, kCellLine);
+    [self.content.pageLabel drawAtPoint:NSMakePoint(x - kChevronGap - labelWidth, pageTop)
+                         withAttributes:Attributes(_pageFont, self.mutedColor)];
   }
 }
 

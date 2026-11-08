@@ -237,8 +237,8 @@ float Panel::fittingWidth() const {
   return result;
 }
 
-// The first row's end: a down chevron while folded with more rows; unfolded, the page label
-// and an up chevron. Every row keeps room for them and for the widest label (999/999, or
+// The first row's end: with more rows, the page label and a chevron, down while folded and
+// up while unfolded. Every row keeps room for them and for the widest label (999/999, or
 // wider for more rows), so the window keeps its width from typing to choosing, folded or not.
 float Panel::tailWidth() const {
   std::string total = content_->pageLabel.substr(content_->pageLabel.find('/') + 1);
@@ -652,10 +652,8 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
     cairo_set_line_join(cr, CAIRO_LINE_JOIN_ROUND);
     cairo_stroke(cr);
     cairo_restore(cr);
-    if (content_->expanded) {
-      Line page(layout(content_->pageLabel, pageFont_));
-      page.draw(cr, x - kChevronGap - page.width, top + kRowTop + kCellTop, kCellLine);
-    }
+    Line page(layout(content_->pageLabel, pageFont_));
+    page.draw(cr, x - kChevronGap - page.width, top + kRowTop + kCellTop, kCellLine);
   }
 }
 
