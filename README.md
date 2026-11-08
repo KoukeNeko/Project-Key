@@ -75,7 +75,10 @@ flowchart TB
   subgraph platforms["各平台：接收按鍵、送出文字、繪製候選視窗"]
     direction LR
     mac["macOS<br>InputMethodKit 輸入法<br>CandidatePanel"]
-    win["Windows<br>TSF 文字服務 ProjectKey.dll<br>⇄ named pipe ⇄<br>引擎伺服器 ProjectKeyServer.exe"]
+    subgraph win["Windows"]
+      direction LR
+      tsf["TSF 文字服務<br>ProjectKey.dll<br>（載入每個 App）"] <-- "named pipe" --> server["引擎伺服器<br>ProjectKeyServer.exe<br>（每位使用者一個）"]
+    end
     linux["Linux<br>Fcitx5 附加元件<br>Panel（Cairo、Pango）"]
     ios["iOS<br>鍵盤擴充"]
   end
@@ -93,7 +96,7 @@ flowchart TB
     models["上下文模型與補詞詞庫<br>（tools/bigram-trainer）"]
   end
 
-  mac & win & linux & ios -- "按鍵" --> controller
+  mac & server & linux & ios -- "按鍵" --> controller
   controller -- "PanelContent" --> platforms
   mcb --> composer
   models --> ranking
