@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Key 大千注音輸入法</title>
+<meta name="description" content="大千注音輸入法。整句打完，再一起選字；依上下文排序，標出可能選錯的地方。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  // 出場前先藏起首屏，避免動畫開始前閃過完成的句子；減少動態效果時不藏。
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('intro');
+  setTimeout(() => document.documentElement.classList.remove('intro'), 4000);
+</script>
+<style>
+  .intro #heroComp, .intro #heroWindow { visibility: hidden; }
+  p { text-wrap: pretty; }
+  :root {
+    --bg: #1d2124;
+    --panel: #23282c;
+    --raised: #2a3034;
+    --line: #343b40;
+    --text: #e8ecee;
+    --muted: #9aa5ad;
+    --faint: #8a959d;
+    --accent: #14806f;
+    --accent-soft: #3fb9a3;
+    --pad: 48px;
+    --click: cubic-bezier(.2, 1.4, .4, 1);  /* 咔嗒：一個鍵帽被按下又彈回 */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bg); }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Noto Sans TC", sans-serif; font-size: 17px; line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .mono { font-family: "IBM Plex Mono", monospace; }
+  .nowrap { white-space: nowrap; }
+  :focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 3px; border-radius: 6px; }
+
+  /* 頁頭 */
+  .top {
+    position: fixed; inset: 0 0 auto 0; z-index: 20; height: 64px;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 var(--pad);
+    background: rgba(29, 33, 36, .86); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 500; font-size: 16px; text-decoration: none; }
+  .mark {
+    width: 28px; height: 28px; border-radius: 6px; background: var(--accent);
+    display: grid; place-items: center; color: #fff; font-size: 17px; font-weight: 500;
+  }
+  .top nav { display: flex; gap: 32px; font-size: 15px; color: var(--muted); }
+  .top nav a { text-decoration: none; transition: color .15s; }
+  .top nav a:hover { color: var(--text); }
+
+  /* 首屏：組字畫面 */
+  .hero {
+    min-height: 100vh; padding: 64px var(--pad) 0;
+    display: grid; grid-template-rows: 1fr auto;
+  }
+  .hero .stage { display: flex; flex-direction: column; justify-content: center; padding: 48px 0; }
+  .comp {
+    font-weight: 300; font-size: clamp(44px, 6.1vw, 88px); line-height: 1.2; letter-spacing: .02em;
+    display: inline-block; align-self: flex-start;
+    border-bottom: 2px solid #4b555c; padding-bottom: 8px;
+  }
+  .comp .ch { display: inline-block; min-width: .5em; }
+  .comp .ch.zy { color: var(--muted); font-size: .62em; vertical-align: .35em; letter-spacing: 0; }
+  .doubt { position: relative; color: var(--accent-soft); display: inline-block; }
+  .doubt::after {
+    content: ""; position: absolute; left: 4%; right: 4%; bottom: -14px; height: 6px; border-radius: 3px;
+    background: var(--accent-soft); transform-origin: left; transform: scaleX(var(--mark, 1)); opacity: var(--mark, 1);
+  }
+  .doubt .ch { transition: color .3s; }
+  .caret { display: inline-block; width: 3px; height: .92em; background: var(--text); vertical-align: -.1em; margin-left: 6px; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .window {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+  }
+  .hero .window { margin-top: 44px; margin-left: var(--wx, 0px); width: min(640px, 100%); transform-origin: 20% 0; }
+  .proof { padding: 12px 18px 14px; font-size: 18px; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .proof b { font-weight: 400; color: var(--accent-soft); border-bottom: 3px solid var(--accent-soft); padding-bottom: 2px; }
+  .row { position: relative; display: flex; gap: 6px; padding: 10px 10px 12px; align-items: center; }
+  .pill { position: absolute; top: 10px; height: calc(100% - 22px); border-radius: 4px; background: var(--accent); z-index: 0; }
+  .cell {
+    position: relative; z-index: 1; display: flex; align-items: baseline; gap: 8px; padding: 6px 12px;
+    font-size: 26px; transition: color .2s; white-space: nowrap;
+  }
+  .cell i { font-style: normal; font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--muted); transition: color .2s; }
+  .cell.on { color: #fff; }
+  .cell.on i { color: rgba(255, 255, 255, .78); }
+  .chev { margin-left: auto; padding-right: 10px; color: var(--muted); font-size: 15px; }
+
+  .status {
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    min-height: 76px; border-top: 1px solid var(--line); font-size: 15px; color: var(--muted);
+    margin: 0 calc(-1 * var(--pad)); padding: 14px var(--pad);
+  }
+  .status .facts { display: flex; flex-wrap: wrap; gap: 6px 28px; align-items: center; }
+  .status strong { color: var(--text); font-weight: 500; }
+  .actions { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: inherit; font-size: 15px; padding: 10px 20px; border-radius: 8px; text-decoration: none; cursor: pointer;
+    color: var(--text); background: transparent; border: 1px solid var(--line);
+    transition: transform .25s var(--click), background .15s, border-color .15s;
+  }
+  .btn:hover { border-color: #4b555c; }
+  .btn:active { transform: scale(.97); transition-duration: .08s; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  .btn.primary:hover { background: #179180; border-color: #179180; }
+
+  /* 通用區段 */
+  section.block { padding: 140px var(--pad) 0; max-width: 1240px; margin: 0 auto; }
+  .eyebrow { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--accent-soft); letter-spacing: .08em; }
+  h2 { font-weight: 500; font-size: clamp(30px, 3.4vw, 44px); line-height: 1.3; margin: 14px 0 0; letter-spacing: .01em; }
+  .flow-title { font-size: 26px; margin: 0 0 28px; }
+  .lead { color: var(--muted); max-width: 34em; margin-top: 16px; }
+
+  /* 選字一次：固定舞台 */
+  .flow { height: 360vh; position: relative; }
+  .flow .pin { position: sticky; top: 0; height: 100vh; display: grid; grid-template-columns: 280px 1fr; gap: 64px; align-items: center; padding: 64px var(--pad) 0; max-width: 1240px; margin: 0 auto; }
+  .steps { list-style: none; display: grid; gap: 22px; counter-reset: s; }
+  .steps li { color: var(--faint); transition: color .3s; padding-left: 36px; position: relative; font-size: 17px; }
+  .steps li::before {
+    counter-increment: s; content: counter(s); position: absolute; left: 0; top: 3px;
+    width: 22px; height: 22px; border-radius: 4px; border: 1px solid var(--line);
+    display: grid; place-items: center; font-family: "IBM Plex Mono", monospace; font-size: 12px;
+  }
+  .steps li strong { display: block; font-weight: 500; font-size: 19px; }
+  .steps li.now { color: var(--text); }
+  .steps li.now::before { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .steps li.now strong { color: var(--text); }
+  .scene { position: relative; }
+  .scene .comp { font-size: clamp(36px, 4.6vw, 64px); }
+  .landing { position: relative; display: inline-block; isolation: isolate; }
+  .field {  /* Enter 之後句子落進的輸入框 */
+    position: absolute; inset: -22px -28px -22px -28px; border: 1px solid #4b555c; border-radius: 10px;
+    background: var(--panel); z-index: -1; opacity: 0;
+  }
+  .scene .comp { position: relative; z-index: 1; }
+  .swap { position: relative; display: inline-block; color: var(--accent-soft); }
+  .swap .a, .swap .b { display: inline-block; }
+  .swap .b { position: absolute; left: 0; top: 0; opacity: 0; color: var(--text); }
+  .swap::after {
+    content: ""; position: absolute; left: 4%; right: 4%; bottom: -12px; height: 6px; border-radius: 3px;
+    background: var(--accent-soft); opacity: var(--mark-o, 1);
+  }
+  .scene .window { position: absolute; left: var(--wx, 220px); top: calc(100% + 34px); width: max-content; max-width: 100%; transform-origin: 18% 0; z-index: 2; }
+  .scene .cell { font-size: 22px; }
+  .toast-sent {
+    position: absolute; left: 0; top: calc(100% + 48px); font-size: 15px; color: var(--muted);
+    display: flex; gap: 10px; align-items: center; opacity: 0;
+  }
+  .toast-sent b { font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: 13px; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 1px 8px; }
+
+  /* 功能：按下的鍵 → 得到的字 */
+  /* 一格一個標本：上方按下的鍵，下方落定的字，沒有分隔線。 */
+  .features { margin-top: 72px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 72px 56px; }
+  .feat { display: grid; grid-template-rows: auto auto 1fr; gap: 18px; align-content: start; }
+  .feat:nth-child(1) { grid-column: span 2; }
+  .feat:nth-child(1) .result { font-size: 64px; }
+  .keys { display: flex; gap: 6px; flex-wrap: wrap; }
+  .k {
+    font-family: "IBM Plex Mono", "Noto Sans TC", monospace; font-size: 17px; line-height: 1;
+    padding: 9px 11px 10px; border-radius: 6px; background: var(--raised);
+    box-shadow: inset 0 -2px 0 #15181a; color: var(--text);
+  }
+  .k.wide { padding-inline: 16px; }
+  .result { font-size: 40px; font-weight: 300; letter-spacing: .02em; line-height: 1.2; }
+  .result.typed { color: var(--muted); }
+  .result small { font-size: 15px; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
+  .feat h3 { font-weight: 500; font-size: 18px; line-height: 1.5; }
+  .feat p { color: var(--muted); font-size: 16px; margin-top: 4px; }
+  .br-s { display: none; }
+  .tag { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--accent-soft); border: 1px solid #2f5f57; border-radius: 4px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
+
+  /* 常用按鍵 */
+  .keytable { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 64px; }
+  .ktgroup h3 { font-size: 14px; font-weight: 500; color: var(--muted); padding-bottom: 12px; border-bottom: 1px solid var(--line); letter-spacing: .04em; }
+  .ktrow { display: grid; grid-template-columns: 120px 1fr; gap: 20px; align-items: center; padding: 12px 0; }
+  .ktrow p { font-size: 16px; }
+
+  /* 下載 */
+  .download { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 64px; align-items: start; margin-top: 56px; }
+  .seg { position: relative; display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
+  .seg .slide { position: absolute; top: 4px; bottom: 4px; border-radius: 5px; background: var(--accent); transition: left .32s var(--click), width .32s var(--click); }
+  .seg button {
+    position: relative; z-index: 1; font: inherit; font-size: 15px; background: none; border: 0; color: var(--muted);
+    padding: 8px 18px; border-radius: 5px; cursor: pointer; transition: color .2s;
+  }
+  .seg button[aria-selected="true"] { color: #fff; }
+  .platform { margin-top: 28px; }
+  .platform .alt { color: var(--muted); font-size: 15px; margin-top: 12px; }
+  .platform .alt a { color: var(--accent-soft); overflow-wrap: anywhere; }
+  .platform .alt code { font-family: "IBM Plex Mono", monospace; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+  .platform .req { color: var(--muted); font-size: 15px; }
+  .cmds { margin-top: 18px; display: grid; gap: 10px; }
+  .cmd {
+    display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 6px 6px 18px; overflow: hidden;
+  }
+  .cmd code { font-family: "IBM Plex Mono", monospace; font-size: 14px; white-space: normal; overflow-wrap: anywhere; flex: 1; padding-block: 6px; }
+  .cmd code::before { content: "$ "; color: var(--faint); }
+  .cmd .btn { padding: 7px 14px; font-size: 14px; flex-shrink: 0; }
+  .platform .note { color: var(--muted); font-size: 15px; margin-top: 16px; }
+  .side { border-left: 1px solid var(--line); padding-left: 40px; }
+  .side dl { display: grid; grid-template-columns: auto 1fr; gap: 12px 24px; font-size: 16px; }
+  .side dt { color: var(--muted); }
+  .side .btn { margin-top: 28px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; z-index: 30; transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+    background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 18px; font-size: 15px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .4); transition: opacity .2s, transform .25s var(--click);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast code { font-family: "IBM Plex Mono", monospace; font-size: 14px; color: var(--accent-soft); }
+
+  /* 隱私與頁尾 */
+  .privacy { margin-top: 120px; padding: 56px var(--pad); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .privacy p { max-width: 1144px; margin: 0 auto; font-size: clamp(22px, 2.2vw, 30px); font-weight: 300; line-height: 1.55; }
+  .privacy p span { color: var(--muted); }
+  footer.end { display: flex; justify-content: space-between; gap: 24px; padding: 32px var(--pad) 48px; color: var(--faint); font-size: 14px; flex-wrap: wrap; }
+  footer.end a { text-decoration: none; color: var(--muted); }
+
+  @media (max-width: 860px) {
+    :root { --pad: 20px; }
+    .top nav { gap: 18px; font-size: 14px; }
+    .top nav .hide-s { display: none; }
+    .hero .comp { line-height: 1.55; }
+    .doubt::after { bottom: -2px; height: 4px; }
+    .hero .window { margin-left: 0; }
+    section.block { padding-top: 96px; }
+    .cell { font-size: 20px; padding: 5px 8px; gap: 5px; white-space: nowrap; }
+    .chev { display: none; }
+    .row .cell:nth-of-type(n+6) { display: none; }  /* 窄螢幕只列前四個候選 */
+    .status { flex-direction: column; align-items: flex-start; }
+    .flow { height: 300vh; }
+    .flow .pin { grid-template-columns: 1fr; gap: 28px; align-content: start; padding-top: 104px; }
+    .field { inset: -14px -12px; }
+    .steps { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .steps li { padding: 30px 0 0; font-size: 13px; }
+    .steps li strong { font-size: 14px; }
+    .steps li span { display: none; }
+    .scene .window { left: 0; }
+    .scene .comp { font-size: 27px; }
+    .br-s { display: inline; }
+    .features { grid-template-columns: 1fr; gap: 48px; margin-top: 48px; }
+    .feat:nth-child(1) { grid-column: auto; }
+    .feat:nth-child(1) .result { font-size: 40px; }
+    .feat { gap: 12px; }
+    .keytable, .download { grid-template-columns: 1fr; gap: 40px; }
+    .side { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 32px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .caret { animation: none; }
+    .flow { height: auto; }
+    .flow .pin { position: static; height: auto; padding-block: 120px 0; }
+  }
+</style>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#"><span class="mark" aria-hidden="true">ㄅ</span>Project Key</a>
+    <nav aria-label="主選單">
+      <a href="#flow" class="hide-s">選字</a>
+      <a href="#features">功能</a>
+      <a href="#keys" class="hide-s">按鍵</a>
+      <a href="#download">下載</a>
+      <a href="https://github.com/KoukeNeko/Project-Key">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-label="Project Key">
+      <div class="stage">
+        <h1 class="comp" id="heroComp" aria-label="我們把舊的程式重構成模組"><span class="ch" data-zy="ㄨㄛˇ">我</span><span class="ch" data-zy="ㄇㄣ˙">們</span><span class="ch" data-zy="ㄅㄚˇ">把</span><span class="ch" data-zy="ㄐㄧㄡˋ">舊</span><span class="ch" data-zy="ㄉㄜ˙">的</span><span class="doubt" id="heroDoubt"><span class="ch" data-zy="ㄔㄥˊ" data-first="城">程</span><span class="ch" data-zy="ㄕˋ" data-first="市">式</span></span><span class="ch" data-zy="ㄔㄨㄥˊ">重</span><span class="ch" data-zy="ㄍㄡˋ">構</span><span class="ch" data-zy="ㄔㄥˊ">成</span><span class="ch" data-zy="ㄇㄛˊ">模</span><span class="ch" data-zy="ㄗㄨˇ">組</span><span class="caret" aria-hidden="true"></span></h1>
+        <div class="window" id="heroWindow" aria-label="候選視窗">
+          <div class="proof">我們把舊的<b id="heroProof">程式</b>重構成模組</div>
+          <div class="row" id="heroRow">
+            <span class="pill" aria-hidden="true"></span>
+            <span class="cell"><i>1</i>城市</span>
+            <span class="cell on"><i>2</i>程式</span>
+            <span class="cell"><i>3</i>成事</span>
+            <span class="cell"><i>4</i>乘勢</span>
+            <span class="cell"><i>5</i>呈示</span>
+            <span class="cell"><i>6</i>誠實</span>
+            <span class="chev" aria-hidden="true">⌄</span>
+          </div>
+        </div>
+      </div>
+      <div class="status">
+        <div class="facts">
+          <strong>大千注音輸入法：整句打完，再一起選字。</strong>
+          <span>依上下文排序，標出可能選錯的地方</span>
+          <span class="nowrap">macOS・Windows・Linux（Fcitx5）・iOS</span>
+        </div>
+        <div class="actions">
+          <a class="btn" href="https://github.com/KoukeNeko/Project-Key">GitHub ↗</a>
+          <a class="btn primary" href="#download">下載 <span class="mono">0.5.0</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="flow" id="flow" aria-label="一次選字的過程">
+      <div class="pin">
+        <div>
+          <h2 class="flow-title">選字一次</h2>
+          <ol class="steps" id="steps">
+            <li class="now"><strong>整句打完</strong><span>可能選錯的詞底下有標記</span></li>
+            <li><strong>空白鍵</strong><span>打開這個詞的候選</span></li>
+            <li><strong>按 2</strong><span>句子裡的詞跟著換</span></li>
+            <li><strong>Enter</strong><span>整句送出</span></li>
+          </ol>
+        </div>
+        <div class="scene">
+          <div class="landing"><span class="field" id="flowField" aria-hidden="true"></span><p class="comp" id="flowComp">我們把舊的<span class="swap" id="flowWord"><span class="a">城市</span><span class="b">程式</span></span>重構成模組</p></div>
+          <div class="window" id="flowWindow" aria-hidden="true">
+            <div class="proof">我們把舊的<b id="flowProof">城市</b>重構成模組</div>
+            <div class="row" id="flowRow">
+              <span class="pill"></span>
+              <span class="cell on"><i>1</i>城市</span>
+              <span class="cell"><i>2</i>程式</span>
+              <span class="cell"><i>3</i>成事</span>
+              <span class="cell"><i>4</i>乘勢</span>
+              <span class="cell"><i>5</i>呈示</span>
+              <span class="cell"><i>6</i>誠實</span>
+            </div>
+          </div>
+          <div class="toast-sent" id="flowSent"><b>⏎</b>已送出到輸入框</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="features">
+      <h2>照你按的鍵打，<br class="br-s">再替你想整句。</h2>
+      <div class="features">
+        <div class="feat">
+          <div class="keys"><span class="k">ㄖㄣ</span><span class="k">ㄨㄟ</span></div>
+          <div class="result">認為</div>
+          <div><h3>聲調可以省略</h3><p>拼成完整音節後直接打下一個，不分聲調比對。</p></div>
+        </div>
+        <div class="feat">
+          <div class="keys"><span class="k">ㄨ</span><span class="k">ㄇ</span></div>
+          <div class="result">我們</div>
+          <div><h3>簡拼<span class="tag">設定中開啟</span></h3><p>單獨一個注音代表以它開頭的音節，ㄎㄧ 是「可以」。</p></div>
+        </div>
+        <div class="feat">
+          <div class="keys"><span class="k">su3cl3</span><span class="k wide">Tab</span></div>
+          <div class="result">你好</div>
+          <div><h3>中英互轉</h3><p>英文模式下打成注音、中文模式下打成英文時，按 Tab 轉回來。</p></div>
+        </div>
+        <div class="feat">
+          <div class="keys"><span class="k">小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ</span></div>
+          <div class="result">小鍵</div>
+          <div><h3>自訂詞<span class="tag">0.5.0</span></h3><p>在設定裡編輯 phrases.txt，存檔後下一句就用得到。</p></div>
+        </div>
+        <div class="feat">
+          <div class="keys"><span class="k">選過一次</span></div>
+          <div class="result">下次先列出來</div>
+          <div><h3>記住選過的字</h3><p>同樣的上下文會直接選它，常打的說法也會往前排。</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="keys">
+      <h2>手不用離開主鍵盤。</h2>
+      <div class="keytable">
+        <div class="ktgroup">
+          <h3>組字中</h3>
+          <div class="ktrow"><span><span class="k wide">Space</span></span><p>結束一聲音節；沒有未打完的注音時開啟候選</p></div>
+          <div class="ktrow"><span><span class="k">↓</span></span><p>開啟候選</p></div>
+          <div class="ktrow"><span><span class="k wide">Tab</span></span><p>依整句預覽送出整句</p></div>
+          <div class="ktrow"><span><span class="k wide">Enter</span></span><p>送出整句</p></div>
+        </div>
+        <div class="ktgroup">
+          <h3>選字中與任何時候</h3>
+          <div class="ktrow"><span><span class="k">1</span> – <span class="k">6</span></span><p>選取這一列的字</p></div>
+          <div class="ktrow"><span><span class="k wide">Tab</span></span><p>跳到下一個可疑處</p></div>
+          <div class="ktrow"><span><span class="k wide">Shift</span></span><p>單按一下，切換中／英</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="download">
+      <h2>Project Key <span class="mono">0.5.0</span></h2>
+      <div class="download">
+        <div>
+          <div class="seg" role="tablist" aria-label="平台" id="seg">
+            <span class="slide" aria-hidden="true"></span>
+            <button role="tab" aria-selected="true" data-p="mac">macOS</button>
+            <button role="tab" aria-selected="false" data-p="win">Windows</button>
+            <button role="tab" aria-selected="false" data-p="linux">Linux</button>
+            <button role="tab" aria-selected="false" data-p="ios">iOS</button>
+          </div>
+          <div class="platform" id="platform" role="tabpanel" aria-live="polite"></div>
+        </div>
+        <aside class="side">
+          <dl>
+            <dt>版本</dt><dd class="mono">0.5.0</dd>
+            <dt>授權</dt><dd>MIT；詞庫與上下文模型另有授權</dd>
+            <dt>引擎與詞庫</dt><dd>McBopomofo</dd>
+            <dt>更新</dt><dd>在設定的「關於」一鍵更新</dd>
+          </dl>
+          <a class="btn" href="https://github.com/KoukeNeko/Project-Key/releases/latest">所有發行版本 ↗</a>
+        </aside>
+      </div>
+    </section>
+
+    <div class="privacy">
+      <p>學到的字只存在這台裝置。<span>你送出的文字不會離開電腦，也只有你能讀取；<span class="nowrap">沙箱中的 App</span> 不會用到它。</span></p>
+    </div>
+  </main>
+
+  <footer class="end">
+    <span>Project Key・MIT License</span>
+    <a href="https://github.com/KoukeNeko/Project-Key">github.com/KoukeNeko/Project-Key ↗</a>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+  <script>
+  // 平台：安裝指令與需求（取自 README）。
+  const REL = 'https://github.com/KoukeNeko/Project-Key/releases/download/v0.5.0';
+  const PLATFORMS = {
+    mac: { req: 'Apple 晶片，macOS 13 以上；以 Homebrew 安裝', cmds: ['brew install --cask koukeneko/tap/project-key'],
+           note: '安裝後的歡迎視窗裡按「加入」，就能開始使用。' },
+    win: { req: 'Windows x64；以 Scoop 安裝', cmds: ['scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket', 'scoop install koukeneko/project-key'],
+           alt: `沒有 Scoop：下載 <a href="${REL}/ProjectKey-0.5.0-windows-x64.zip">ProjectKey-0.5.0-windows-x64.zip</a>，解壓縮後在該資料夾的 PowerShell 執行：`,
+           altCmd: 'powershell -ExecutionPolicy Bypass -File .\\install.ps1 -Source .',
+           note: '安裝時會請求一次系統管理員權限；開始功能表裡有 Project Key 的設定。' },
+    linux: { req: 'Fcitx5；以 Homebrew 從原始碼建置', cmds: ['brew install koukeneko/tap/fcitx5-projectkey', 'projectkey-link'],
+             note: '重新啟動 Fcitx5 後執行 projectkey-settings --welcome，按「加入」。' },
+    ios: { req: 'iOS 17 以上', cmds: [], note: '目前從原始碼建置，步驟見 GitHub 上的 platforms/ios 說明。' },
+  };
+  const seg = document.getElementById('seg'), slide = seg.querySelector('.slide'), panel = document.getElementById('platform');
+  const toast = document.getElementById('toast');
+  let toastTimer;
+  function showToast(html) {
+    toast.innerHTML = html; toast.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+  function placeSlide(button, animate) {
+    if (!animate) slide.style.transition = 'none';
+    slide.style.left = button.offsetLeft + 'px'; slide.style.width = button.offsetWidth + 'px';
+    if (!animate) { slide.offsetWidth; slide.style.transition = ''; }
+  }
+  function renderPlatform(key) {
+    const p = PLATFORMS[key];
+    const cmd = c => `<div class="cmd"><code>${c}</code><button class="btn" type="button" data-copy="${c}">複製</button></div>`;
+    const cmds = p.cmds.map(cmd).join('');
+    panel.innerHTML = `<p class="req">${p.req}</p>${cmds ? `<div class="cmds">${cmds}</div>` : ''}${p.alt ? `<p class="alt">${p.alt}</p><div class="cmds">${cmd(p.altCmd)}</div>` : ''}<p class="note">${p.note}</p>`;
+  }
+  function selectPlatform(b) {
+    seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x === b));
+    renderPlatform(b.dataset.p);
+  }
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    selectPlatform(b); placeSlide(b, true);
+    if (window.gsap && !reduce) gsap.from(panel.children, { x: 14, opacity: 0, duration: .28, stagger: .05, ease: 'power2.out' });
+  });
+  panel.addEventListener('click', async e => {
+    const b = e.target.closest('[data-copy]'); if (!b) return;
+    try { await navigator.clipboard.writeText(b.dataset.copy); } catch (_) { /* 沒有剪貼簿權限時仍顯示指令，讓人手動複製 */ }
+    b.textContent = '已複製'; setTimeout(() => (b.textContent = '複製'), 1600);
+    showToast(`已複製：<code>${b.dataset.copy}</code>`);
+  });
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // 依訪客的系統預先選好分頁。
+  const ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent;
+  const os = /iPhone|iPad|iOS/i.test(ua) ? 'ios' : /Win/i.test(ua) ? 'win' : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? 'linux' : 'mac';
+  selectPlatform(seg.querySelector(`[data-p="${os}"]`));
+  document.fonts.ready.then(() => placeSlide(seg.querySelector('[aria-selected="true"]'), false));
+  addEventListener('resize', () => placeSlide(seg.querySelector('[aria-selected="true"]'), false));
+
+  // 候選列的膠囊：放到某一格上。
+  function pillTo(row, index) {
+    const cell = row.querySelectorAll('.cell')[index], pill = row.querySelector('.pill');
+    return { left: cell.offsetLeft, width: cell.offsetWidth };
+  }
+  function setPill(row, index) {
+    const p = pillTo(row, index), pill = row.querySelector('.pill');
+    pill.style.left = p.left + 'px'; pill.style.width = p.width + 'px';
+    row.querySelectorAll('.cell').forEach((c, i) => c.classList.toggle('on', i === index));
+  }
+
+  // 候選視窗的左緣對齊被標記的詞，右緣不超出句子。
+  function placeWindows() {
+    const stage = document.querySelector('.hero .stage'), doubt = document.getElementById('heroDoubt');
+    const hw = document.getElementById('heroWindow');
+    const hx = doubt.getBoundingClientRect().left - stage.getBoundingClientRect().left - 12;
+    hw.style.setProperty('--wx', Math.max(0, Math.min(hx, stage.clientWidth - hw.offsetWidth)) + 'px');
+    const word = document.getElementById('flowWord'), comp = document.getElementById('flowComp');
+    const fw = document.getElementById('flowWindow');
+    const fx = Math.min(word.offsetLeft - 12, comp.offsetWidth - fw.offsetWidth);
+    document.querySelector('.scene').style.setProperty('--wx', Math.max(0, fx) + 'px');
+  }
+  addEventListener('resize', placeWindows);
+
+  document.fonts.ready.then(() => {
+    const heroRow = document.getElementById('heroRow'), flowRow = document.getElementById('flowRow');
+    placeWindows();
+    setPill(heroRow, 1); setPill(flowRow, 0);
+    if (!window.gsap || reduce) { document.documentElement.classList.remove('intro'); finalFlow(); return; }
+    gsap.registerPlugin(ScrollTrigger);
+    const lenis = new Lenis();
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add(t => lenis.raf(t * 1000));
+    gsap.ticker.lagSmoothing(0);
+    document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
+      const id = a.getAttribute('href'); if (id.length < 2) return;
+      e.preventDefault(); lenis.scrollTo(id, { offset: -64 });
+    }));
+    heroEntrance(heroRow);
+    flowStory(flowRow);
+    blocks();
+  });
+
+  // 首次出場：逐音節由注音變成字，先組成「城市」並標為可疑，候選視窗彈出，
+  // 膠囊從 1 滑到 2，句子裡的「城市」換成「程式」，標記收掉。
+  function heroEntrance(row) {
+    const chars = [...document.querySelectorAll('#heroComp .ch')];
+    const win = document.getElementById('heroWindow'), doubt = document.getElementById('heroDoubt');
+    const proof = document.getElementById('heroProof'), fixed = [...doubt.querySelectorAll('.ch')];
+    const pill = row.querySelector('.pill'), one = pillTo(row, 0), two = pillTo(row, 1);
+    chars.forEach(c => { c.dataset.char = c.dataset.first || c.textContent; c.textContent = ''; });
+    doubt.style.setProperty('--mark', 0);
+    proof.textContent = '城市';
+    gsap.set(win, { opacity: 0, y: -10, scale: .96 });
+    gsap.set(pill, { left: one.left, width: one.width });
+    row.querySelectorAll('.cell').forEach((c, i) => c.classList.toggle('on', i === 0));
+    document.documentElement.classList.remove('intro');
+    const tl = gsap.timeline({ delay: .2 });
+    chars.forEach((c, i) => {
+      tl.call(() => { c.textContent = c.dataset.zy; c.classList.add('zy'); }, null, i * .05);
+      tl.call(() => { c.textContent = c.dataset.char; c.classList.remove('zy'); }, null, i * .05 + .04);
+    });
+    tl.to(doubt, { '--mark': 1, duration: .25, ease: 'power2.out' }, '+=.05');
+    tl.to(win, { opacity: 1, y: 0, scale: 1, duration: .32, ease: 'back.out(2.2)' }, '+=.15');
+    tl.to(pill, { left: two.left, width: two.width, duration: .3, ease: 'back.out(1.8)',
+      onStart: () => row.querySelectorAll('.cell').forEach((c, i) => c.classList.toggle('on', i === 1)) }, '+=.3');
+    tl.to(fixed, { y: -14, opacity: 0, duration: .14, ease: 'power2.in' }, '<.05');
+    tl.call(() => { fixed[0].textContent = '程'; fixed[1].textContent = '式'; proof.textContent = '程式'; });
+    tl.fromTo(fixed, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .24, ease: 'back.out(2.5)' });
+    tl.to(doubt, { '--mark': 0, duration: .3, ease: 'power2.in' }, '+=.25');
+  }
+
+  // 選字一次：固定舞台，滾動進度一對一驅動。
+  function flowStory(row) {
+    const win = document.getElementById('flowWindow'), word = document.getElementById('flowWord');
+    const a = word.querySelector('.a'), b = word.querySelector('.b'), comp = document.getElementById('flowComp');
+    const proof = document.getElementById('flowProof'), sent = document.getElementById('flowSent');
+    const field = document.getElementById('flowField');
+    const steps = [...document.querySelectorAll('#steps li')];
+    const pill = row.querySelector('.pill'), one = pillTo(row, 0), two = pillTo(row, 1);
+    gsap.set(win, { opacity: 0, scale: .7 });
+    gsap.set(pill, { left: one.left, width: one.width });
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: '#flow', start: 'top top', end: 'bottom bottom', scrub: .6,
+        onUpdate: self => {
+          const n = Math.min(3, Math.floor(self.progress * 4));
+          steps.forEach((s, i) => s.classList.toggle('now', i === n));
+          const picked = self.progress > .56;
+          row.querySelectorAll('.cell').forEach((c, i) => c.classList.toggle('on', i === (picked ? 1 : 0)));
+          proof.textContent = picked ? '程式' : '城市';
+        },
+      },
+    });
+    tl.fromTo(word, { '--mark-o': .6 }, { '--mark-o': 1, duration: .3 })
+      .to({}, { duration: .7 })                                       // 停：讀說明 1
+      .to(win, { opacity: 1, scale: 1, duration: .6, ease: 'back.out(1.6)' })
+      .to({}, { duration: .4 })                                       // 停：讀說明 2
+      .to(pill, { left: two.left, width: two.width, duration: .45, ease: 'back.out(1.4)' })
+      .to(a, { opacity: 0, y: -18, duration: .3 }, '<')
+      .fromTo(b, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .3 }, '<.1')
+      .to(word, { '--mark-o': 0, duration: .3 })
+      .to({}, { duration: .4 })                                       // 停：讀說明 3
+      .to(win, { opacity: 0, scale: .6, y: -20, duration: .5, ease: 'power2.in' })
+      .to(comp, { borderBottomColor: 'rgba(75, 85, 92, 0)', duration: .3 }, '<.2')
+      .fromTo(field, { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: .4, ease: 'back.out(1.6)' }, '<')
+      .to(b, { color: '#e8ecee', duration: .3 }, '<')
+      .to(sent, { opacity: 1, duration: .3 })
+      .to({}, { duration: .4 });                                      // 停：讀說明 4
+  }
+
+  // 區塊出場：一次。功能格先按下鍵帽，結果先顯示成按下的鍵，再咔嗒換成字（和首屏同一個動作）。
+  function blocks() {
+    gsap.utils.toArray('section.block').forEach(sec => {
+      gsap.from(sec.querySelectorAll('h2'), { y: 24, opacity: 0, duration: .5, ease: 'power3.out',
+        scrollTrigger: { trigger: sec, start: 'top 80%', once: true } });
+    });
+    gsap.utils.toArray('.feat').forEach(f => {
+      const result = f.querySelector('.result'), word = result.textContent;
+      const typed = [...f.querySelectorAll('.k')].filter(k => !k.classList.contains('wide')).map(k => k.textContent).join(' ');
+      const tl = gsap.timeline({ scrollTrigger: { trigger: f, start: 'top 85%', once: true } });
+      tl.call(() => { result.textContent = typed; result.classList.add('typed'); }, null, 0)
+        .from(f.querySelectorAll('.k'), { y: -6, opacity: 0, duration: .18, stagger: .07 }, 0)
+        .from(result, { opacity: 0, duration: .2 }, '<.05')
+        .to(result, { y: -12, opacity: 0, duration: .14, ease: 'power2.in' }, '+=.35')
+        .call(() => { result.textContent = word; result.classList.remove('typed'); })
+        .fromTo(result, { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: .26, ease: 'back.out(2.5)' })
+        .from(f.querySelector('h3').parentNode, { opacity: 0, y: 8, duration: .3 }, '<');
+    });
+    gsap.utils.toArray('.ktgroup').forEach(g => {
+      gsap.from(g.querySelectorAll('.ktrow'), { x: -16, opacity: 0, duration: .35, stagger: .06, ease: 'power3.out',
+        scrollTrigger: { trigger: g, start: 'top 82%', once: true } });
+    });
+  }
+
+  // 沒有動效時：選字段落直接顯示選好的結果。
+  function finalFlow() {
+    document.getElementById('flowWord').querySelector('.a').style.opacity = 0;
+    document.getElementById('flowWord').querySelector('.b').style.opacity = 1;
+    document.getElementById('flowWord').style.setProperty('--mark-o', 0);
+    document.getElementById('flowProof').textContent = '程式';
+    setPill(document.getElementById('flowRow'), 1);
+    document.getElementById('flowField').style.opacity = 1;
+    document.querySelectorAll('#steps li').forEach(s => s.classList.add('now'));
+  }
+  </script>
+</body>
+</html>
