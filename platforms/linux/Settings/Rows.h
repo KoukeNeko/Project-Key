@@ -46,7 +46,7 @@ inline std::filesystem::path MadeUserPhrases() {
   if (std::filesystem::exists(file, error)) return file;
   std::filesystem::create_directories(data, error);
   std::ofstream out(file);
-  out << "# 詞 注音，例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n";
+  out << "# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n";
   return out.good() ? file : std::filesystem::path();
 }
 

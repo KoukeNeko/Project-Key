@@ -272,7 +272,7 @@ public sealed partial class MainWindow : Window {
     try {
       if (!File.Exists(file)) {
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, "# 詞 注音，例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n");  // UTF-8 without a BOM, as the engine reads it
+        File.WriteAllText(file, "# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");  // UTF-8 without a BOM, as the engine reads it
       }
       Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
     } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) {
