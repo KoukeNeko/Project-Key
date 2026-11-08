@@ -90,6 +90,9 @@ struct SettingsForm: View {
           case .failed: Text("無法下載")
           }
         }
+        LabeledContent("歡迎視窗") {
+          Button("開啟") { WelcomeWindow.show() }
+        }
         LabeledContent("授權", value: "MIT")
         LabeledContent("引擎與詞庫") {
           Link("McBopomofo", destination: URL(string: "https://github.com/openvanilla/McBopomofo")!)

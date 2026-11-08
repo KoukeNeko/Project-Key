@@ -17,7 +17,7 @@ platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑測試�
 platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註冊
 ```
 
-安裝後到「系統設定 > 鍵盤 > 輸入方式」按「+」，在繁體中文下加入 Project Key。之後重新安裝不需要再加一次。
+安裝後會開啟歡迎視窗，按「加入」就會加進輸入方式；也可以到「系統設定 > 鍵盤 > 輸入方式」按「+」，在繁體中文下加入 Project Key。已經加入時不會再出現歡迎視窗，之後重新安裝也不需要再加一次。
 
 移除：刪掉 `~/Library/Input Methods/ProjectKey.app`，再從輸入方式清單移除。
 

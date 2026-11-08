@@ -26,7 +26,7 @@
 | Linux（Fcitx5） | `brew install koukeneko/tap/fcitx5-projectkey`<br>`projectkey-link` | 需先裝相依套件，見 [platforms/linux](platforms/linux/README.md) |
 | iOS 17 以上 | 從原始碼建置 | [platforms/ios](platforms/ios/README.md) |
 
-安裝後到系統的輸入法設定加入 Project Key：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
+安裝後會開啟歡迎視窗：按「加入」把 Project Key 加進系統的輸入法，切換過去就能在視窗裡試打（Linux 在重新啟動 Fcitx5 後執行 `projectkey-settings --welcome`）。也可以自己到系統的輸入法設定加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
 
 發行版附上[上下文模型](#上下文模型)與補詞後的詞庫，選字依上下文排序。這些資料檔另有授權（CC BY-SA 4.0 與 LGPL-2.1-or-later），見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 

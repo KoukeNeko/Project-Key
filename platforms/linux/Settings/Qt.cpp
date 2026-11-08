@@ -9,10 +9,12 @@
 #include <QCryptographicHash>
 #include <QDBusArgument>
 #include <QDBusInterface>
+#include <QDBusMetaType>
 #include <QDBusReply>
 #include <QDBusVariant>
 #include <QFile>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QIcon>
 #include <QJsonArray>
@@ -21,6 +23,7 @@
 #include <QLabel>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
@@ -29,12 +32,34 @@
 #include <QMessageBox>
 #include <QSignalBlocker>
 #include <QStandardPaths>
+#include <QProcess>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QVersionNumber>
 
 #include <algorithm>
 
 #include "Rows.h"
+
+// One input method in a Fcitx5 group, as its controller sends it: (ss), the name and layout.
+struct GroupEntry {
+  QString inputMethod, layout;
+};
+Q_DECLARE_METATYPE(GroupEntry)
+
+QDBusArgument& operator<<(QDBusArgument& argument, const GroupEntry& entry) {
+  argument.beginStructure();
+  argument << entry.inputMethod << entry.layout;
+  argument.endStructure();
+  return argument;
+}
+
+const QDBusArgument& operator>>(const QDBusArgument& argument, GroupEntry& entry) {
+  argument.beginStructure();
+  argument >> entry.inputMethod >> entry.layout;
+  argument.endStructure();
+  return argument;
+}
 
 using namespace ProjectKey::SettingsRows;
 
@@ -222,6 +247,150 @@ void ApplyDarkPalette() {
   QApplication::setPalette(palette);
 }
 
+// The input method group in use: its name, default layout and input methods; no name when
+// Fcitx5 is not running.
+struct InputMethodGroup {
+  QString name, layout;
+  QList<GroupEntry> entries;
+  bool has(const char* inputMethod) const {
+    return std::any_of(entries.begin(), entries.end(), [inputMethod](const GroupEntry& entry) { return entry.inputMethod == inputMethod; });
+  }
+};
+
+InputMethodGroup CurrentGroup(QDBusInterface& controller) {
+  QDBusReply<QString> name = controller.call("CurrentInputMethodGroup");
+  if (!name.isValid()) return {};
+  QDBusMessage info = controller.call("InputMethodGroupInfo", name.value());
+  if (info.type() != QDBusMessage::ReplyMessage || info.arguments().size() < 2) return {};
+  return {name.value(), info.arguments()[0].toString(), qdbus_cast<QList<GroupEntry>>(info.arguments()[1])};
+}
+
+// The window after installing (--welcome); see kInputMethod in Rows.h.
+int Welcome(QApplication& app, QDBusInterface& controller) {
+  qDBusRegisterMetaType<GroupEntry>();
+  qDBusRegisterMetaType<QList<GroupEntry>>();
+  QWidget window;
+  window.setWindowTitle("Project Key");
+  auto* layout = new QVBoxLayout(&window);
+  layout->setContentsMargins(24, 20, 24, 20);
+  layout->setSpacing(16);
+
+  auto* header = new QHBoxLayout;
+  auto* icon = new QLabel;
+  icon->setPixmap(QIcon::fromTheme("fcitx-projectkey").pixmap(48, 48));  // the input method's own icon
+  header->addWidget(icon);
+  auto* title = new QLabel("Project Key");
+  QFont titleFont = title->font();
+  titleFont.setPointSizeF(titleFont.pointSizeF() * 1.6);
+  titleFont.setBold(true);
+  title->setFont(titleFont);
+  header->addWidget(title);
+  header->addStretch();
+  layout->addLayout(header);
+
+  auto* steps = new QFrame;
+  steps->setFrameShape(QFrame::StyledPanel);
+  auto* grid = new QGridLayout(steps);
+  grid->setHorizontalSpacing(12);
+  grid->setVerticalSpacing(14);
+  grid->setColumnStretch(2, 1);
+  QLabel* marks[3];
+  const char* titles[] = {"加入輸入法", "切換到 Project Key", "試打"};
+  for (int row = 0; row < 3; row++) {
+    marks[row] = new QLabel;
+    marks[row]->setFixedWidth(20);
+    marks[row]->setAlignment(Qt::AlignCenter);
+    grid->addWidget(marks[row], row, 0);
+    grid->addWidget(new QLabel(titles[row]), row, 1);
+  }
+  auto dim = [](const QString& text) {
+    auto* label = new QLabel(text);
+    label->setForegroundRole(QPalette::PlaceholderText);
+    return label;
+  };
+  auto* add = new QPushButton("加入");
+  add->setDefault(true);
+  QLabel* added = dim("已加入");
+  auto* addCell = new QHBoxLayout;
+  addCell->addWidget(add);
+  addCell->addWidget(added);
+  grid->addLayout(addCell, 0, 3, Qt::AlignRight);
+  auto* shortcut = new QLabel("<kbd>Ctrl</kbd> + <kbd>Space</kbd>");  // Fcitx5's default trigger key
+  QLabel* inUse = dim("使用中");
+  auto* switchCell = new QHBoxLayout;
+  switchCell->addWidget(shortcut);
+  switchCell->addWidget(inUse);
+  grid->addLayout(switchCell, 1, 3, Qt::AlignRight);
+  QLabel* hints = dim("Space 選字　　Enter 送出　　單按 Shift 切換中英");
+  grid->addWidget(hints, 3, 1, 1, 3);
+  auto* text = new QPlainTextEdit;
+  text->setFixedHeight(76);
+  QFont textFont = text->font();
+  textFont.setPointSizeF(textFont.pointSizeF() * 1.15);
+  text->setFont(textFont);
+  grid->addWidget(text, 4, 1, 1, 3);
+  layout->addWidget(steps);
+
+  auto* footer = new QHBoxLayout;
+  auto* settings = new QPushButton("設定…");
+  settings->setFlat(true);
+  footer->addWidget(settings);
+  footer->addStretch();
+  auto* done = new QPushButton("完成");
+  footer->addWidget(done);
+  layout->addLayout(footer);
+
+  int step = -1;
+  bool addFailed = false;
+  auto refresh = [&] {
+    InputMethodGroup group = CurrentGroup(controller);
+    bool isAdded = group.has(kInputMethod), tried = !text->toPlainText().isEmpty();
+    QDBusReply<QString> current = controller.call("CurrentInputMethod");
+    int now = WelcomeStep(isAdded, isAdded && current.isValid() && current.value() == kInputMethod, tried);
+    // Fcitx5 not running, or running without the addon it would add.
+    added->setText(isAdded ? "已加入" : group.name.isEmpty() ? "Fcitx5 沒有執行" : "請重新啟動 Fcitx5");
+    added->setVisible(now > 0 || group.name.isEmpty() || addFailed);
+    add->setVisible(now == 0 && !group.name.isEmpty() && !addFailed);
+    if (now == step) return;
+    step = now;
+    for (int row = 0; row < 3; row++) {
+      // Done, the step to do now, or not yet.
+      QColor color = step > row ? QColor(39, 174, 96) : step == row ? window.palette().color(QPalette::Highlight)
+                                                                  : window.palette().color(QPalette::PlaceholderText);
+      marks[row]->setText(QString("<span style=\"color:%1\">%2</span>").arg(color.name(), step > row ? "✓" : step == row ? "●" : "○"));
+    }
+    shortcut->setVisible(step <= 1);
+    inUse->setVisible(step > 1);
+    shortcut->setEnabled(step == 1);
+    hints->setEnabled(step >= 2);
+    text->setEnabled(step >= 1);
+    done->setDefault(step == 3);
+    if (step == 2) text->setFocus();  // the switch landed: type here next
+  };
+  QObject::connect(add, &QPushButton::clicked, [&] {
+    InputMethodGroup group = CurrentGroup(controller);
+    if (!group.name.isEmpty()) {
+      // Fcitx5 drops an input method whose addon it has not loaded.
+      group.entries.append({kInputMethod, ""});
+      controller.call("SetInputMethodGroupInfo", group.name, group.layout, QVariant::fromValue(group.entries));
+    }
+    addFailed = !CurrentGroup(controller).has(kInputMethod);
+    refresh();
+  });
+  QObject::connect(text, &QPlainTextEdit::textChanged, refresh);
+  // The settings window is this program without --welcome.
+  QObject::connect(settings, &QPushButton::clicked, [&app] { QProcess::startDetached(app.applicationFilePath(), {}); });
+  QObject::connect(done, &QPushButton::clicked, &window, &QWidget::close);
+  // Neither Fcitx5's input methods nor the one in use say when they change.
+  QTimer poll;
+  QObject::connect(&poll, &QTimer::timeout, refresh);
+  poll.start(500);
+  refresh();
+  window.setFixedWidth(520);
+  window.show();
+  return app.exec();
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -232,6 +401,7 @@ int main(int argc, char** argv) {
   QApplication::setWindowIcon(QIcon::fromTheme("fcitx-projectkey"));
 
   QDBusInterface controller(kFcitx, "/controller", "org.fcitx.Fcitx.Controller1");
+  if (app.arguments().contains("--welcome")) return Welcome(app, controller);
   const QVariantMap config = ReadConfig(controller);
   const bool available = !config.isEmpty();
 

@@ -28,6 +28,9 @@ FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's 1-6 p
 - (BOOL)reload;  // switches to the newest release in downloads; NO when it cannot be loaded
 @end
 
+// Opens the settings window, as the input menu's 設定… does (InputController.mm).
+FOUNDATION_EXPORT void PKShowSettings(void);
+
 @interface PKSettingsWindow : NSObject
 + (void)registerDefaults;
 + (void)showWithClearChoices:(void (^)(void))clearChoices models:(id<PKModels>)models;

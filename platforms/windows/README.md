@@ -32,7 +32,7 @@ platforms\windows\build.ps1      # 下載並編譯引擎、產生詞庫、跑測
 platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註冊（會要求系統管理員權限）
 ```
 
-安裝後到「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」加入 Project Key，之後用 Win+Space 切換。重新安裝不需要再加一次；正在使用舊版的 App 要重新開啟才會換成新版。
+安裝後會開啟歡迎視窗，按「加入」就會加進鍵盤清單；也可以到「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」加入 Project Key。之後用 Win+Space 切換。重新安裝不需要再加一次；正在使用舊版的 App 要重新開啟才會換成新版。
 
 移除：`platforms\windows\uninstall.ps1`（設定留在 `HKCU\Software\ProjectKey`）。
 

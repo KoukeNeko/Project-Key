@@ -108,6 +108,16 @@ inline void AbandonModels(const std::string& date) {
   std::filesystem::remove_all(DownloadedModels() / (date + ".partial"), error);
 }
 
+// The welcome window (--welcome, which projectkey-link suggests after installing): adds Project
+// Key to Fcitx5's input methods, waits for the user to switch to it, and offers a box to try
+// it in, as on macOS (WelcomeForm.swift) and Windows (WelcomeWindow.xaml).
+constexpr char kInputMethod[] = "projectkey";  // Fcitx5's name for it (projectkey.conf)
+
+// 0 add it, 1 switch to it, 2 try it, 3 done.
+inline int WelcomeStep(bool added, bool inUse, bool tried) {
+  return !added ? 0 : !tried && !inUse ? 1 : !tried ? 2 : 3;
+}
+
 struct Row {
   enum Kind { kToggle, kChoice, kClearChoices } kind;
   const char* key;  // empty for kClearChoices

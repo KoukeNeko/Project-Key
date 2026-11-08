@@ -116,6 +116,7 @@ int main(int argc, const char *argv[]) {
       NSBitmapImageRep *rep = [form bitmapImageRepForCachingDisplayInRect:form.bounds];
       [form cacheDisplayInRect:form.bounds toBitmapImageRep:rep];
       [[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:[dir stringByAppendingPathComponent:@"settings.png"] atomically:YES];
+      [PKWelcome previewInto:dir];
       return 0;
     }
     NSString *connection = bundle.infoDictionary[@"InputMethodConnectionName"];
@@ -125,6 +126,7 @@ int main(int argc, const char *argv[]) {
       return 1;
     }
     [NSApplication sharedApplication];
+    [PKWelcome showIfNeeded];
     [NSApp run];
   }
   return 0;

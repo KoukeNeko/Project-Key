@@ -1,7 +1,7 @@
 # Installs build\out (or -Source, an unpacked release) into Program Files
 # (where apps in a sandbox can read it), registers the input method, and starts
-# the engine server now and at sign-in.
-# Adding it as a keyboard is left to Settings > Time & language > Language & region.
+# the engine server now and at sign-in, then opens the welcome window, which adds
+# it as a keyboard (the settings app with --welcome, which closes when it is added).
 param([string]$Source = (Join-Path $PSScriptRoot 'build\out'), [switch]$Elevated)
 $ErrorActionPreference = 'Stop'
 $Dest = Join-Path $env:ProgramFiles 'Project Key'
@@ -40,6 +40,7 @@ if ($admin.ExitCode) { throw "installing into $Dest failed: $(Get-Content (Join-
 $server = Join-Path $Dest 'ProjectKeyServer.exe'
 Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'ProjectKeyServer' "`"$server`""
 Start-Process $server
+Start-Process (Join-Path $Dest 'Settings\ProjectKeySettings.exe') '--welcome'
 Write-Host "installed $Dest"
 
 # A loaded DLL cannot be replaced: apps keep the version they loaded until they

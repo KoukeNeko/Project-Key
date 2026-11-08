@@ -7,8 +7,10 @@
 #include <json-glib/json-glib.h>
 #include <libsoup/soup.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -395,14 +397,246 @@ void Activate(GtkApplication* app) {
   gtk_window_present(GTK_WINDOW(window));
 }
 
+// Fcitx5's input method group in use, its default layout and its input methods.
+struct InputMethodGroup {
+  std::string name, layout;
+  std::vector<std::pair<std::string, std::string>> inputMethods;  // name, layout
+};
+
+std::optional<InputMethodGroup> CurrentGroup() {
+  GVariant* name = g_dbus_connection_call_sync(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "CurrentInputMethodGroup",
+                                               nullptr, G_VARIANT_TYPE("(s)"), G_DBUS_CALL_FLAGS_NONE, 1000, nullptr, nullptr);
+  if (!name) return std::nullopt;
+  InputMethodGroup group;
+  const char* text = nullptr;
+  g_variant_get(name, "(&s)", &text);
+  group.name = text;
+  g_variant_unref(name);
+  GVariant* info = g_dbus_connection_call_sync(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "InputMethodGroupInfo",
+                                               g_variant_new("(s)", group.name.c_str()), G_VARIANT_TYPE("(sa(ss))"),
+                                               G_DBUS_CALL_FLAGS_NONE, 1000, nullptr, nullptr);
+  if (!info) return std::nullopt;
+  GVariantIter* items = nullptr;
+  g_variant_get(info, "(&sa(ss))", &text, &items);
+  group.layout = text;
+  const char *inputMethod = nullptr, *layout = nullptr;
+  while (g_variant_iter_next(items, "(&s&s)", &inputMethod, &layout)) group.inputMethods.emplace_back(inputMethod, layout);
+  g_variant_iter_free(items);
+  g_variant_unref(info);
+  return group;
+}
+
+bool InputMethodAdded(const std::optional<InputMethodGroup>& group) {
+  return group && std::any_of(group->inputMethods.begin(), group->inputMethods.end(), [](const auto& item) { return item.first == kInputMethod; });
+}
+
+// Appends Project Key to the group; Fcitx5 drops it when it has not loaded the addon.
+void AddInputMethod(const InputMethodGroup& group) {
+  GVariantBuilder items;
+  g_variant_builder_init(&items, G_VARIANT_TYPE("a(ss)"));
+  for (const auto& [inputMethod, layout] : group.inputMethods) g_variant_builder_add(&items, "(ss)", inputMethod.c_str(), layout.c_str());
+  g_variant_builder_add(&items, "(ss)", kInputMethod, "");
+  GVariant* reply = g_dbus_connection_call_sync(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "SetInputMethodGroupInfo",
+                                                g_variant_new("(ssa(ss))", group.name.c_str(), group.layout.c_str(), &items), nullptr,
+                                                G_DBUS_CALL_FLAGS_NONE, 1000, nullptr, nullptr);
+  if (reply) g_variant_unref(reply);
+}
+
+bool InputMethodInUse() {
+  GVariant* reply = g_dbus_connection_call_sync(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "CurrentInputMethod",
+                                                nullptr, G_VARIANT_TYPE("(s)"), G_DBUS_CALL_FLAGS_NONE, 1000, nullptr, nullptr);
+  if (!reply) return false;
+  const char* name = nullptr;
+  g_variant_get(reply, "(&s)", &name);
+  bool inUse = std::string(name) == kInputMethod;
+  g_variant_unref(reply);
+  return inUse;
+}
+
+struct Welcome {
+  GtkWidget *add, *added, *shortcut, *inUse, *hints, *text, *done;
+  GtkWidget* marks[3];
+  int step = -1;
+  bool addFailed = false;
+};
+
+// A step's mark: done, the step to do now, or not yet.
+void SetMark(GtkWidget* mark, int step, int row) {
+  gtk_label_set_text(GTK_LABEL(mark), step > row ? "✓" : step == row ? "●" : "○");
+  for (const char* style : {"success", "accent", "dim-label"}) gtk_widget_remove_css_class(mark, style);
+  gtk_widget_add_css_class(mark, step > row ? "success" : step == row ? "accent" : "dim-label");
+}
+
+void RefreshWelcome(Welcome* welcome) {
+  std::optional<InputMethodGroup> group = CurrentGroup();
+  GtkTextIter start, end;
+  gtk_text_buffer_get_bounds(gtk_text_view_get_buffer(GTK_TEXT_VIEW(welcome->text)), &start, &end);
+  bool added = InputMethodAdded(group), tried = !gtk_text_iter_equal(&start, &end);
+  int step = WelcomeStep(added, added && InputMethodInUse(), tried);
+  // Fcitx5 not running, or running without the addon it would add.
+  gtk_label_set_text(GTK_LABEL(welcome->added), added ? "已加入" : !group ? "Fcitx5 沒有執行" : "請重新啟動 Fcitx5");
+  gtk_widget_set_visible(welcome->added, step > 0 || !group || welcome->addFailed);
+  gtk_widget_set_visible(welcome->add, step == 0 && group && !welcome->addFailed);
+  if (step == welcome->step) return;
+  welcome->step = step;
+  for (int row = 0; row < 3; row++) SetMark(welcome->marks[row], step, row);
+  gtk_widget_set_visible(welcome->shortcut, step <= 1);
+  gtk_widget_set_visible(welcome->inUse, step > 1);
+  gtk_widget_set_opacity(welcome->shortcut, step == 1 ? 1 : 0.55);
+  gtk_widget_set_opacity(welcome->hints, step >= 2 ? 1 : 0.5);
+  gtk_widget_set_opacity(welcome->text, step >= 2 ? 1 : 0.5);
+  gtk_widget_set_sensitive(welcome->text, step >= 1);
+  if (step == 3) {
+    gtk_widget_add_css_class(welcome->done, "suggested-action");
+  } else {
+    gtk_widget_remove_css_class(welcome->done, "suggested-action");
+  }
+  if (step == 2) gtk_widget_grab_focus(welcome->text);  // the switch landed: type here next
+}
+
+GtkWidget* Mark() {
+  GtkWidget* mark = gtk_label_new("○");
+  gtk_widget_set_size_request(mark, 20, -1);
+  return mark;
+}
+
+GtkWidget* ActionRow(const char* title, GtkWidget* mark) {
+  GtkWidget* row = adw_action_row_new();
+  adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), title);
+  adw_action_row_add_prefix(ADW_ACTION_ROW(row), mark);
+  return row;
+}
+
+GtkWidget* DimLabel(const char* text) {
+  GtkWidget* label = gtk_label_new(text);
+  gtk_widget_add_css_class(label, "dim-label");
+  return label;
+}
+
+GtkWidget* Hint(const char* accelerator, const char* text) {
+  GtkWidget* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_box_append(GTK_BOX(box), gtk_shortcut_label_new(accelerator));
+  GtkWidget* label = DimLabel(text);
+  gtk_widget_add_css_class(label, "caption");
+  gtk_box_append(GTK_BOX(box), label);
+  return box;
+}
+
+void ActivateWelcome(GtkApplication* app) {
+  auto* welcome = new Welcome;
+  GtkWidget* content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 20);
+  for (auto margin : {gtk_widget_set_margin_start, gtk_widget_set_margin_end, gtk_widget_set_margin_bottom}) margin(content, 24);
+
+  GtkWidget* header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+  GtkWidget* icon = gtk_image_new_from_icon_name("fcitx-projectkey");  // the input method's own icon
+  gtk_image_set_pixel_size(GTK_IMAGE(icon), 48);
+  gtk_box_append(GTK_BOX(header), icon);
+  GtkWidget* title = gtk_label_new("Project Key");
+  gtk_widget_add_css_class(title, "title-2");
+  gtk_box_append(GTK_BOX(header), title);
+  gtk_box_append(GTK_BOX(content), header);
+
+  GtkWidget* steps = adw_preferences_group_new();
+  for (GtkWidget*& mark : welcome->marks) mark = Mark();
+  GtkWidget* addRow = ActionRow("加入輸入法", welcome->marks[0]);
+  welcome->add = gtk_button_new_with_label("加入");
+  gtk_widget_add_css_class(welcome->add, "suggested-action");
+  gtk_widget_set_valign(welcome->add, GTK_ALIGN_CENTER);
+  welcome->added = DimLabel("已加入");
+  adw_action_row_add_suffix(ADW_ACTION_ROW(addRow), welcome->add);
+  adw_action_row_add_suffix(ADW_ACTION_ROW(addRow), welcome->added);
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(steps), addRow);
+  GtkWidget* switchRow = ActionRow("切換到 Project Key", welcome->marks[1]);
+  welcome->shortcut = gtk_shortcut_label_new("<Control>space");  // Fcitx5's default trigger key
+  gtk_widget_set_valign(welcome->shortcut, GTK_ALIGN_CENTER);
+  welcome->inUse = DimLabel("使用中");
+  adw_action_row_add_suffix(ADW_ACTION_ROW(switchRow), welcome->shortcut);
+  adw_action_row_add_suffix(ADW_ACTION_ROW(switchRow), welcome->inUse);
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(steps), switchRow);
+  GtkWidget* tryRow = ActionRow("試打", welcome->marks[2]);
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(steps), tryRow);
+  gtk_box_append(GTK_BOX(content), steps);
+
+  GtkWidget* tryBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+  welcome->hints = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 14);
+  gtk_box_append(GTK_BOX(welcome->hints), Hint("space", "選字"));
+  gtk_box_append(GTK_BOX(welcome->hints), Hint("Return", "送出"));
+  gtk_box_append(GTK_BOX(welcome->hints), Hint("Shift_L", "單按切換中英"));
+  gtk_box_append(GTK_BOX(tryBox), welcome->hints);
+  welcome->text = gtk_text_view_new();
+  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(welcome->text), GTK_WRAP_WORD_CHAR);
+  for (auto margin : {gtk_text_view_set_left_margin, gtk_text_view_set_right_margin, gtk_text_view_set_top_margin, gtk_text_view_set_bottom_margin}) {
+    margin(GTK_TEXT_VIEW(welcome->text), 8);
+  }
+  GtkWidget* frame = gtk_frame_new(nullptr);
+  gtk_frame_set_child(GTK_FRAME(frame), welcome->text);
+  gtk_widget_set_size_request(frame, -1, 76);
+  gtk_box_append(GTK_BOX(tryBox), frame);
+  gtk_box_append(GTK_BOX(content), tryBox);
+
+  GtkWidget* footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  GtkWidget* settings = gtk_button_new_with_label("設定…");
+  gtk_widget_add_css_class(settings, "flat");
+  gtk_box_append(GTK_BOX(footer), settings);
+  welcome->done = gtk_button_new_with_label("完成");
+  gtk_widget_set_hexpand(welcome->done, true);
+  gtk_widget_set_halign(welcome->done, GTK_ALIGN_END);
+  gtk_box_append(GTK_BOX(footer), welcome->done);
+  gtk_box_append(GTK_BOX(content), footer);
+
+  GtkWidget* view = adw_toolbar_view_new();
+  GtkWidget* bar = adw_header_bar_new();
+  adw_header_bar_set_show_title(ADW_HEADER_BAR(bar), false);
+  adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(view), bar);
+  adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(view), content);
+  GtkWidget* window = adw_application_window_new(app);
+  gtk_window_set_title(GTK_WINDOW(window), "Project Key");
+  gtk_window_set_icon_name(GTK_WINDOW(window), "fcitx-projectkey");
+  gtk_window_set_default_size(GTK_WINDOW(window), 520, -1);
+  gtk_window_set_resizable(GTK_WINDOW(window), false);
+  adw_application_window_set_content(ADW_APPLICATION_WINDOW(window), view);
+
+  g_signal_connect(welcome->add, "clicked", G_CALLBACK((+[](GtkButton*, gpointer data) {
+                     auto* welcome = static_cast<Welcome*>(data);
+                     std::optional<InputMethodGroup> group = CurrentGroup();
+                     if (group) AddInputMethod(*group);
+                     welcome->addFailed = !InputMethodAdded(CurrentGroup());
+                     RefreshWelcome(welcome);
+                   })),
+                   welcome);
+  g_signal_connect(gtk_text_view_get_buffer(GTK_TEXT_VIEW(welcome->text)), "changed",
+                   G_CALLBACK((+[](GtkTextBuffer*, gpointer data) { RefreshWelcome(static_cast<Welcome*>(data)); })), welcome);
+  g_signal_connect(settings, "clicked", G_CALLBACK((+[](GtkButton*, gpointer) {
+                     // The settings window is this program without --welcome.
+                     char* self = g_file_read_link("/proc/self/exe", nullptr);
+                     const char* command[] = {self, nullptr};
+                     if (self) g_spawn_async(nullptr, const_cast<char**>(command), nullptr, G_SPAWN_DEFAULT, nullptr, nullptr, nullptr, nullptr);
+                     g_free(self);
+                   })),
+                   nullptr);
+  g_signal_connect_swapped(welcome->done, "clicked", G_CALLBACK(gtk_window_close), window);
+  // Neither Fcitx5's input methods nor the one in use say when they change.
+  guint poll = g_timeout_add(500, +[](gpointer data) -> gboolean {
+    RefreshWelcome(static_cast<Welcome*>(data));
+    return G_SOURCE_CONTINUE;
+  }, welcome);
+  g_object_set_data_full(G_OBJECT(window), "welcome", welcome, +[](gpointer data) { delete static_cast<Welcome*>(data); });
+  g_signal_connect(window, "destroy", G_CALLBACK((+[](GtkWidget*, gpointer poll) { g_source_remove(GPOINTER_TO_UINT(poll)); })),
+                   GUINT_TO_POINTER(poll));
+  RefreshWelcome(welcome);
+  gtk_window_present(GTK_WINDOW(window));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   // No application ID, so GNOME matches the window to projectkey-settings.desktop by its program name.
   g_set_prgname("projectkey-settings");
   AdwApplication* app = adw_application_new(nullptr, G_APPLICATION_NON_UNIQUE);
-  g_signal_connect(app, "activate", G_CALLBACK(Activate), nullptr);
-  int status = g_application_run(G_APPLICATION(app), argc, argv);
+  // --welcome opens the window after installing instead; GApplication would reject the option.
+  bool welcome = argc > 1 && std::string(argv[1]) == "--welcome";
+  g_signal_connect(app, "activate", welcome ? G_CALLBACK(ActivateWelcome) : G_CALLBACK(Activate), nullptr);
+  int status = g_application_run(G_APPLICATION(app), welcome ? 1 : argc, argv);
   g_object_unref(app);
   return status;
 }

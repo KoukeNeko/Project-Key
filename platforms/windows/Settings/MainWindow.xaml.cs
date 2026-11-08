@@ -52,8 +52,7 @@ public sealed partial class MainWindow : Window {
     CheckForModels();
     CheckForUpdate();
 
-    Root.SizeChanged += (_, _) => FitToContent();
-    Root.Loaded += (_, _) => Root.XamlRoot.Changed += (_, _) => FitToContent();
+    WindowFit.Follow(this, Root, Width);
   }
 
   private static int Read(string name, int fallback) =>
@@ -190,23 +189,6 @@ public sealed partial class MainWindow : Window {
   private static void Bind(ComboBox box, string name, int fallback) {
     box.SelectedIndex = Math.Clamp(Read(name, fallback), 0, box.Items.Count - 1);
     box.SelectionChanged += (_, _) => Write(name, box.SelectedIndex);
-  }
-
-  // As tall as the laid-out content, at the fixed width, centered. Resizing
-  // inside a layout event is overridden by that layout, so it waits for it to end.
-  private void FitToContent() {
-    DispatcherQueue.TryEnqueue(() => {
-      double scale = Root.XamlRoot.RasterizationScale;
-      // The XAML area is the content plus what is left over below it. The
-      // outer size is set: ResizeClient lands 30px taller with the title bar extended.
-      int spare = (int)Math.Round((Root.XamlRoot.Size.Height - Root.ActualHeight) * scale);
-      int widthChange = (int)Math.Ceiling(Width * scale) - AppWindow.ClientSize.Width;
-      if (spare == 0 && widthChange == 0) return;
-      AppWindow.Resize(new SizeInt32(AppWindow.Size.Width + widthChange, AppWindow.Size.Height - spare));
-      DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
-      AppWindow.Move(new PointInt32(area.WorkArea.X + (area.WorkArea.Width - AppWindow.Size.Width) / 2,
-                                    area.WorkArea.Y + (area.WorkArea.Height - AppWindow.Size.Height) / 2));
-    });
   }
 
   // The newest GitHub release, which brew and scoop install from.

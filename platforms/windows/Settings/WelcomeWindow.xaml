@@ -1,0 +1,81 @@
+<Window
+    x:Class="ProjectKey.Settings.WelcomeWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:tk="using:CommunityToolkit.WinUI.Controls"
+    Title="Project Key">
+  <!-- The macOS welcome window (WelcomeForm.swift) as Settings-app cards. -->
+  <Window.SystemBackdrop>
+    <MicaBackdrop />
+  </Window.SystemBackdrop>
+  <StackPanel x:Name="Root" VerticalAlignment="Top">
+    <StackPanel.Resources>
+      <Style x:Key="Keycap" TargetType="Border">
+        <Setter Property="MinWidth" Value="24" />
+        <Setter Property="Padding" Value="6,1,6,2" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{ThemeResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="Background" Value="{ThemeResource ControlFillColorDefaultBrush}" />
+      </Style>
+    </StackPanel.Resources>
+    <Grid x:Name="TitleBar" Height="32" />
+    <StackPanel Padding="24,0,24,24" Spacing="20">
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <!-- The input switcher's icon, as build.ps1 draws it: ㄅ at 0.62 of the size, 4% low, corners a fifth. -->
+        <Border Width="48" Height="48" CornerRadius="9.6" Background="#14806F">
+          <TextBlock Margin="0,2,0,0" HorizontalAlignment="Center" VerticalAlignment="Center" FontFamily="Microsoft JhengHei UI"
+                     FontSize="29.76" FontWeight="Bold" Foreground="White" Text="ㄅ" />
+        </Border>
+        <TextBlock VerticalAlignment="Center" Style="{StaticResource SubtitleTextBlockStyle}" Text="Project Key" />
+      </StackPanel>
+
+      <StackPanel Spacing="4">
+        <tk:SettingsCard x:Name="AddCard" Header="加入鍵盤">
+          <Grid>
+            <Button x:Name="Add" Click="OnAdd" Content="加入" Style="{StaticResource AccentButtonStyle}" />
+            <TextBlock x:Name="Added" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="已加入" Visibility="Collapsed" />
+          </Grid>
+        </tk:SettingsCard>
+        <tk:SettingsCard x:Name="SwitchCard" Header="切換到 Project Key">
+          <Grid>
+            <StackPanel x:Name="Shortcut" Orientation="Horizontal" Spacing="4">
+              <Border Style="{StaticResource Keycap}"><TextBlock FontSize="12" HorizontalAlignment="Center" Text="Win" /></Border>
+              <Border Style="{StaticResource Keycap}"><TextBlock FontSize="12" HorizontalAlignment="Center" Text="Space" /></Border>
+            </StackPanel>
+            <TextBlock x:Name="InUse" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="使用中" Visibility="Collapsed" />
+          </Grid>
+        </tk:SettingsCard>
+        <Border x:Name="TryCard" Padding="16,14,16,16" CornerRadius="{ThemeResource ControlCornerRadius}" BorderThickness="1"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+          <StackPanel Spacing="10">
+            <StackPanel Orientation="Horizontal" Spacing="22">
+              <FontIcon x:Name="TryMark" FontSize="20" />
+              <TextBlock VerticalAlignment="Center" Text="試打" />
+            </StackPanel>
+            <StackPanel x:Name="Hints" Margin="42,0,0,0" Orientation="Horizontal" Spacing="14">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Border Style="{StaticResource Keycap}"><TextBlock FontSize="12" Text="Space" /></Border>
+                <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="選字" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Border Style="{StaticResource Keycap}"><TextBlock FontSize="12" Text="Enter" /></Border>
+                <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="送出" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Border Style="{StaticResource Keycap}"><TextBlock FontSize="12" Text="Shift" /></Border>
+                <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="單按切換中英" />
+              </StackPanel>
+            </StackPanel>
+            <TextBox x:Name="Try" Height="76" Margin="42,0,0,0" AcceptsReturn="True" FontSize="15" TextChanged="OnTyped" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+
+      <Grid>
+        <HyperlinkButton Padding="0" Click="OnSettings" Content="設定…" />
+        <Button x:Name="Done" HorizontalAlignment="Right" Click="OnDone" Content="完成" />
+      </Grid>
+    </StackPanel>
+  </StackPanel>
+</Window>

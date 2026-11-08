@@ -315,9 +315,7 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 }
 
 - (void)showSettings:(id)sender {
-  [PKSettingsWindow showWithClearChoices:^{
-    ProjectKey::ClearChoices(SharedEnvironment());
-  } models:[[PKEngineModels alloc] init]];
+  PKShowSettings();
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)client {
@@ -351,3 +349,9 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 }
 
 @end
+
+void PKShowSettings(void) {
+  [PKSettingsWindow showWithClearChoices:^{
+    ProjectKey::ClearChoices(SharedEnvironment());
+  } models:[[PKEngineModels alloc] init]];
+}

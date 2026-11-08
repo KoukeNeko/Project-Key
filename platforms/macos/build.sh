@@ -34,10 +34,10 @@ fi
 cmake -S "$MCB/Source/Engine" -B "$MCB/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 >/dev/null
 cmake --build "$MCB/build" --target McBopomofoLMLib MandarinLib gramambular2_lib >/dev/null
 
-# The settings form is SwiftUI; it exposes ProjectKey-Swift.h to Objective-C.
-xcrun swiftc -c -O -parse-as-library -module-name ProjectKey -target "$(uname -m)-apple-macos13.0" \
+# The settings and welcome forms are SwiftUI; they expose ProjectKey-Swift.h to Objective-C.
+xcrun swiftc -c -O -wmo -parse-as-library -module-name ProjectKey -target "$(uname -m)-apple-macos13.0" \
   -import-objc-header Sources/SettingsWindow.h -emit-objc-header-path $BUILD/ProjectKey-Swift.h \
-  Sources/SettingsForm.swift -o $BUILD/SettingsForm.o
+  Sources/SettingsForm.swift Sources/WelcomeForm.swift -o $BUILD/SettingsForm.o
 SWIFT_LINK="$BUILD/SettingsForm.o -L$(xcrun --show-sdk-path)/usr/lib/swift -L$(dirname "$(xcrun -f swiftc)")/../lib/swift/macosx -Wl,-rpath,/usr/lib/swift"
 
 # shellcheck disable=SC2086
@@ -61,6 +61,7 @@ c++ $CXXFLAGS -fobjc-arc $ENGINE Sources/*.mm $LIBS $SWIFT_LINK \
   -o "$APP/Contents/MacOS/ProjectKey"
 cp Resources/Info.plist "$APP/Contents/"
 cp Resources/icon.tiff "$MCB/Source/Data/data.txt" "$APP/Contents/Resources/"
+cp ../linux/fcitx-projectkey.svg "$APP/Contents/Resources/"  # the icon, drawn by the welcome window
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp "$MCB/LICENSE.txt" "$APP/Contents/Resources/McBopomofo-LICENSE.txt"
 # From tools/bigram-trainer: the dictionary with the words McBopomofo lacks, replacing

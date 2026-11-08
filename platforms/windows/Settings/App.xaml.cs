@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 
@@ -18,6 +19,16 @@ public partial class App : Application {
   private static extern bool SetForegroundWindow(IntPtr hwnd);
 
   protected override void OnLaunched(LaunchActivatedEventArgs args) {
+    // install.ps1 opens it after every install; it is for the first one.
+    if (Environment.GetCommandLineArgs().Contains("--welcome")) {
+      if (WelcomeWindow.IsAdded()) {
+        Exit();
+        return;
+      }
+      window_ = new WelcomeWindow();
+      window_.Activate();
+      return;
+    }
     // Opened again while open: bring the open window forward instead.
     IntPtr open = FindWindow(null, "Project Key 設定");
     if (open != IntPtr.Zero) {

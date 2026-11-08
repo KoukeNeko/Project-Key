@@ -42,7 +42,7 @@ platforms/linux/build.sh                       # 下載並編譯引擎、產生�
 sudo cmake --install platforms/linux/build    # 安裝到 /usr
 ```
 
-安裝後重新啟動 Fcitx5（`fcitx5 -r`），在 Fcitx5 設定的「輸入法」加入 Project Key（取消「只顯示目前語言」才看得到）。之後用 Ctrl+Space 切換。
+安裝後重新啟動 Fcitx5（`fcitx5 -r`），執行 `projectkey-settings --welcome` 按「加入」；也可以在 Fcitx5 設定的「輸入法」加入 Project Key（取消「只顯示目前語言」才看得到）。之後用 Ctrl+Space 切換。
 
 Fcitx5 選單的「檢查 Project Key 安裝」以通知列出還缺什麼：詞庫、英文字典（Tab 提示用）、候選字窗的字型、設定程式，以及 Project Key 自己的視窗能不能出現（GNOME 上要開啟擴充功能）。從用 Fcitx5 候選面板的 App 打開時，也檢查 Fcitx5 的主題是不是 Project Key。
 

@@ -222,7 +222,7 @@ jobs:
                   rm -rf "${data:?}/$file"
                   ln -s "#{opt_share}/$file" "$data/$file"
                 done
-                echo "Linked Project Key into $data. Restart Fcitx5 (fcitx5 -r) and add Project Key in its input methods."
+                echo "Linked Project Key into $data. Restart Fcitx5 (fcitx5 -r), then run projectkey-settings --welcome to add it."
               SH
               chmod 0755, bin/"projectkey-link"
             end
