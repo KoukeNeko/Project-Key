@@ -67,7 +67,7 @@ tests/corpus/       評測語料
 distribution/       發行說明，由發行流程讀取
 ```
 
-輸入法的邏輯都在共用引擎：各平台把按鍵交給 Controller，再把它整理好的 `PanelContent` 繪製成候選視窗。
+輸入法的邏輯都在共用引擎：各平台把按鍵交給 Controller，再依 Controller 整理好的 `PanelContent` 繪製候選視窗。
 
 ```mermaid
 flowchart TB
@@ -83,7 +83,7 @@ flowchart TB
     direction LR
     controller["Controller<br>按鍵狀態機"] --> composer["Composer<br>注音組字、整句與候選"]
     composer --> ranking["Bigram、CharModel<br>依上下文排序、標出可疑處"]
-    composer --> personal["PersonalModel<br>學選過、送出過的字"]
+    composer --> personal["PersonalModel<br>記住選過與送出過的字"]
   end
 
   subgraph data["資料"]
