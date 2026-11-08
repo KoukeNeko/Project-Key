@@ -82,7 +82,7 @@ struct SettingsForm: View {
           case .installable(let version, let file):
             Button("更新到 \(version)") {
               update = .installing(0)
-              Task { if !(await installUpdate(file, progress: { update = .installing($0) })) { update = .installFailed } }
+              Task { update = await installUpdate(file, progress: { update = .installing($0) }) ? .current : .installFailed }
             }
           case .installing(let fraction): Text(fraction < 1 ? "下載中 \(Int(fraction * 100))%" : "安裝中…")
           case .installFailed: Text("無法更新")
@@ -115,7 +115,7 @@ struct SettingsForm: View {
   }
 }
 
-private let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+private let currentVersion = PKInputMethodBundle()?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
 
 private enum UpdateState {
   case checking, current, failed
@@ -147,13 +147,13 @@ private func checkForUpdate() async -> UpdateState {
 }
 
 // Downloads the release's macOS zip, checks it against GitHub's SHA-256, puts its ProjectKey.app in
-// place of this one, as the Homebrew cask installs it, and registers it. Then this input method
-// quits and the new one opens; false when it could not be updated, and nothing was replaced.
+// place of the installed one, as the Homebrew cask installs it, and registers it. Then the running
+// input method quits and the new one opens; false when it could not be updated, and nothing was replaced.
 // shortcut: written without a Mac to run it on; check it on one before relying on it.
 @MainActor
 private func installUpdate(_ zip: ModelsUpdater.File, progress: @escaping @MainActor (Double) -> Void) async -> Bool {
   let fileManager = FileManager.default
-  let bundle = Bundle.main.bundleURL
+  guard let bundle = PKInputMethodBundle()?.bundleURL else { return false }
   do {
     // On the bundle's volume, so the new one moves into place rather than being copied.
     let work = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: bundle, create: true)
@@ -181,7 +181,10 @@ private func installUpdate(_ zip: ModelsUpdater.File, progress: @escaping @MainA
   reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
   reopen.arguments = ["-c", "sleep 1; /usr/bin/open -g \"$0\"", bundle.path]
   try? reopen.run()
-  exit(0)
+  if Bundle.main.bundleURL == bundle { exit(0) }
+  // The settings app: the input method quits as install.sh stops it, and this window stays.
+  for app in NSRunningApplication.runningApplications(withBundleIdentifier: PKInputMethodBundleID) { app.terminate() }
+  return true
 }
 
 // Runs a program to its end; throws when it fails.
@@ -333,6 +336,6 @@ final class SettingsFormFactory: NSObject {
   @MainActor @objc static func makeView(clearChoices: @escaping () -> Void, models: PKModels) -> NSView {
     let updater = ModelsUpdater.shared ?? ModelsUpdater(models: models)
     ModelsUpdater.shared = updater
-    return NSHostingView(rootView: SettingsForm(models: updater, clearChoices: clearChoices))
+    return NSHostingView(rootView: SettingsForm(models: updater, clearChoices: clearChoices).defaultAppStorage(PKDefaults()))
   }
 }

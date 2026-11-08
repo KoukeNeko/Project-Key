@@ -70,8 +70,7 @@ class DefaultsSettings : public ProjectKey::Settings {
 
 // Newer models the settings window downloads, beside personal.txt.
 NSURL *DownloadedModels() {
-  NSURL *support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
-  return [support URLByAppendingPathComponent:@"ProjectKey/models" isDirectory:YES];
+  return [PKSupportDirectory() URLByAppendingPathComponent:@"models" isDirectory:YES];
 }
 
 // Switches env to the newest models. The tests run from a bare executable without a bundle and
@@ -91,17 +90,20 @@ ProjectKey::Environment &SharedEnvironment() {
     // What the user typed, learned on this Mac only. Only the installed input method learns:
     // the tests run from a bare executable without a bundle and must not touch the user's file.
     if (NSBundle.mainBundle.bundleIdentifier) {
-      NSURL *support = [NSFileManager.defaultManager URLForDirectory:NSApplicationSupportDirectory
-                                                           inDomain:NSUserDomainMask
-                                                  appropriateForURL:nil
-                                                             create:YES
-                                                              error:nil];
-      if (support) {
-        env->personalPath = [support URLByAppendingPathComponent:@"ProjectKey/personal.txt"].fileSystemRepresentation;
-        env->userPhrasesPath = [support URLByAppendingPathComponent:@"ProjectKey/phrases.txt"].fileSystemRepresentation;
-      }
+      NSURL *support = PKSupportDirectory();
+      env->personalPath = [support URLByAppendingPathComponent:@"personal.txt"].fileSystemRepresentation;
+      env->userPhrasesPath = [support URLByAppendingPathComponent:@"phrases.txt"].fileSystemRepresentation;
       env->personal = std::make_shared<ProjectKey::PersonalModel>();
-      if (!env->personalPath.empty()) env->personal->load(env->personalPath);
+      env->personal->load(env->personalPath);
+      // From the settings app. Any app can post these, sandboxed ones too, so the choices are
+      // cleared only once personal.txt is gone: removing it takes the user's own file access.
+      NSDistributedNotificationCenter *center = NSDistributedNotificationCenter.defaultCenter;
+      [center addObserverForName:PKClearChoicesNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *) {
+        if (![NSFileManager.defaultManager fileExistsAtPath:String(env->personalPath)]) ProjectKey::ClearChoices(*env);
+      }];
+      [center addObserverForName:PKReloadModelsNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *) {
+        if (!UseNewestModels(*env)) NSLog(@"Project Key: cannot load the downloaded models");
+      }];
     }
     static DefaultsSettings settings;
     env->settings = &settings;
@@ -320,19 +322,8 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
   return menu;
 }
 
-// Opens the user's words in their text editor; the next composition after a save reads them.
 - (void)editUserPhrases:(id)sender {
-  NSString *path = @(SharedEnvironment().userPhrasesPath.c_str());
-  NSFileManager *files = NSFileManager.defaultManager;
-  if (![files fileExistsAtPath:path]) {
-    [files createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
-    NSError *error = nil;
-    if (![@"# 詞 注音，例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
-      NSLog(@"Project Key: cannot create %@: %@", path, error);
-      return;
-    }
-  }
-  [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:path]];
+  PKEditUserPhrases();
 }
 
 - (void)showSettings:(id)sender {

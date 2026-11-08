@@ -28,8 +28,25 @@ FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's 1-6 p
 - (BOOL)reload;  // switches to the newest release in downloads; NO when it cannot be loaded
 @end
 
-// Opens the settings window, as the input menu's 設定… does (InputController.mm).
+// The input method's bundle identifier (Resources/Info.plist). The settings app
+// (Sources/SettingsApp) has its own, so the system never takes it for a second input method.
+FOUNDATION_EXPORT NSString *const PKInputMethodBundleID;
+// What the settings app posts to the input method, as distributed notifications.
+FOUNDATION_EXPORT NSString *const PKClearChoicesNotification;  // after removing personal.txt
+FOUNDATION_EXPORT NSString *const PKReloadModelsNotification;  // after downloading models
+// The input method's defaults: the standard ones in the input method, its domain in the settings app.
+FOUNDATION_EXPORT NSUserDefaults *PKDefaults(void);
+// The input method's bundle: this one, or the installed one in the settings app (nil when not installed).
+FOUNDATION_EXPORT NSBundle *_Nullable PKInputMethodBundle(void);
+// ~/Library/Application Support/ProjectKey: personal.txt, phrases.txt and the downloaded models.
+FOUNDATION_EXPORT NSURL *PKSupportDirectory(void);
+
+// Opens the settings window, as the input menu's 設定… does (InputController.mm), or at the
+// settings app's launch (SettingsApp/main.mm).
 FOUNDATION_EXPORT void PKShowSettings(void);
+// Opens the user's words (Lexicon::loadUserPhrases) in their text editor, made first when missing;
+// as the input menu's 編輯自訂詞… does. Nothing without a place to keep them (outside the app bundle).
+FOUNDATION_EXPORT void PKEditUserPhrases(void);
 
 @interface PKSettingsWindow : NSObject
 + (void)registerDefaults;

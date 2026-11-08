@@ -76,3 +76,18 @@ if [ -f "$TRAINED/data.txt" ] || [ -f "$TRAINED/bigram.bin" ]; then
 fi
 codesign --force --sign - "$APP"
 echo "built $APP"
+
+# The settings app (Sources/SettingsApp): the same settings window, opened without the input menu.
+SETTINGS="$BUILD/Project Key 設定.app"
+rm -rf "$SETTINGS"
+mkdir -p "$SETTINGS/Contents/MacOS" "$SETTINGS/Contents/Resources"
+# shellcheck disable=SC2086
+c++ $CXXFLAGS -fobjc-arc -ISources Sources/SettingsApp/main.mm Sources/SettingsWindow.mm Sources/CandidatePanel.mm $SWIFT_LINK \
+  -framework Cocoa -framework QuartzCore -framework Carbon -o "$SETTINGS/Contents/MacOS/ProjectKeySettings"
+cp Resources/SettingsApp/Info.plist "$SETTINGS/Contents/"
+for key in CFBundleShortVersionString CFBundleVersion; do  # the input method's, which it updates with
+  plutil -replace $key -string "$(plutil -extract $key raw Resources/Info.plist)" "$SETTINGS/Contents/Info.plist"
+done
+cp Resources/AppIcon.icns ../linux/fcitx-projectkey.svg "$SETTINGS/Contents/Resources/"
+codesign --force --sign - "$SETTINGS"
+echo "built $SETTINGS"

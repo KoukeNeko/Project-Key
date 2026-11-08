@@ -13,13 +13,13 @@ brew install --cask koukeneko/tap/project-key
 自行建置需要 Xcode（或 Command Line Tools）與 CMake，macOS 13 以上。
 
 ```bash
-platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑測試、輸出 build/ProjectKey.app
-platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註冊
+platforms/macos/build.sh     # 下載並編譯引擎、產生詞庫、跑測試、輸出 build/ProjectKey.app 與 build/Project Key 設定.app
+platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註冊，設定 App 裝到 ~/Applications
 ```
 
 安裝後會開啟歡迎視窗，按「加入」就會加進輸入方式；也可以到「系統設定 > 鍵盤 > 輸入方式」按「+」，在繁體中文下加入 Project Key。已經加入時不會再出現歡迎視窗，之後重新安裝也不需要再加一次。
 
-移除：刪掉 `~/Library/Input Methods/ProjectKey.app`，再從輸入方式清單移除。
+移除：刪掉 `~/Library/Input Methods/ProjectKey.app` 與 `~/Applications/Project Key 設定.app`，再從輸入方式清單移除。
 
 ## 按鍵
 
@@ -53,6 +53,8 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 | 組字中 | ⌃⇧P | 開關整句預覽 |
 
 整句預覽分兩處設定：輸入時常駐在文字旁的預覽，以及選字時候選視窗下方的預覽，各有三種模式（永遠、有可疑字時、關閉），預設都是有可疑字時，在輸入法選單的「設定…」視窗中切換，設定會保存（輸入法選單不見時，用 Spotlight 或 Finder 開啟 `~/Library/Input Methods/ProjectKey.app` 也會打開這個視窗）；⌃⇧P 開關目前這一處。「設定…」也可選擇候選視窗與中英提示的外觀：Liquid Glass（macOS 26 以上的預設），或深色，選字位置（游標後或游標前），以及開關選完跳到下一個可疑處、簡拼、數字鍵盤選字（預設關）、記住選過的字（可清除紀錄；開著時也從送出的文字學習常打的說法，次數存在 `~/Library/Application Support/ProjectKey/personal.txt`，清除時一併清空）、⇪ 切換中英（預設關）、單按 ⇧ 切換中英，以及 ⇥ 的英文轉注音、注音轉英文（預設開）。最後一區「關於」列出版本、有無新版（查 GitHub 最新發行版；按「更新到」會下載發行版的 zip、核對 SHA-256，換掉 `~/Library/Input Methods/ProjectKey.app` 並重新開啟輸入法，與 Homebrew cask 的安裝方式相同）、選字模型的日期（有新模型時可以直接下載，核對 SHA-256 後不必重新安裝就生效）、授權與引擎及詞庫的來源。設定在下一次組字時生效。
+
+設定 App（`~/Applications/Project Key 設定.app`，可從 Launchpad 或 Spotlight 開啟）是同一個設定視窗，獨立於輸入法執行，輸入法沒加入或沒在執行時也能改設定。它的 bundle ID 是 `org.projectkey.Settings`，與輸入法不同，所以系統不會把它當成第二份輸入法；設定直接寫入輸入法的 defaults（`org.projectkey.inputmethod.ProjectKey`）。輸入法放在記憶體裡的狀態以 distributed notification 通知：清除選字紀錄時設定 App 先刪掉 `personal.txt` 再通知，輸入法確認檔案已刪除才清空記憶體中的紀錄（其他 App 也能發這個通知，但沙盒中的 App 刪不了這個檔案）；下載新模型後通知輸入法改用新模型。輸入法沒在執行時，下次啟動就會讀到這些變更。「更新到」換掉的是 `~/Library/Input Methods/ProjectKey.app`，並重新開啟輸入法，設定 App 本身不會跟著更新。
 
 選單列圖示是 `icon.tiff`：強調色底上的白色「ㄅ」，與 Windows 相同。歡迎與設定視窗的 App 圖示是 `AppIcon.icns`，由 `tools/icon/make-app-icon.swift` 依 macOS 的圖示格線從同一個「ㄅ」畫成。
 

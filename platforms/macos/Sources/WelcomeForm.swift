@@ -10,7 +10,7 @@ import SwiftUI
 final class InputSourceState: ObservableObject {
   @Published private(set) var enabled = false
   @Published private(set) var selected = false
-  private let bundleID = Bundle.main.bundleIdentifier ?? ""
+  private let bundleID = PKInputMethodBundleID
 
   init() {
     refresh()

@@ -13,11 +13,58 @@ NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
 NSString *const PKCandidatePositionKey = @"CandidatePosition";
 NSString *const PKNextDoubtfulKey = @"NextDoubtful";
 NSString *const PKKeypadPicksKey = @"KeypadPicks";
+NSString *const PKInputMethodBundleID = @"org.projectkey.inputmethod.ProjectKey";
+NSString *const PKClearChoicesNotification = @"org.projectkey.inputmethod.ProjectKey.ClearChoices";
+NSString *const PKReloadModelsNotification = @"org.projectkey.inputmethod.ProjectKey.ReloadModels";
+
+// The settings app is the bundled process that is not the input method; the tests have no bundle.
+static BOOL InSettingsApp(void) {
+  NSString *identifier = NSBundle.mainBundle.bundleIdentifier;
+  return identifier && ![identifier isEqualToString:PKInputMethodBundleID];
+}
+
+NSUserDefaults *PKDefaults(void) {
+  static NSUserDefaults *defaults;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    defaults = InSettingsApp() ? [[NSUserDefaults alloc] initWithSuiteName:PKInputMethodBundleID] : NSUserDefaults.standardUserDefaults;
+  });
+  return defaults;
+}
+
+NSBundle *PKInputMethodBundle(void) {
+  if (!InSettingsApp()) return NSBundle.mainBundle;
+  // Where install.sh and the Homebrew cask put it.
+  NSString *installed = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Input Methods/ProjectKey.app"];
+  return [NSBundle bundleWithPath:installed];
+}
+
+NSURL *PKSupportDirectory(void) {
+  NSURL *support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
+  return [support URLByAppendingPathComponent:@"ProjectKey" isDirectory:YES];
+}
+
+// Opens the user's words in their text editor; the next composition after a save reads them.
+// The tests have no bundle and must not touch the user's file.
+void PKEditUserPhrases(void) {
+  if (!NSBundle.mainBundle.bundleIdentifier) return;
+  NSString *path = [PKSupportDirectory() URLByAppendingPathComponent:@"phrases.txt"].path;
+  NSFileManager *files = NSFileManager.defaultManager;
+  if (![files fileExistsAtPath:path]) {
+    [files createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
+    NSError *error = nil;
+    if (![@"# 詞 注音，例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
+      NSLog(@"Project Key: cannot create %@: %@", path, error);
+      return;
+    }
+  }
+  [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:path]];
+}
 
 @implementation PKSettingsWindow
 
 + (void)registerDefaults {
-  [NSUserDefaults.standardUserDefaults registerDefaults:@{
+  [PKDefaults() registerDefaults:@{
     PKAbbreviatedKey : @NO,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,
