@@ -43,9 +43,18 @@ SOFTWARE.
 | 檔案 | 來源 | 授權 |
 |---|---|---|
 | `bigram.bin`、`chars.bin` | 從[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）與[立法院公報](https://ppg.ly.gov.tw)（資料提供者：立法院，政府資料開放授權條款第 1 版）統計的詞與字 n-gram，不含原文 | CC BY-SA 4.0 |
-| `data.txt` | McBopomofo 詞庫（MIT），加上 [libchewing-data](https://github.com/chewing/libchewing-data) `tsi.csv`（commit `c44e81aef24b06f1509f19e1be54c99812d0c43f`，LGPL-2.1-or-later）的詞，以及從上述訓練文字找出的詞 | LGPL-2.1-or-later |
+| `data.txt` | McBopomofo 詞庫（MIT），加上 [libchewing-data](https://github.com/chewing/libchewing-data) `tsi.csv`（commit `c44e81aef24b06f1509f19e1be54c99812d0c43f`，LGPL-2.1-or-later）的詞、[全國路名資料](https://data.gov.tw/dataset/35321)（115 年版，資料提供者：內政部戶政司，政府資料開放授權條款第 1 版）的路名與鄉鎮市區名，以及從上述訓練文字找出的詞 | LGPL-2.1-or-later |
 
 程式在執行時讀取這些檔案，可以直接替換或移除；沒有它們時改用 McBopomofo 的詞庫與排序。
+
+### Wayland 協定定義
+
+`platforms/linux/protocols/` 內含兩份 Wayland 協定的 XML，建置時由 `wayland-scanner` 產生程式碼，連結進 Linux 的 addon。兩者都以 MIT 授權發布，條文在各檔案開頭的 `<copyright>`：
+
+| 檔案 | 來源 |
+|---|---|
+| `input-method-unstable-v2.xml` | wlroots 的 input-method-unstable-v2 協定 |
+| `ext-background-effect-v1.xml` | [wayland-protocols](https://gitlab.freedesktop.org/wayland/wayland-protocols) 的 `staging/ext-background-effect` |
 
 ### Windows 設定視窗的 NuGet 套件
 
@@ -72,5 +81,6 @@ SOFTWARE.
 | [中文維基百科](https://zh.wikipedia.org)（Hugging Face `wikimedia/wikipedia` 20231101.zh 第一個分片） | CC BY-SA 4.0 | `tools/bigram-trainer` 的訓練文字 |
 | [pyarrow](https://arrow.apache.org) | Apache-2.0 | 讀取維基百科分片 |
 | [立法院公報](https://ppg.ly.gov.tw)（經 g0v [立法院 API](https://v2.ly.govapi.tw) 取得純文字） | 政府資料開放授權條款第 1 版（與 CC BY 4.0 相容），資料提供者：立法院 | `tools/bigram-trainer` 的訓練文字（`fetch_gazette.py`） |
+| [全國路名資料](https://data.gov.tw/dataset/35321)（115 年版） | 政府資料開放授權條款第 1 版，資料提供者：內政部戶政司 | `tools/bigram-trainer` 補進詞庫的路名與鄉鎮市區名（`supplement.py`） |
 
 日後產品若隨附其中其他元件，須把對應的授權條文移到「repo 內含」一節。LGPL 元件還必須保持可替換。
