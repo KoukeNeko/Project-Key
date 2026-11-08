@@ -371,7 +371,7 @@ int Welcome(QApplication& app, QDBusInterface& controller) {
     InputMethodGroup group = CurrentGroup(controller);
     if (!group.name.isEmpty()) {
       // Fcitx5 drops an input method whose addon it has not loaded.
-      group.entries.append({kInputMethod, ""});
+      group.entries.append(GroupEntry{kInputMethod, ""});
       controller.call("SetInputMethodGroupInfo", group.name, group.layout, QVariant::fromValue(group.entries));
     }
     addFailed = !CurrentGroup(controller).has(kInputMethod);
