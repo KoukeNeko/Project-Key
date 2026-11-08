@@ -27,6 +27,20 @@
 }
 @end
 
+// Opening the running input method again (from Spotlight or Finder) shows the settings, which
+// stay reachable when the input menu is gone, for example after the source was removed.
+// shortcut: a first launch from Spotlight looks like the system's own and shows only the
+// welcome window; the system starts the input method with the session, so that is rare.
+@interface PKAppDelegate : NSObject <NSApplicationDelegate>
+@end
+
+@implementation PKAppDelegate
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)visible {
+  PKShowSettings();
+  return NO;
+}
+@end
+
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
     NSBundle *bundle = NSBundle.mainBundle;
@@ -126,6 +140,8 @@ int main(int argc, const char *argv[]) {
       return 1;
     }
     [NSApplication sharedApplication];
+    PKAppDelegate *delegate = [[PKAppDelegate alloc] init];  // NSApp holds its delegate weakly
+    NSApp.delegate = delegate;
     [PKWelcome showIfNeeded];
     [NSApp run];
   }

@@ -27,6 +27,7 @@ $languages = Get-WinUserLanguageList
 foreach ($language in $languages) { [void]$language.InputMethodTips.Remove($Tip) }
 Set-WinUserLanguageList $languages -Force
 Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'ProjectKeyServer' -ErrorAction SilentlyContinue
+Remove-Item (Join-Path ([Environment]::GetFolderPath('Programs')) 'Project Key.lnk') -ErrorAction SilentlyContinue
 $pwsh = (Get-Process -Id $PID).Path
 $admin = Start-Process $pwsh -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Elevated'
 if ($admin.ExitCode) { throw "removing $Dest failed with exit code $($admin.ExitCode)" }

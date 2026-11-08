@@ -42,6 +42,11 @@ $server = Join-Path $Dest 'ProjectKeyServer.exe'
 Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' 'ProjectKeyServer' "`"$server`""
 Start-Process $server
 $settings = Join-Path $Dest 'Settings\ProjectKeySettings.exe'
+# In the Start menu, so the settings open even when the keyboard list or its tray icon does not.
+$shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) 'Project Key.lnk'))
+$shortcut.TargetPath = $settings
+$shortcut.Description = 'Settings for the Project Key Zhuyin input method'
+$shortcut.Save()
 if ($Update) {
   Start-Process $settings
   exit 0  # nobody sees the apps still on the old version; they switch when they restart
