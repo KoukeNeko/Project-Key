@@ -19,6 +19,7 @@ public struct RECT { public int Left, Top, Right, Bottom; }
 '@
 
 [void][PK.Native]::SetProcessDPIAware()  # window and screen coordinates in the same pixels
+$capsLockBefore = [Console]::CapsLock
 # A fresh server forgets earlier runs' choices, so the engine guesses the same words each time.
 $server = Get-Process ProjectKeyServer -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path
 if ($server) {
@@ -165,6 +166,17 @@ try {
   if (-not (Text).EndsWith('、、「」')) { throw "expected 、、「」, got [$(Text)]" }
   'TypingTest passed'
 } finally {
+  # The keys it pressed are global: leave no modifier down and Caps Lock as it was, pass or fail.
+  foreach ($vk in 0x10, 0x11, 0x12) { [PK.Native]::keybd_event($vk, 0, 2, [UIntPtr]::Zero) }
+  if ([Console]::CapsLock -ne $capsLockBefore) {
+    [PK.Native]::keybd_event(0x14, 0, 0, [UIntPtr]::Zero); [PK.Native]::keybd_event(0x14, 0, 2, [UIntPtr]::Zero)
+  }
+  # A fresh server also drops the 中/英 mode the test left it in.
+  $server = Get-Process ProjectKeyServer -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path
+  if ($server) {
+    Get-Process ProjectKeyServer | Stop-Process -Force
+    Start-Process $server
+  }
   if (-not $host_.HasExited) { Stop-Process -Id $host_.Id -Force }
   Remove-Item $out -ErrorAction SilentlyContinue
 }
