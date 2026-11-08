@@ -11,7 +11,7 @@ $pipe.ReadMode = [IO.Pipes.PipeTransmissionMode]::Message
 
 function Send([byte]$type, [byte]$key = 0, [string]$chars = '', [byte]$flags = 0) {
   $m = [IO.MemoryStream]::new(); $w = [IO.BinaryWriter]::new($m)
-  $w.Write([uint32]2); $w.Write($type); $w.Write($key)  # Protocol.h kVersion
+  $w.Write([uint32]3); $w.Write($type); $w.Write($key)  # Protocol.h kVersion
   $b = [Text.Encoding]::UTF8.GetBytes($chars); $w.Write([uint32]$b.Length); $w.Write($b); $w.Write($flags)
   $w.Write([byte]0); $w.Write([uint32]0)
   $bytes = $m.ToArray(); $pipe.Write($bytes, 0, $bytes.Length); $pipe.Flush()
@@ -31,7 +31,7 @@ function Send([byte]$type, [byte]$key = 0, [string]$chars = '', [byte]$flags = 0
         $n = $r.ReadUInt32(); $r.ReadBytes($n) | Out-Null
         $active = $r.ReadInt32(); $pending = & $str; $caret = $r.ReadUInt32(); $proof = $r.ReadByte(); $hint = & $str; $replaced = & $str
         $rows = @(); $n = $r.ReadUInt32(); for ($k = 0; $k -lt $n; $k++) { $row = @(); $c = $r.ReadUInt32(); for ($j = 0; $j -lt $c; $j++) { $row += & $str }; $rows += , $row }
-        $result.Ops += [pscustomobject]@{ Op = $(if ($op -eq 7) { 'hint' } else { 'panel' }); Segments = $segments; Rows = $rows; SelectedRow = $r.ReadInt32(); Selection = $r.ReadInt32(); Page = & $str }
+        $result.Ops += [pscustomobject]@{ Op = $(if ($op -eq 7) { 'hint' } else { 'panel' }); Segments = $segments; Rows = $rows; SelectedRow = $r.ReadInt32(); Selection = $r.ReadInt32(); Page = & $str; Expanded = $r.ReadByte() }
       }
       4 { $result.Ops += [pscustomobject]@{ Op = 'hide' } }
       5 { $result.Ops += [pscustomobject]@{ Op = 'indicator'; Text = & $str } }
@@ -50,13 +50,15 @@ function Type-Keys([string]$keys) {
 $reply = Type-Keys 'ji3ap7183ru.42k7t/6g4tj/6e.4t/6ai6yj3'
 $composition = ($reply.Ops | Where-Object Op -eq 'composition')[-1].Text
 "composition: $composition"
-if ($composition -notmatch '城市') { throw 'expected the engine to guess 城市' }
-$reply = Send 1 1 ' '  # Space: candidates on the doubtful 城市
-$panel = ($reply.Ops | Where-Object Op -eq 'panel')[-1]
-"candidates: $($panel.Rows[0] -join ' ')  page $($panel.Page)"
-$reply = Send 1 0 '2'
-$composition = ($reply.Ops | Where-Object Op -eq 'composition')[-1].Text
-if ($composition -notmatch '的程式') { throw "expected 程式 after picking 2: $composition" }
+# The dictionary alone guesses 城市; with the context models installed (bigram.bin), 程式.
+if ($composition -match '的城市') {
+  $reply = Send 1 1 ' '  # Space: candidates on the doubtful 城市
+  $panel = ($reply.Ops | Where-Object Op -eq 'panel')[-1]
+  "candidates: $($panel.Rows[0] -join ' ')  page $($panel.Page)"
+  $reply = Send 1 0 '2'
+  $composition = ($reply.Ops | Where-Object Op -eq 'composition')[-1].Text
+}
+if ($composition -notmatch '的程式') { throw "expected 程式: $composition" }
 $reply = Send 1 2  # Return commits
 $insert = ($reply.Ops | Where-Object Op -eq 'insert')[-1].Text
 "committed: $insert"
