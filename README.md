@@ -67,11 +67,11 @@ tests/corpus/       評測語料
 distribution/       發行說明，由發行流程讀取
 ```
 
-輸入法的邏輯都在共用引擎：各平台把按鍵交給 Controller，再把它整理好的 `PanelContent` 畫成候選視窗。
+輸入法的邏輯都在共用引擎：各平台把按鍵交給 Controller，再把它整理好的 `PanelContent` 繪製成候選視窗。
 
 ```mermaid
 flowchart TB
-  subgraph platforms["各平台：接收按鍵、送出文字、畫候選視窗"]
+  subgraph platforms["各平台：接收按鍵、送出文字、繪製候選視窗"]
     direction LR
     mac["macOS<br>InputMethodKit 輸入法<br>CandidatePanel"]
     win["Windows<br>TSF 文字服務 ProjectKey.dll<br>⇄ named pipe ⇄<br>引擎伺服器 ProjectKeyServer.exe"]
@@ -97,7 +97,7 @@ flowchart TB
   mcb --> composer
   models --> ranking
 
-  subgraph screens["Linux 的候選視窗放在哪"]
+  subgraph screens["Linux 候選視窗的顯示方式"]
     direction LR
     x11["X11Screen<br>X11 視窗"]
     wayland["WaylandScreen<br>input-method-v2 popup"]
