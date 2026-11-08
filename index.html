@@ -70,7 +70,7 @@
   }
   .comp .ch { display: inline-block; min-width: .5em; }
   .comp .ch:empty { min-width: 0; }  /* 還沒打到的字不佔位，游標跟著打字前進 */
-  .comp .ch.zy { color: var(--muted); font-size: .62em; vertical-align: .35em; letter-spacing: 0; }
+  .comp .ch.zy { color: var(--muted); letter-spacing: 0; }  /* 注音和中文字同大 */
   .doubt { position: relative; color: var(--accent-soft); display: inline-block; }
   .doubt::after {
     content: ""; position: absolute; left: 4%; right: 4%; bottom: -14px; height: 6px; border-radius: 3px;
@@ -547,11 +547,11 @@
     chars.forEach(c => {
       [...c.dataset.zy].forEach((_, k) => {
         tl.call(() => { c.textContent = c.dataset.zy.slice(0, k + 1); c.classList.add('zy'); }, null, at);
-        at += .25;
+        at += .19;
       });
-      at += .3;
+      at += .25;
       tl.call(() => { c.textContent = c.dataset.char; c.classList.remove('zy'); }, null, at);
-      at += .1;
+      at += .08;
     });
     // 「城市」先停在畫面上，標記長出來，讓人看出它選錯了。
     tl.to(doubt, { '--mark': 1, duration: .3, ease: 'power2.out' }, '+=.3');
