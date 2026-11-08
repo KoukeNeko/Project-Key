@@ -6,7 +6,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
+#include <vector>
 
 #include "Composer.h"
 #include "Controller.h"
@@ -35,6 +37,32 @@ const Segment* find(const Composer& composer, const std::string& reading) {
     if (segment.reading == reading) return &segment;
   }
   return nullptr;
+}
+
+// A sentence model (tools/lm-trainer/export.py's layout) of one layer, two wide, with zero
+// weights but for the final bias and the token embedding: every position then predicts the same
+// logits, the final bias times each token's embedding. `favored` gets logit 8, the rest 0.
+void WriteSentenceModel(const std::string& path, const std::vector<std::string>& characters, const char* favored) {
+  const uint32_t embd = 2, context = 16, vocab = 5 + static_cast<uint32_t>(characters.size());
+  std::ofstream out(path, std::ios::binary);
+  out.write("PKSM0001", 8);
+  for (uint32_t v : {vocab, 1u, 1u, embd, context}) out.write(reinterpret_cast<const char*>(&v), 4);
+  std::vector<uint32_t> codePoints(5, 0);
+  for (const std::string& c : characters) codePoints.push_back(ProjectKey::CharModel::CodePoints(c)[0]);
+  out.write(reinterpret_cast<const char*>(codePoints.data()), codePoints.size() * 4);
+  auto halves = [&](size_t count, uint16_t value = 0) {
+    for (size_t i = 0; i < count; i++) out.write(reinterpret_cast<const char*>(&value), 2);
+  };
+  for (size_t v = 0; v < vocab; v++) {  // token embedding: [favored][0] = 8 (0x4800 in float16)
+    bool isFavored = favored && v >= 5 && characters[v - 5] == favored;
+    halves(1, isFavored ? 0x4800 : 0);
+    halves(embd - 1);
+  }
+  halves(context * embd);  // positions
+  halves(2 * embd + embd * 3 * embd + 3 * embd + embd * embd + embd + 2 * embd + embd * 4 * embd + 4 * embd + 4 * embd * embd + embd);
+  halves(embd);                 // ln_f weight
+  halves(1, favored ? 0x3C00 : 0);  // ln_f bias: 1 in the first dimension
+  halves(embd - 1);
 }
 
 }  // namespace
@@ -257,6 +285,36 @@ int main(int argc, char** argv) {
   type(withoutChars, "c.4vm03y4");
   assert(withoutChars.text() == "候選字");
   std::remove(charsPath.c_str());
+
+  // The sentence model. With zero weights every token is equally likely: P = (1 / vocabulary)
+  // per character and for the end, alone, batched, or from the cache.
+  std::string sentencePath = tempPath("ComposerTest-sentence.bin");
+  WriteSentenceModel(sentencePath, {"候", "選", "字", "自"}, nullptr);
+  auto uniform = std::make_shared<ProjectKey::SentenceModel>();
+  assert(uniform->load(sentencePath));
+  assert(!uniform->encode(ProjectKey::CharModel::CodePoints("候選人")));
+  auto ids = [&](const ProjectKey::SentenceModel& model, const char* text) { return *model.encode(ProjectKey::CharModel::CodePoints(text)); };
+  ProjectKey::SentenceModel::Cache cache;
+  double single = uniform->log10Probabilities({ids(*uniform, "候選字")}, cache)[0];
+  assert(std::abs(single - 4 * std::log10(1.0 / 9)) < 1e-4);
+  std::vector<double> batched = uniform->log10Probabilities({ids(*uniform, "候選"), ids(*uniform, "候選字"), ids(*uniform, "自")}, cache);
+  assert(std::abs(batched[1] - single) < 1e-6 && std::abs(batched[0] - 3 * std::log10(1.0 / 9)) < 1e-4);
+  ProjectKey::SentenceModel::Cache fresh;
+  assert(std::abs(uniform->log10Probabilities({ids(*uniform, "自")}, fresh)[0] - batched[2]) < 1e-6);
+  // A model that reads 自 as far likelier everywhere reranks 候選字 into 候選自; without it, or
+  // with the uniform one, the walk's own stays.
+  WriteSentenceModel(sentencePath, {"候", "選", "字", "自"}, "自");
+  auto favoring = std::make_shared<ProjectKey::SentenceModel>();
+  assert(favoring->load(sentencePath));
+  Composer reranked(lm, contextModel);
+  reranked.setSentenceModel(favoring);
+  type(reranked, "c.4vm03y4");
+  assert(reranked.text() == "候選自");
+  reranked.setSentenceModel(uniform);
+  assert(reranked.text() == "候選字");
+  reranked.setSentenceModel(nullptr);
+  assert(reranked.text() == "候選字");
+  std::remove(sentencePath.c_str());
   std::remove(contextPath.c_str());
 
   // What the user typed: with no context or character model, 程式 learned from committed

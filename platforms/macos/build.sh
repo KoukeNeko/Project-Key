@@ -14,7 +14,7 @@ fi
 BUILD=build
 MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)
 CORE=../../core/engine  # the engine shared with Windows
-ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/PersonalModel.cpp $CORE/Controller.cpp"
+ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/SentenceModel.cpp $CORE/PersonalModel.cpp $CORE/Controller.cpp"
 MCB=$BUILD/mcbopomofo
 APP=$BUILD/ProjectKey.app
 CXXFLAGS="-std=c++20 -O2 -Wall -mmacosx-version-min=13.0 -I$MCB/Source/Engine -I$CORE -I$BUILD"
@@ -69,6 +69,7 @@ cp "$MCB/LICENSE.txt" "$APP/Contents/Resources/McBopomofo-LICENSE.txt"
 if [ -f "$TRAINED/data.txt" ]; then cp "$TRAINED/data.txt" "$APP/Contents/Resources/"; fi
 if [ -f "$TRAINED/bigram.bin" ]; then cp "$TRAINED/bigram.bin" "$APP/Contents/Resources/"; else echo "no $TRAINED/bigram.bin: building without context ranking"; fi
 if [ -f "$TRAINED/chars.bin" ]; then cp "$TRAINED/chars.bin" "$APP/Contents/Resources/"; fi
+if [ -f "$TRAINED/sentence.bin" ]; then cp "$TRAINED/sentence.bin" "$APP/Contents/Resources/"; fi  # optional: tools/lm-trainer
 if [ -f "$TRAINED/models-version.txt" ]; then cp "$TRAINED/models-version.txt" "$APP/Contents/Resources/"; fi
 # Their licenses and sources go with them.
 if [ -f "$TRAINED/data.txt" ] || [ -f "$TRAINED/bigram.bin" ]; then

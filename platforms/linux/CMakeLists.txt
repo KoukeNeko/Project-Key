@@ -44,9 +44,10 @@ add_subdirectory("${MCBOPOMOFO}/Source/Engine" mcbopomofo EXCLUDE_FROM_ALL)
 target_compile_options(McBopomofoLMLib PRIVATE "SHELL:-include iterator")
 
 # The engine shared with macOS, Windows and iOS.
-add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/CharModel.cpp" "${CORE}/PersonalModel.cpp" "${CORE}/Controller.cpp")
+add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/CharModel.cpp" "${CORE}/SentenceModel.cpp" "${CORE}/PersonalModel.cpp" "${CORE}/Controller.cpp")
 target_include_directories(engine PUBLIC "${CORE}" "${MCBOPOMOFO}/Source/Engine")
-target_link_libraries(engine PUBLIC McBopomofoLMLib MandarinLib gramambular2_lib)
+find_package(Threads REQUIRED)  # SentenceModel's matrix products
+target_link_libraries(engine PUBLIC McBopomofoLMLib MandarinLib gramambular2_lib Threads::Threads)
 
 foreach(test ComposerTest ControllerTest)
   add_executable(${test} "${CORE}/Tests/${test}.cpp")
@@ -135,6 +136,9 @@ foreach(file data.txt bigram.bin chars.bin models-version.txt)
     install(FILES "${TRAINED}/${file}" DESTINATION "${DATA_DIR}")
   endif()
 endforeach()
+if(EXISTS "${TRAINED}/sentence.bin")  # optional: tools/lm-trainer
+  install(FILES "${TRAINED}/sentence.bin" DESTINATION "${DATA_DIR}")
+endif()
 # Their licenses and sources go with them.
 if(EXISTS "${TRAINED}/data.txt" OR EXISTS "${TRAINED}/bigram.bin")
   install(FILES ../../tools/bigram-trainer/MODELS-NOTICE.txt ../../tools/bigram-trainer/LICENSE-LGPL-2.1.txt DESTINATION "${DATA_DIR}")

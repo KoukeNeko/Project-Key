@@ -32,6 +32,7 @@ targets:
       - path: ../../core/engine/Controller.cpp
       - path: ../../core/engine/Bigram.cpp
       - path: ../../core/engine/CharModel.cpp
+      - path: ../../core/engine/SentenceModel.cpp
       - path: ../../core/engine/PersonalModel.cpp
       - path: build/mcbopomofo/Source/Engine/AssociatedPhrasesV2.cpp
       - path: build/mcbopomofo/Source/Engine/ByteBlockBackedDictionary.cpp

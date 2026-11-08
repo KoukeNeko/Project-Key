@@ -394,6 +394,12 @@ void Composer::setTextBefore(const std::string& text) {
   walk();
 }
 
+void Composer::setSentenceModel(std::shared_ptr<const SentenceModel> sentences) {
+  sentences_ = sentences && sentences->isLoaded() ? std::move(sentences) : nullptr;
+  sentenceCache_.clear();
+  walk();
+}
+
 void Composer::clear() {
   hanBefore_.clear();
   endReading();
@@ -575,6 +581,97 @@ void Composer::walk() {
     const State& state = choices[at].states[k];
     at = state.previous;
     k = state.back;
+  }
+
+  // With a sentence model, the best whole path through each choice is a candidate sentence, and
+  // the best kSentencePaths of them are reranked by how each reads as a whole: the walk sees only
+  // two words back, so a rare pair can win (網液態 for 網頁太). A sentence with a character outside
+  // the model's vocabulary keeps its walk score only when it is the walk's own.
+  if (sentences_ && !path.empty()) {
+    std::vector<int> slot(choices.size());  // a choice's index in endingAt[its end]: its state in each successor
+    for (size_t e = 0; e <= n; e++) {
+      for (size_t j = 0; j < endingAt[e].size(); j++) slot[endingAt[e][j]] = static_cast<int>(j);
+    }
+    std::vector<std::vector<int>> startingAt(n + 1);
+    for (size_t c = 0; c < choices.size(); c++) startingAt[choices[c].start].push_back(static_cast<int>(c));
+    // Backward: the best rest of the path after each state, and the choice it goes on with.
+    std::vector<std::vector<double>> rest(choices.size());
+    std::vector<std::vector<int>> following(choices.size());
+    for (int c = static_cast<int>(choices.size()) - 1; c >= 0; c--) {
+      const Choice& choice = choices[c];
+      rest[c].assign(choice.states.size(), -INFINITY);
+      following[c].assign(choice.states.size(), -1);
+      size_t end = choice.start + choice.length;
+      for (size_t k = 0; k < choice.states.size(); k++) {
+        int p = choice.states[k].previous;
+        uint32_t first = p >= 0 ? choices[p].id : opening;
+        const std::vector<uint32_t>* beforeLast = p >= 0 ? &choices[p].chars : &openingChars;
+        if (end == n) {
+          rest[c][k] = score(first, choice.id, boundary, kEndScore) + charScore(beforeLast, choice.chars, kEndChars);
+          continue;
+        }
+        for (int next : startingAt[end]) {
+          double step = learned(c, choices[next]) ? 0
+                        : score(first, choice.id, choices[next].id, choices[next].unigramScore) +
+                              charScore(beforeLast, choice.chars, choices[next].chars);
+          if (step + rest[next][slot[c]] > rest[c][k]) {
+            rest[c][k] = step + rest[next][slot[c]];
+            following[c][k] = next;
+          }
+        }
+      }
+    }
+    std::vector<std::pair<double, std::vector<int>>> paths;
+    for (size_t c = 0; c < choices.size(); c++) {
+      size_t k = 0;
+      for (size_t j = 1; j < choices[c].states.size(); j++) {
+        if (choices[c].states[j].best + rest[c][j] > choices[c].states[k].best + rest[c][k]) k = j;
+      }
+      double total = choices[c].states[k].best + rest[c][k];
+      if (!std::isfinite(total)) continue;
+      std::vector<int> through;
+      for (int at = static_cast<int>(c), state = static_cast<int>(k); at >= 0;) {
+        through.insert(through.begin(), at);
+        const State& s = choices[at].states[state];
+        at = s.previous;
+        state = s.back;
+      }
+      for (int at = static_cast<int>(c), state = static_cast<int>(k); following[at][state] >= 0;) {
+        int next = following[at][state];
+        state = slot[at];
+        at = next;
+        through.push_back(at);
+      }
+      paths.emplace_back(total, std::move(through));
+    }
+    std::sort(paths.begin(), paths.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    paths.erase(std::unique(paths.begin(), paths.end(), [](const auto& a, const auto& b) { return a.second == b.second; }),
+                paths.end());
+    if (paths.size() > kSentencePaths) paths.resize(kSentencePaths);
+    std::vector<std::vector<uint32_t>> encoded;
+    std::vector<size_t> scored;  // index into paths
+    for (size_t i = 0; i < paths.size(); i++) {
+      std::vector<uint32_t> codePoints;
+      for (int at : paths[i].second) {
+        for (uint32_t c : CharModel::CodePoints(choices[at].value)) codePoints.push_back(c);
+      }
+      std::optional<std::vector<uint32_t>> tokens = sentences_->encode(codePoints);
+      if (!tokens) {
+        if (paths[i].second == path) break;  // the walk's own: no sentence to compare it with
+        continue;
+      }
+      encoded.push_back(std::move(*tokens));
+      scored.push_back(i);
+    }
+    bool walkScored = std::any_of(scored.begin(), scored.end(), [&](size_t i) { return paths[i].second == path; });
+    if (walkScored && scored.size() > 1) {
+      std::vector<double> lm = sentences_->log10Probabilities(encoded, sentenceCache_);
+      size_t best = 0;
+      for (size_t j = 1; j < scored.size(); j++) {
+        if (paths[scored[j]].first + kSentenceWeight * lm[j] > paths[scored[best]].first + kSentenceWeight * lm[best]) best = j;
+      }
+      path = paths[scored[best]].second;
+    }
   }
 
   // A word is doubtful when another word of the same node scores within the gap

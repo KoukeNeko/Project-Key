@@ -100,7 +100,7 @@ $engineSources = @('AssociatedPhrasesV2', 'ByteBlockBackedDictionary', 'McBopomo
   ForEach-Object { "$Engine\$_.cpp" }
 $engineSources += "$Engine\gramambular2\reading_grid.cpp", "$Engine\Mandarin\Mandarin.cpp"
 $engineObjects = @(Compile 'mcbopomofo' $engineSources @('/W0'))
-$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\PersonalModel.cpp", "$Core\Controller.cpp")
+$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\SentenceModel.cpp", "$Core\PersonalModel.cpp", "$Core\Controller.cpp")
 Invoke-Native lib.exe /nologo "/OUT:$Obj\engine.lib" @engineObjects
 
 # Tests: the engine tests shared with macOS, and the pipe protocol.
@@ -177,6 +177,7 @@ Copy-Item "$Mcb\LICENSE.txt" "$Out\McBopomofo-LICENSE.txt"
 Copy-Item "$PSScriptRoot\..\..\LICENSE" "$Out\LICENSE.txt"
 if (Test-Path "$Trained\bigram.bin") { Copy-Item "$Trained\bigram.bin" $Out } else { Write-Host "no $Trained\bigram.bin`: building without context ranking" }
 if (Test-Path "$Trained\chars.bin") { Copy-Item "$Trained\chars.bin" $Out }
+if (Test-Path "$Trained\sentence.bin") { Copy-Item "$Trained\sentence.bin" $Out }  # optional: tools/lm-trainer
 if (Test-Path "$Trained\models-version.txt") { Copy-Item "$Trained\models-version.txt" $Out }
 # Their licenses and sources go with them.
 if ((Test-Path "$Trained\data.txt") -or (Test-Path "$Trained\bigram.bin")) {

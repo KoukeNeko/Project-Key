@@ -140,6 +140,7 @@ void Controller::makeComposer() {
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight,
                                          rememberChoices && personal_ ? env_.personal : nullptr, abbreviated);
+  if (env_.sentences) composer_->setSentenceModel(env_.sentences);
 }
 
 void ClearChoices(Environment& env) {
@@ -173,6 +174,11 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   env.lm = lm;
   env.bigram = bigram->load(Utf8(dir / "bigram.bin")) ? bigram : nullptr;
   env.chars = chars->load(Utf8(dir / "chars.bin")) ? chars : nullptr;
+  // Optional, and not in model releases yet: the bundled one serves when the newest release lacks it.
+  auto sentences = std::make_shared<SentenceModel>();
+  env.sentences = sentences->load(Utf8(dir / "sentence.bin")) || sentences->load(Utf8(Path(bundled) / "sentence.bin"))
+                      ? sentences
+                      : nullptr;
   ++env.models;
   env.userPhrasesTime.reset();  // the new lexicon has none yet
   std::error_code error;

@@ -105,6 +105,7 @@ struct Environment {
   std::shared_ptr<Lexicon> lm;
   std::shared_ptr<const Bigram> bigram;
   std::shared_ptr<const CharModel> chars;
+  std::shared_ptr<const SentenceModel> sentences;  // reranks whole sentences (Composer::setSentenceModel)
   unsigned models = 0;  // counts UseNewestModels loads; controllers make a new composer when it changes
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel;  // replaced by value to clear it
   // What the user typed, learned while choices are remembered (Setting::kRememberChoices) and
