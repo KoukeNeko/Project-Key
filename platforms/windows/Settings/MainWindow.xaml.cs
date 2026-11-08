@@ -226,10 +226,11 @@ public sealed partial class MainWindow : Window {
       using var pipe = new NamedPipeClientStream(".", "ProjectKey-" + sid, PipeDirection.InOut);
       pipe.Connect(1000);
       pipe.ReadMode = PipeTransmissionMode.Message;
-      // Protocol.h: kVersion (2), the request, an empty key event, no context.
+      // Protocol.h: kVersion (3), the request, an empty key event, no context. A server of another
+      // version drops the message, so this follows kVersion.
       var message = new MemoryStream();
       var writer = new BinaryWriter(message);
-      writer.Write(2u);
+      writer.Write(3u);
       writer.Write(request);
       writer.Write((byte)0);
       writer.Write(0u);
