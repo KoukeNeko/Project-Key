@@ -96,7 +96,10 @@ ProjectKey::Environment &SharedEnvironment() {
                                                   appropriateForURL:nil
                                                              create:YES
                                                               error:nil];
-      if (support) env->personalPath = [support URLByAppendingPathComponent:@"ProjectKey/personal.txt"].fileSystemRepresentation;
+      if (support) {
+        env->personalPath = [support URLByAppendingPathComponent:@"ProjectKey/personal.txt"].fileSystemRepresentation;
+        env->userPhrasesPath = [support URLByAppendingPathComponent:@"ProjectKey/phrases.txt"].fileSystemRepresentation;
+      }
       env->personal = std::make_shared<ProjectKey::PersonalModel>();
       if (!env->personalPath.empty()) env->personal->load(env->personalPath);
     }
@@ -311,7 +314,25 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 - (NSMenu *)menu {
   NSMenu *menu = [[NSMenu alloc] init];
   [menu addItemWithTitle:@"設定…" action:@selector(showSettings:) keyEquivalent:@""];
+  if (!SharedEnvironment().userPhrasesPath.empty()) {
+    [menu addItemWithTitle:@"編輯自訂詞…" action:@selector(editUserPhrases:) keyEquivalent:@""];
+  }
   return menu;
+}
+
+// Opens the user's words in their text editor; the next composition after a save reads them.
+- (void)editUserPhrases:(id)sender {
+  NSString *path = @(SharedEnvironment().userPhrasesPath.c_str());
+  NSFileManager *files = NSFileManager.defaultManager;
+  if (![files fileExistsAtPath:path]) {
+    [files createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
+    NSError *error = nil;
+    if (![@"# 詞 注音，例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
+      NSLog(@"Project Key: cannot create %@: %@", path, error);
+      return;
+    }
+  }
+  [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:path]];
 }
 
 - (void)showSettings:(id)sender {

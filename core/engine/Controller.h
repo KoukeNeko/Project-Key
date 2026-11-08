@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -110,6 +111,11 @@ struct Environment {
   // saved to personalPath after each commit; with an empty path it lives in memory only.
   std::shared_ptr<PersonalModel> personal;
   std::string personalPath;
+  // The user's own words (Lexicon::loadUserPhrases), edited by the user in any text editor and
+  // read again by the next composition after the file changes; empty for none.
+  std::string userPhrasesPath;
+  std::optional<std::filesystem::file_time_type> userPhrasesTime;  // when the loaded file was written
+  uint64_t userPhrasesVersion = 0;  // changes with each load
   Settings* settings = nullptr;
   // Whether text (letters and spaces) is correctly spelled English.
   std::function<bool(const std::string&)> isEnglish;
@@ -128,6 +134,9 @@ struct Environment {
 
 // Forgets what the user chose and typed, in memory and in the saved file.
 void ClearChoices(Environment& env);
+// Loads Environment::userPhrasesPath into the lexicon when it was written since the last load,
+// or was removed.
+void ReloadUserPhrases(Environment& env);
 
 // Loads data.txt, bigram.bin and chars.bin from ModelsDirectory(bundled, downloaded) (Models.h)
 // into env, at start and after the settings window downloads a release; controllers switch on
@@ -259,6 +268,7 @@ class Controller {
   std::string shown_;  // the composition as last shown, pending reading included
   bool abbreviated_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   unsigned models_ = 0;                                // and Environment::models
+  uint64_t userPhrasesVersion_ = 0;                    // and Environment::userPhrasesVersion
   // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
   std::string englishRun_;

@@ -4,6 +4,7 @@
 #undef NDEBUG
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -679,6 +680,27 @@ int main(int argc, char** argv) {
     std::error_code mapped;  // Windows keeps the loaded release open; the next run removes it
     fs::remove_all(root, mapped);
   }
+
+  // The user's own words win, with tones or without, from the next composition after the file
+  // is written; removing the file takes them out again.
+  const char* tmp = std::getenv("TMPDIR");
+  if (!tmp) tmp = std::getenv("TEMP");
+  env.userPhrasesPath = std::string(tmp ? tmp : "/tmp") + "/ControllerTest-phrases.txt";
+  std::filesystem::remove(env.userPhrasesPath);
+  Type(controller, "vul3ru04");
+  assert(client.marked != "鍵小");
+  EscapeAll(controller, client);
+  std::ofstream(env.userPhrasesPath) << "# 詞 注音\n鍵小 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n鍵小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ-ㄒㄧㄠˇ\n";
+  Type(controller, "vul3ru04");
+  assert(client.marked == "鍵小");
+  EscapeAll(controller, client);
+  Type(controller, "vulru0vul3");  // a reading only the user's words have, the first two without tones
+  assert(client.marked == "鍵小鍵");
+  EscapeAll(controller, client);
+  std::filesystem::remove(env.userPhrasesPath);
+  Type(controller, "vul3ru04");
+  assert(client.marked != "鍵小");
+  EscapeAll(controller, client);
 
   std::printf("ControllerTest passed\n");
   return 0;

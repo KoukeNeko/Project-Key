@@ -36,12 +36,17 @@ class Lexicon : public McBopomofo::McBopomofoLM {
  public:
   // Hides McBopomofoLM's own, which loads only the exact lookups.
   void loadLanguageModel(const char* path);
-  // The "reading word score" rows whose reading starts with `prefix`.
+  // The user's own words, one "word reading" line each (小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ), '#' starting a
+  // comment; they win over the dictionary's words of the same reading. A missing file has none.
+  void loadUserPhrases(const std::string& path);
+  // The "reading word score" rows whose reading starts with `prefix`, then the user's
+  // readings that do, each a row of the reading alone.
   std::vector<std::string_view> rowsStartingWith(const std::string& prefix) const;
 
  private:
   McBopomofo::MemoryMappedFile file_;
   std::unique_ptr<McBopomofo::ParselessPhraseDB> rows_;
+  std::vector<std::string> userReadings_;  // sorted, unique
 };
 
 class Composer {

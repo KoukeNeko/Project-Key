@@ -127,7 +127,13 @@ void Controller::makeComposer() {
   if (!composer_) replacing_ = 0;
   bool abbreviated = env_.settings->flag(Setting::kAbbreviated);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
-  if (composer_ && abbreviated == abbreviated_ && rememberChoices == rememberChoices_ && env_.models == models_) return;
+  ReloadUserPhrases(env_);
+  // The composer keeps the words it looked up, so new user phrases need a new one.
+  if (composer_ && abbreviated == abbreviated_ && rememberChoices == rememberChoices_ && env_.models == models_ &&
+      env_.userPhrasesVersion == userPhrasesVersion_) {
+    return;
+  }
+  userPhrasesVersion_ = env_.userPhrasesVersion;
   abbreviated_ = abbreviated;
   rememberChoices_ = rememberChoices;
   models_ = env_.models;
@@ -168,12 +174,25 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   env.bigram = bigram->load(Utf8(dir / "bigram.bin")) ? bigram : nullptr;
   env.chars = chars->load(Utf8(dir / "chars.bin")) ? chars : nullptr;
   ++env.models;
+  env.userPhrasesTime.reset();  // the new lexicon has none yet
   std::error_code error;
   for (const auto& entry : std::filesystem::directory_iterator(Path(downloaded), error)) {
     // Best effort: Windows keeps a release open while a composer still maps it; the next start removes it.
     if (entry.path() != dir && entry.path().extension() != ".partial") std::filesystem::remove_all(entry.path(), error);
   }
   return true;
+}
+
+void ReloadUserPhrases(Environment& env) {
+  if (env.userPhrasesPath.empty()) return;
+  std::error_code error;
+  auto written = std::filesystem::last_write_time(env.userPhrasesPath, error);
+  std::optional<std::filesystem::file_time_type> time;
+  if (!error) time = written;
+  if (time == env.userPhrasesTime) return;
+  env.userPhrasesTime = time;
+  env.lm->loadUserPhrases(env.userPhrasesPath);
+  env.userPhrasesVersion++;
 }
 
 void Controller::learn(const std::string& committed) {

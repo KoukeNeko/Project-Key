@@ -6,6 +6,8 @@
 #include <unordered_set>
 #include <cmath>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 
 #include "Utf8.h"
 
@@ -178,8 +180,28 @@ void Lexicon::loadLanguageModel(const char* path) {
   }
 }
 
+void Lexicon::loadUserPhrases(const std::string& path) {
+  McBopomofoLM::loadUserPhrases(path.c_str(), nullptr);
+  userReadings_.clear();
+  std::ifstream file(path);
+  std::string line;
+  while (std::getline(file, line)) {
+    std::istringstream columns(line);
+    std::string word, reading;
+    if (!(columns >> word >> reading) || word[0] == '#') continue;
+    userReadings_.push_back(reading);
+  }
+  std::sort(userReadings_.begin(), userReadings_.end());
+  userReadings_.erase(std::unique(userReadings_.begin(), userReadings_.end()), userReadings_.end());
+}
+
 std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefix) const {
-  return rows_ ? rows_->findRows(prefix) : std::vector<std::string_view>{};
+  std::vector<std::string_view> rows = rows_ ? rows_->findRows(prefix) : std::vector<std::string_view>{};
+  for (auto it = std::lower_bound(userReadings_.begin(), userReadings_.end(), prefix);
+       it != userReadings_.end() && it->compare(0, prefix.size(), prefix) == 0; ++it) {
+    rows.push_back(*it);
+  }
+  return rows;
 }
 
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
