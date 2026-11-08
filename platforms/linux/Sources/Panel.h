@@ -74,8 +74,11 @@ class Panel {
   float proofWidth(const PanelContent& content) const;
   float fittingWidth() const;
   float tailWidth() const;
-  Rect selectionRect() const;
+  Rect selectionRect() const;  // relative to the rows
   Rect shownSelectionRect() const;
+  float shownRowTop() const;  // where the rows start, as drawn now
+  bool proofMoves() const;
+  void drawProofRow(cairo_t* cr, const PanelContent& content, bool below, float alpha, float width, float height);
   void drawProof(cairo_t* cr, const PanelContent& content, float top, float width);
   void drawCandidates(cairo_t* cr, float top, float width);
 
@@ -109,10 +112,16 @@ class Panel {
   std::optional<PanelContent> content_;
   bool proofBelow_ = false;  // window above the text: proof row last, next to the text
   bool rounded_ = false;     // a compositor shows the corners through
-  Rect pillFrom_, pillTo_;
+  Rect pillFrom_, pillTo_;  // the highlight slides from one to the other, relative to the rows
   Frame frameFrom_, frameTo_;
   uint64_t slideStart_ = 0, resizeStart_ = 0;
+  // resizing_: the window changing shape, moving and resizing from frameFrom_ to frameTo_ while
+  // progress_ runs from 0 to 1: the rows move from oldRowTop_ and a proof row that comes, goes
+  // or changes sides fades from its place in oldContent_ to its new one.
   bool sliding_ = false, resizing_ = false;
+  std::optional<PanelContent> oldContent_;
+  bool oldProofBelow_ = false;
+  float oldRowTop_ = 0, progress_ = 1;
   std::unique_ptr<fcitx::EventSourceTime> panelTimer_;
 
   std::unique_ptr<Window> hint_;

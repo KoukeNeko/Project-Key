@@ -191,8 +191,8 @@ float CandidateWindow::rowHeight() const {
   return kRowTop + rows * cell + (rows - 1) * kCellGap + kRowBottom;
 }
 
-float CandidateWindow::keyWidth() const {
-  return std::max(kKeyHeight, fonts_.widthOf(Widen(content_->keyHint), fonts_.key()) + 2 * kKeyPadding);
+float CandidateWindow::keyWidth(const PanelContent& c) const {
+  return std::max(kKeyHeight, fonts_.widthOf(Widen(c.keyHint), fonts_.key()) + 2 * kKeyPadding);
 }
 
 // The first row's end: a down chevron while folded with more rows; unfolded, the page label
@@ -211,7 +211,7 @@ D2D1_SIZE_F CandidateWindow::fittingSize() const {
     std::string sentence;
     for (const std::string& segment : content_->segments) sentence += segment;
     sentence += content_->pendingReading;
-    float key = content_->keyHint.empty() ? 0 : kKeyGap + keyWidth();
+    float key = content_->keyHint.empty() ? 0 : kKeyGap + keyWidth(*content_);
     if (!content_->replacedText.empty()) key += fonts_.widthOf(Widen(content_->replacedText) + kReplacedArrow, fonts_.proof());
     width = std::max(width, kProofLeft + fonts_.widthOf(Widen(sentence), fonts_.proof()) + key + kProofRight);
   }
@@ -242,8 +242,17 @@ D2D1_RECT_F CandidateWindow::selectionRect() const {
   for (int i = 0; i < content_->selection; i++) column += fonts_.span(Widen(row[i]));
   int span = fonts_.span(Widen(row[content_->selection]));
   float left = kRowLeft + column * (fonts_.columnWidth() + kCellGap);
-  float top = rowTop() + kRowTop + labeledRow * (cellHeight + kCellGap);
+  float top = kRowTop + labeledRow * (cellHeight + kCellGap);
   return D2D1::RectF(left, top, left + span * fonts_.columnWidth() + (span - 1) * kCellGap, top + cellHeight);
+}
+
+float CandidateWindow::shownRowTop() const {
+  return oldRowTop_ + (rowTop() - oldRowTop_) * progress_;
+}
+
+// Whether the proof row fades between two places rather than staying where it is.
+bool CandidateWindow::proofMoves() const {
+  return oldContent_ && (oldContent_->showsProof != content_->showsProof || oldProofBelow_ != proofBelow_);
 }
 
 D2D1_RECT_F CandidateWindow::shownSelectionRect() const {
@@ -258,9 +267,14 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   if (!ensureWindow()) return;
   if (appearance != appearance_) applyAppearance(appearance);
   bool wasVisible = visible();
-  // Changes within one list move: the highlight slides and the window resizes.
-  bool animate = wasVisible && content_ && !content_->rows.empty() && !content.rows.empty() && !ReducesMotion();
+  // One window changing shape: it moves and resizes to the new content, across the text when it
+  // changes sides, while the highlight slides, the rows move with it and the proof row fades
+  // between its places.
+  bool animate = wasVisible && content_ && !ReducesMotion();
   D2D1_RECT_F from = shownSelectionRect();
+  std::optional<PanelContent> old = content_;
+  bool oldProofBelow = proofBelow_;
+  float oldRowTop = content_ ? shownRowTop() : 0;
   content_ = content;
 
   D2D1_SIZE_F size = fittingSize();
@@ -290,12 +304,19 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
 
   SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
   RECT current = this->frame();
-  resizing_ = animate && (current.right - current.left != width || current.bottom - current.top != height);
+  bool moved = !EqualRect(&current, &frame);
+  resizing_ = animate && (moved || oldRowTop != rowTop() || old->showsProof != content_->showsProof || oldProofBelow != proofBelow_);
   if (resizing_) {
     frameFrom_ = current;
     frameTo_ = frame;
     resizeStart_ = GetTickCount64();
+    oldContent_ = std::move(old);
+    oldProofBelow_ = oldProofBelow;
+    oldRowTop_ = oldRowTop;
+    progress_ = 0;
   } else {
+    oldContent_.reset();
+    progress_ = 1;
     SetWindowPos(hwnd_, HWND_TOPMOST, frame.left, frame.top, width, height, SWP_NOACTIVATE);
   }
   if (!wasVisible) {
@@ -344,7 +365,11 @@ void CandidateWindow::tick() {
     int left = mix(frameFrom_.left, frameTo_.left), top = mix(frameFrom_.top, frameTo_.top);
     int right = mix(frameFrom_.right, frameTo_.right), bottom = mix(frameFrom_.bottom, frameTo_.bottom);
     SetWindowPos(hwnd_, HWND_TOPMOST, left, top, right - left, bottom - top, SWP_NOACTIVATE);
-    if (t >= 1) resizing_ = false;
+    progress_ = e;
+    if (t >= 1) {
+      resizing_ = false;
+      oldContent_.reset();
+    }
   }
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
@@ -355,6 +380,8 @@ void CandidateWindow::hide() {
   if (!visible()) return;
   KillTimer(hwnd_, kAnimationTimer);
   sliding_ = resizing_ = false;
+  oldContent_.reset();
+  progress_ = 1;
   ShowWindow(hwnd_, SW_HIDE);
   NotifyWinEvent(EVENT_OBJECT_IME_HIDE, hwnd_, OBJID_CLIENT, CHILDID_SELF);
   content_.reset();
@@ -384,27 +411,43 @@ void CandidateWindow::paint() {
 
   target_->BeginDraw();
   target_->Clear(Fill(appearance_));
-  bool both = content_->showsProof && !content_->rows.empty();
-  // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
-  float proofTop = proofBelow_ ? height - proofHeight() : 0;
-  if (both) {
-    auto line = Brush(target_.Get(), Color(kLine, material() ? 0.6f : 1));
-    float y = proofBelow_ ? proofTop - 1 : proofHeight();
-    target_->FillRectangle(D2D1::RectF(0, y, width, y + 1), line.Get());
-  }
-  if (content_->showsProof) drawProof(target_.Get(), proofTop);
+  // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
+  // the window resizes; when it comes, goes or changes sides, it fades between its places.
+  bool moves = proofMoves();
+  if (moves && oldContent_->showsProof) drawProofRow(target_.Get(), *oldContent_, oldProofBelow_, 1 - progress_, width, height);
+  if (content_->showsProof) drawProofRow(target_.Get(), *content_, proofBelow_, moves ? progress_ : 1, width, height);
   if (!content_->rows.empty()) {
     // While the window grows above the text, rows laid out for the final size
     // would run over the pinned proof row; keep them above it.
-    bool clip = proofBelow_ && content_->showsProof;
-    if (clip) target_->PushAxisAlignedClip(D2D1::RectF(0, 0, width, proofTop - 1), D2D1_ANTIALIAS_MODE_ALIASED);
-    drawCandidates(target_.Get(), rowTop(), width);
+    bool clip = !moves && proofBelow_ && content_->showsProof;
+    if (clip) target_->PushAxisAlignedClip(D2D1::RectF(0, 0, width, height - proofHeight() - 1), D2D1_ANTIALIAS_MODE_ALIASED);
+    drawCandidates(target_.Get(), shownRowTop(), width);
     if (clip) target_->PopAxisAlignedClip();
   }
   if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
 
-void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
+// A proof row, with the line between it and the rows, at the edge next to the text.
+void CandidateWindow::drawProofRow(ID2D1RenderTarget* target, const PanelContent& c, bool below, float alpha, float width,
+                                   float height) {
+  float rowHeight = kProofPad + kProofLine + kProofPad;
+  float top = below ? height - rowHeight : 0;
+  ComPtr<ID2D1Layer> layer;
+  if (alpha < 1 && SUCCEEDED(target->CreateLayer(&layer))) {
+    target->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), alpha),
+                      layer.Get());
+  }
+  if (!c.rows.empty()) {
+    auto line = Brush(target, Color(kLine, material() ? 0.6f : 1));
+    float y = below ? top - 1 : rowHeight;
+    target->FillRectangle(D2D1::RectF(0, y, width, y + 1), line.Get());
+  }
+  drawProof(target, c, top);
+  if (layer) target->PopLayer();
+}
+
+void CandidateWindow::drawProof(ID2D1RenderTarget* target, const PanelContent& c, float top) {
   float x = kProofLeft;
   // The line stays centered; marks sit in the space below it, so they come and
   // go without moving the text.
@@ -413,8 +456,8 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
   auto muted = Brush(target, Color(kMuted));
   auto accentSoft = Brush(target, Color(kAccentSoft));
   auto doubtMark = Brush(target, Color(kAccentSoft, kDoubtMarkAlpha));
-  if (!content_->keyHint.empty()) {
-    float w = keyWidth();
+  if (!c.keyHint.empty()) {
+    float w = keyWidth(c);
     float right = static_cast<float>(target->GetSize().width) - kProofRight;
     D2D1_RECT_F cap = D2D1::RectF(right - w, lineTop + (kProofLine - kKeyHeight) / 2, right, lineTop + (kProofLine + kKeyHeight) / 2);
     // A key: a face with a hairline edge, raised on a darker lip along its bottom.
@@ -425,13 +468,13 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
     target->FillRoundedRectangle(face, faceFill.Get());
     auto edge = Brush(target, Color(kMuted, 0.35f));
     target->DrawRoundedRectangle(face, edge.Get(), 0.5f);
-    Line key = Measure(fonts_, Widen(content_->keyHint), fonts_.key());
+    Line key = Measure(fonts_, Widen(c.keyHint), fonts_.key());
     auto text = Brush(target, Color(kText));
     DrawLine(target, key, (cap.left + cap.right - key.width) / 2, cap.top, kKeyHeight, text.Get());
   }
-  if (!content_->replacedText.empty()) {
-    Line replaced = Measure(fonts_, Widen(content_->replacedText), fonts_.proof());
-    if (replaced.layout) replaced.layout->SetStrikethrough(TRUE, {0, static_cast<UINT32>(Widen(content_->replacedText).size())});
+  if (!c.replacedText.empty()) {
+    Line replaced = Measure(fonts_, Widen(c.replacedText), fonts_.proof());
+    if (replaced.layout) replaced.layout->SetStrikethrough(TRUE, {0, static_cast<UINT32>(Widen(c.replacedText).size())});
     DrawLine(target, replaced, x, lineTop, kProofLine, muted.Get());
     x += replaced.width;
     Line arrow = Measure(fonts_, kReplacedArrow, fonts_.proof());
@@ -439,30 +482,30 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
     x += arrow.width;
   }
   std::wstring joined;
-  for (const std::string& segment : content_->segments) joined += Widen(segment);
+  for (const std::string& segment : c.segments) joined += Widen(segment);
   const uint32_t length = static_cast<uint32_t>(joined.size());
-  const bool hint = !content_->replacedText.empty();  // a conversion preview, not the proof row's Tab
+  const bool hint = !c.replacedText.empty();  // a conversion preview, not the proof row's Tab
   // The pending reading, or a caret line when there is none, sits at the cursor.
   auto drawCursor = [&](float& at) {
-    std::wstring reading = Widen(content_->pendingReading);
+    std::wstring reading = Widen(c.pendingReading);
     if (!reading.empty()) {
       Line line = Measure(fonts_, reading, fonts_.proof());
       DrawLine(target, line, at, lineTop, kProofLine, muted.Get());
       at += line.width;
-    } else if (content_->caret < length && content_->activeSegment < 0) {
+    } else if (c.caret < length && c.activeSegment < 0) {
       target->FillRectangle(D2D1::RectF(at, lineTop + 1, at + 1, lineTop + kProofLine - 1), accentSoft.Get());
     }
   };
-  if (content_->caret == 0) drawCursor(x);
+  if (c.caret == 0) drawCursor(x);
   uint32_t start = 0;
-  for (size_t i = 0; i < content_->segments.size(); i++) {
-    std::wstring segment = Widen(content_->segments[i]);
+  for (size_t i = 0; i < c.segments.size(); i++) {
+    std::wstring segment = Widen(c.segments[i]);
     uint32_t segmentLength = static_cast<uint32_t>(segment.size());
-    bool active = static_cast<int>(i) == content_->activeSegment;
+    bool active = static_cast<int>(i) == c.activeSegment;
     // A conversion preview shows its result in full text color.
     auto brush = active ? accentSoft : hint ? Brush(target, Color(kText)) : muted;
     float left = x;
-    uint32_t split = content_->caret > start && content_->caret < start + segmentLength ? content_->caret - start : 0;
+    uint32_t split = c.caret > start && c.caret < start + segmentLength ? c.caret - start : 0;
     if (split) {
       Line head = Measure(fonts_, segment.substr(0, split), fonts_.proof());
       DrawLine(target, head, x, lineTop, kProofLine, brush.Get());
@@ -476,19 +519,21 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, float top) {
       DrawLine(target, line, x, lineTop, kProofLine, brush.Get());
       x += line.width;
     }
-    ID2D1Brush* mark = active ? accentSoft.Get() : i < content_->doubtful.size() && content_->doubtful[i] ? doubtMark.Get() : nullptr;
+    ID2D1Brush* mark = active ? accentSoft.Get() : i < c.doubtful.size() && c.doubtful[i] ? doubtMark.Get() : nullptr;
     if (mark) {
       D2D1_RECT_F line = D2D1::RectF(left + kMarkInset, markTop, x - kMarkInset, markTop + kMarkHeight);
       target->FillRoundedRectangle(D2D1::RoundedRect(line, 1, 1), mark);
     }
     start += segmentLength;
-    if (content_->caret == start && start > 0) drawCursor(x);
+    if (c.caret == start && start > 0) drawCursor(x);
   }
 }
 
 void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float width) {
   float cellHeight = kCellTop + kCellLine + kCellBottom;
   D2D1_RECT_F pill = shownSelectionRect();
+  pill.top += top;
+  pill.bottom += top;
   if (!IsEmpty(pill)) {
     auto fill = Brush(target, content_->selectedRow >= 0 ? Color(kAccent) : Color(kText, kGuessAlpha));
     target->FillRoundedRectangle(D2D1::RoundedRect(pill, kPillRadius, kPillRadius), fill.Get());

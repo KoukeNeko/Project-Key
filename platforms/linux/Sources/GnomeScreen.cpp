@@ -78,8 +78,6 @@ class GnomeScreen final : public Screen {
   float scale() const override { return static_cast<float>(geometry_.scale); }
   bool composited() override { return true; }
   bool blurs() override { return true; }  // Shell.BlurEffect, in the extension
-  // Each frame crosses to GNOME Shell as a file: no animation frames.
-  bool animates() const override { return false; }
   std::string problem() const override {
     if (known_) return {};
     return "GNOME Shell 擴充功能「Project Key」沒有在執行：在「擴充功能」App 開啟它"

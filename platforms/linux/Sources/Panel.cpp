@@ -188,7 +188,8 @@ void Panel::startTimer(std::unique_ptr<fcitx::EventSourceTime>& timer, bool (Pan
     timer->setOneShot();
     return;
   }
-  timer = loop_.addTimeEvent(CLOCK_MONOTONIC, next, 0, [this, tick](fcitx::EventSourceTime* source, uint64_t) {
+  // An accuracy of 0 means sd-event's default, 250ms, which would coalesce the frames.
+  timer = loop_.addTimeEvent(CLOCK_MONOTONIC, next, 1000, [this, tick](fcitx::EventSourceTime* source, uint64_t) {
     if ((this->*tick)()) {
       source->setNextInterval(kFrameUs);
       source->setOneShot();
@@ -259,8 +260,17 @@ Panel::Rect Panel::selectionRect() const {
   for (int i = 0; i < content_->selection; i++) column += span(row[i]);
   int cells = span(row[content_->selection]);
   float left = kRowLeft + column * (columnWidth_ + kCellGap);
-  float top = rowTop() + kRowTop + labeledRow * (cellHeight + kCellGap);
+  float top = kRowTop + labeledRow * (cellHeight + kCellGap);
   return {left, top, left + cells * columnWidth_ + (cells - 1) * kCellGap, top + cellHeight};
+}
+
+float Panel::shownRowTop() const {
+  return oldRowTop_ + (rowTop() - oldRowTop_) * progress_;
+}
+
+// Whether the proof row fades between two places rather than staying where it is.
+bool Panel::proofMoves() const {
+  return oldContent_ && (oldContent_->showsProof != content_->showsProof || oldProofBelow_ != proofBelow_);
 }
 
 Panel::Rect Panel::shownSelectionRect() const {
@@ -282,9 +292,15 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
                                    });
   }
   bool wasVisible = panel_->mapped;
-  // Changes within one list move: the highlight slides and the window resizes.
-  bool animate = screen_->animates() && wasVisible && content_ && !content_->rows.empty() && !content.rows.empty();
+  // One window changing shape: it moves and resizes to the new content, across the text when it
+  // changes sides, while the highlight slides, the rows move with it and the proof row fades
+  // between its places.
+  bool animate = wasVisible && content_;
   Rect from = shownSelectionRect();
+  Frame frameFrom = panel_->frame;
+  std::optional<PanelContent> old = content_;
+  bool oldProofBelow = proofBelow_;
+  float oldRowTop = content_ ? shownRowTop() : 0;
   owner_ = &ic;
   anchor_ = anchor;
   content_ = content;
@@ -314,13 +330,21 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   }
   pillTo_ = to;
 
-  resizing_ = animate && (panel_->frame.width != width || panel_->frame.height != height);
+  Frame target{left, top, width, height};
+  bool moved = frameFrom.x != left || frameFrom.y != top || frameFrom.width != width || frameFrom.height != height;
+  resizing_ = animate && (moved || oldRowTop != rowTop() || old->showsProof != content_->showsProof || oldProofBelow != proofBelow_);
   if (resizing_) {
-    frameFrom_ = panel_->frame;
-    frameTo_ = {left, top, width, height};
+    frameFrom_ = frameFrom;
+    frameTo_ = target;
     resizeStart_ = NowMs();
+    oldContent_ = std::move(old);
+    oldProofBelow_ = oldProofBelow;
+    oldRowTop_ = oldRowTop;
+    progress_ = 0;
   } else {
-    panel_->place({left, top, width, height});
+    oldContent_.reset();
+    progress_ = 1;
+    panel_->place(target);
   }
   panel_->map(ic);
   paintPanel();
@@ -348,7 +372,11 @@ bool Panel::tickPanel() {
     int right = mix(frameFrom_.x + frameFrom_.width, frameTo_.x + frameTo_.width);
     int bottom = mix(frameFrom_.y + frameFrom_.height, frameTo_.y + frameTo_.height);
     panel_->place({left, top, right - left, bottom - top});
-    if (t >= 1) resizing_ = false;
+    progress_ = e;
+    if (t >= 1) {
+      resizing_ = false;
+      oldContent_.reset();
+    }
   }
   paintPanel();
   return sliding_ || resizing_;
@@ -358,6 +386,8 @@ void Panel::hide(const fcitx::InputContext& ic) {
   if (!panel_ || &ic != owner_) return;
   if (panelTimer_) panelTimer_->setEnabled(false);
   sliding_ = resizing_ = false;
+  oldContent_.reset();
+  progress_ = 1;
   panel_->unmap();
   content_.reset();
   owner_ = nullptr;
@@ -434,28 +464,22 @@ void Panel::paintPanel() {
   float width = panel_->frame.width / scale_, height = panel_->frame.height / scale_;
 
   DrawBackground(cr, width, height, rounded_, blurred);
-  float lineAlpha = blurred ? 0.6f : 1;
 
-  bool both = content_->showsProof && !content_->rows.empty();
-  // Above the text the proof row hugs the bottom edge, so it stays put while the window resizes.
-  float proofTop = proofBelow_ ? height - proofHeight() : 0;
-  if (both) {
-    float y = proofBelow_ ? proofTop - 1 : proofHeight();
-    SetColor(cr, kLine, lineAlpha);
-    cairo_rectangle(cr, 0, y, width, 1);
-    cairo_fill(cr);
-  }
-  if (content_->showsProof) drawProof(cr, *content_, proofTop, width);
+  // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
+  // the window resizes; when it comes, goes or changes sides, it fades between its places.
+  bool moves = proofMoves();
+  if (moves && oldContent_->showsProof) drawProofRow(cr, *oldContent_, oldProofBelow_, 1 - progress_, width, height);
+  if (content_->showsProof) drawProofRow(cr, *content_, proofBelow_, moves ? progress_ : 1, width, height);
   if (!content_->rows.empty()) {
     // While the window grows above the text, rows laid out for the final size
     // would run over the pinned proof row; keep them above it.
-    bool clip = proofBelow_ && content_->showsProof;
+    bool clip = !moves && proofBelow_ && content_->showsProof;
     if (clip) {
       cairo_save(cr);
-      cairo_rectangle(cr, 0, 0, width, proofTop - 1);
+      cairo_rectangle(cr, 0, 0, width, height - proofHeight() - 1);
       cairo_clip(cr);
     }
-    drawCandidates(cr, rowTop(), width);
+    drawCandidates(cr, shownRowTop(), width);
     if (clip) cairo_restore(cr);
   }
 
@@ -463,6 +487,21 @@ void Panel::paintPanel() {
   cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
   cairo_paint(cr);
   panel_->endPaint(cr);
+}
+
+// A proof row, with the line between it and the rows, at the edge next to the text.
+void Panel::drawProofRow(cairo_t* cr, const PanelContent& c, bool below, float alpha, float width, float height) {
+  float rowHeight = kProofPad + kProofLine + kProofPad;
+  float top = below ? height - rowHeight : 0;
+  cairo_push_group(cr);
+  if (!c.rows.empty()) {
+    SetColor(cr, kLine, panel_->blurred ? 0.6f : 1);
+    cairo_rectangle(cr, 0, below ? top - 1 : rowHeight, width, 1);
+    cairo_fill(cr);
+  }
+  drawProof(cr, c, top, width);
+  cairo_pop_group_to_source(cr);
+  cairo_paint_with_alpha(cr, alpha);
 }
 
 void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windowWidth) {
@@ -558,6 +597,8 @@ void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windo
 void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
   float cellHeight = kCellTop + kCellLine + kCellBottom;
   Rect pill = shownSelectionRect();
+  pill.top += top;
+  pill.bottom += top;
   if (!pill.empty()) {
     if (content_->selectedRow >= 0) {
       SetColor(cr, kAccent);

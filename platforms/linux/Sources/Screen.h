@@ -69,8 +69,6 @@ class Screen {
   virtual bool blurs() = 0;
   // Handles what the display sent, so a window shows at once.
   virtual void sync() {}
-  // Whether windows slide and resize in steps; each step is a frame to deliver.
-  virtual bool animates() const { return true; }
   // Why no window shows yet, for the install check; empty when they can.
   virtual std::string problem() const { return {}; }
 };

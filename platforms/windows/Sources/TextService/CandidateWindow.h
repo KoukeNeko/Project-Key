@@ -41,11 +41,14 @@ class CandidateWindow {
   float rowHeight() const;
   float tailWidth() const;
   float rowTop() const;
-  D2D1_RECT_F selectionRect() const;
+  D2D1_RECT_F selectionRect() const;  // relative to the rows
   D2D1_RECT_F shownSelectionRect() const;
-  void drawProof(ID2D1RenderTarget* target, float top);
+  float shownRowTop() const;  // where the rows start, as drawn now
+  bool proofMoves() const;
+  void drawProofRow(ID2D1RenderTarget* target, const PanelContent& content, bool below, float alpha, float width, float height);
+  void drawProof(ID2D1RenderTarget* target, const PanelContent& content, float top);
   void drawCandidates(ID2D1RenderTarget* target, float top, float width);
-  float keyWidth() const;
+  float keyWidth(const PanelContent& content) const;
 
   ModeBadge& badge_;
   HWND hwnd_ = nullptr;
@@ -58,11 +61,17 @@ class CandidateWindow {
   int appearance_ = 0;
   bool material() const { return appearance_ != 0; }  // a system material shows through
   float scale_ = 1;
-  // The selection highlight slides from one rect to the other; the window resizes from one frame to the other.
+  // The selection highlight slides from one rect to the other, relative to the rows.
   D2D1_RECT_F pillFrom_{}, pillTo_{};
+  // resizing_: the window changing shape, moving and resizing from frameFrom_ to frameTo_ while
+  // progress_ runs from 0 to 1: the rows move from oldRowTop_ and a proof row that comes, goes
+  // or changes sides fades from its place in oldContent_ to its new one.
   RECT frameFrom_{}, frameTo_{};
   ULONGLONG slideStart_ = 0, resizeStart_ = 0;
   bool sliding_ = false, resizing_ = false;
+  std::optional<PanelContent> oldContent_;
+  bool oldProofBelow_ = false;
+  float oldRowTop_ = 0, progress_ = 1;
 };
 
 class ModeBadge {
