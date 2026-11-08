@@ -69,6 +69,7 @@
     border-bottom: 2px solid #4b555c; padding-bottom: 8px;
   }
   .comp .ch { display: inline-block; min-width: .5em; }
+  .comp .ch:empty { min-width: 0; }  /* 還沒打到的字不佔位，游標跟著打字前進 */
   .comp .ch.zy { color: var(--muted); font-size: .62em; vertical-align: .35em; letter-spacing: 0; }
   .doubt { position: relative; color: var(--accent-soft); display: inline-block; }
   .doubt::after {
@@ -540,18 +541,27 @@
     gsap.set(pill, { left: one.left, width: one.width });
     row.querySelectorAll('.cell').forEach((c, i) => c.classList.toggle('on', i === 0));
     document.documentElement.classList.remove('intro');
-    const tl = gsap.timeline({ delay: .2 });
-    chars.forEach((c, i) => {
-      tl.call(() => { c.textContent = c.dataset.zy; c.classList.add('zy'); }, null, i * .05);
-      tl.call(() => { c.textContent = c.dataset.char; c.classList.remove('zy'); }, null, i * .05 + .04);
+    const tl = gsap.timeline({ delay: .9 });  // 載入後先停一下，讓人看清楚空白的輸入列
+    // 像真的在打字：注音一鍵一鍵長出來，停一下再變成字。
+    let at = 0;
+    chars.forEach(c => {
+      [...c.dataset.zy].forEach((_, k) => {
+        tl.call(() => { c.textContent = c.dataset.zy.slice(0, k + 1); c.classList.add('zy'); }, null, at);
+        at += .25;
+      });
+      at += .3;
+      tl.call(() => { c.textContent = c.dataset.char; c.classList.remove('zy'); }, null, at);
+      at += .1;
     });
-    tl.to(doubt, { '--mark': 1, duration: .25, ease: 'power2.out' }, '+=.05');
-    tl.to(win, { opacity: 1, y: 0, scale: 1, duration: .32, ease: 'back.out(2.2)' }, '+=.15');
+    // 「城市」先停在畫面上，標記長出來，讓人看出它選錯了。
+    tl.to(doubt, { '--mark': 1, duration: .3, ease: 'power2.out' }, '+=.3');
+    tl.to(win, { opacity: 1, y: 0, scale: 1, duration: .32, ease: 'back.out(2.2)' }, '+=.7');
     tl.to(pill, { left: two.left, width: two.width, duration: .3, ease: 'back.out(1.8)',
-      onStart: () => row.querySelectorAll('.cell').forEach((c, i) => c.classList.toggle('on', i === 1)) }, '+=.3');
+      onStart: () => row.querySelectorAll('.cell').forEach((c, i) => c.classList.toggle('on', i === 1)) }, '+=.8');
     tl.to(fixed, { y: -14, opacity: 0, duration: .14, ease: 'power2.in' }, '<.05');
     tl.call(() => { fixed[0].textContent = '程'; fixed[1].textContent = '式'; proof.textContent = '程式'; });
-    tl.fromTo(fixed, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .24, ease: 'back.out(2.5)' });
+    // immediateRender: false，否則一建立時間軸就把「城市」設成透明，打出來也看不到。
+    tl.fromTo(fixed, { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .24, ease: 'back.out(2.5)', immediateRender: false });
     tl.to(doubt, { '--mark': 0, duration: .3, ease: 'power2.in' }, '+=.25');
   }
 
