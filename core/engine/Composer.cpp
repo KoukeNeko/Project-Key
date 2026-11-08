@@ -6,7 +6,9 @@
 #include <unordered_set>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 
 #include "Utf8.h"
@@ -181,11 +183,16 @@ void Lexicon::loadLanguageModel(const char* path) {
 }
 
 void Lexicon::loadUserPhrases(const std::string& path) {
-  McBopomofoLM::loadUserPhrases(path.c_str(), nullptr);
+  // Read, not mapped as McBopomofo maps it: on Windows a mapped file cannot be saved over, so the
+  // user could not edit it while Project Key runs. The path is UTF-8, which Windows' narrow file
+  // calls would read in the ANSI code page.
+  std::ifstream file(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary);
+  userPhrasesText_.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+  McBopomofoLM::loadUserPhrases(userPhrasesText_.data(), userPhrasesText_.size());  // which keeps pointing into the text
   userReadings_.clear();
-  std::ifstream file(path);
+  std::istringstream lines(userPhrasesText_);
   std::string line;
-  while (std::getline(file, line)) {
+  while (std::getline(lines, line)) {
     std::istringstream columns(line);
     std::string word, reading;
     if (!(columns >> word >> reading) || word[0] == '#') continue;

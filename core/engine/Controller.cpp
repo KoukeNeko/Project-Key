@@ -186,7 +186,9 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
 void ReloadUserPhrases(Environment& env) {
   if (env.userPhrasesPath.empty()) return;
   std::error_code error;
-  auto written = std::filesystem::last_write_time(env.userPhrasesPath, error);
+  // A UTF-8 path, which Windows' narrow file calls would read in the ANSI code page.
+  std::filesystem::path path(std::u8string(env.userPhrasesPath.begin(), env.userPhrasesPath.end()));
+  auto written = std::filesystem::last_write_time(path, error);
   std::optional<std::filesystem::file_time_type> time;
   if (!error) time = written;
   if (time == env.userPhrasesTime) return;

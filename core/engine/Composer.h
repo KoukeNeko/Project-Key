@@ -46,6 +46,7 @@ class Lexicon : public McBopomofo::McBopomofoLM {
  private:
   McBopomofo::MemoryMappedFile file_;
   std::unique_ptr<McBopomofo::ParselessPhraseDB> rows_;
+  std::string userPhrasesText_;            // the user phrases file, which McBopomofo's points into
   std::vector<std::string> userReadings_;  // sorted, unique
 };
 
