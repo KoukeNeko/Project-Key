@@ -228,6 +228,8 @@ class Controller {
   std::optional<size_t> doubtfulAfter(size_t start, bool backwards) const;
   // The segment's candidates as the grid lists them, with its Zhuyin at *readingIndex (-1 for none).
   std::vector<std::string> choicesFor(const Segment& segment, int* readingIndex) const;
+  // The index in words of the word the composition shows for the segment, or -1.
+  int shownChoice(const Segment& segment, const std::vector<std::string>& words) const;
   // Choosing the word before the cursor (Setting::kCandidatePosition 1), whose shorter
   // candidates are the ones that end at the cursor.
   bool choosesFromEnd() const;

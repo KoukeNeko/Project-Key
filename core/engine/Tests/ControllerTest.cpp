@@ -702,6 +702,19 @@ int main(int argc, char** argv) {
   assert(client.marked != "鍵小");
   EscapeAll(controller, client);
 
+  // Split into 我|們, the text still reads as the longer candidate 我們, which is the one marked.
+  settings.set(Setting::kCandidatePosition, 1);
+  Type(controller, "ji3ap7");
+  assert(controller.handleKey(Special(ProjectKey::Key::kHome)) && controller.handleKey(Special(ProjectKey::Key::kRight)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const std::vector<std::string>& first = controller.candidates();
+  controller.choose(static_cast<int>(std::find(first.begin(), first.end(), "我") - first.begin()));
+  assert(client.marked == "我們" && controller.handleKey(Special(ProjectKey::Key::kEnd)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(client.panel.rows[0][client.panel.selection] == "我們");
+  EscapeAll(controller, client);
+  settings.remove(Setting::kCandidatePosition);
+
   std::printf("ControllerTest passed\n");
   return 0;
 }

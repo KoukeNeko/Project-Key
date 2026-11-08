@@ -819,6 +819,22 @@ std::vector<std::string> Controller::choicesFor(const Segment& segment, int* rea
   return candidates;
 }
 
+// From the end, words longer than the segment come first, and the walk may have split one the
+// text reads as (七賢|一路 for 七賢一路), which is then the word shown.
+int Controller::shownChoice(const Segment& segment, const std::vector<std::string>& words) const {
+  auto shown = std::find(words.begin(), words.end(), segment.text);
+  if (choosesFromEnd() && !segment.text.empty()) {
+    std::string text = segment.text;
+    const std::vector<Segment>& segments = composer_->segments();
+    for (auto before = segments.rbegin(); before != segments.rend(); ++before) {
+      if (before->start + before->length > segment.start) continue;
+      text = before->text + text;
+      shown = std::find(words.begin(), shown, text);
+    }
+  }
+  return shown == words.end() ? -1 : static_cast<int>(shown - words.begin());
+}
+
 void Controller::pack(const std::vector<std::string>& words, std::vector<int>* rowStarts, std::vector<int>* columns) const {
   rowStarts->clear();
   columns->clear();
@@ -862,8 +878,7 @@ void Controller::startChoosingAt(size_t start) {
   firstRow_ = 0;
   candidates_ = std::move(candidates);
   pack(candidates_, &rowStarts_, &columns_);
-  auto current = std::find(candidates_.begin(), candidates_.end(), segment->text);
-  selection_ = current == candidates_.end() ? 0 : static_cast<int>(current - candidates_.begin());
+  selection_ = std::max(shownChoice(*segment, candidates_), 0);
   refresh();
 }
 
@@ -1016,8 +1031,7 @@ void Controller::refresh() {
       pack(all, &rowStarts, &columns);
       // Folded as when choosing: with more rows, the page label, drawn with a down chevron.
       if (rowStarts.size() > 1) guessPage = "1/" + std::to_string(rowStarts.size());
-      auto at = std::find(guesses.begin(), guesses.end(), segment->text);
-      if (at != guesses.end()) guessAt = static_cast<int>(at - guesses.begin());
+      guessAt = shownChoice(*segment, guesses);
     }
   }
   rowSegment_ = guesses.empty() ? std::nullopt : typing;
