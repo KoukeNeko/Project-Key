@@ -27,7 +27,7 @@
 			<key>org.projectkey.inputmethod.ProjectKey.Bopomofo</key>
 			<dict>
 				<key>TISIconIsTemplate</key>
-				<false/>
+				<true/>
 				<key>TISIconLabels</key>
 				<dict>
 					<key>Primary</key>
@@ -76,7 +76,7 @@
 	<key>TICapsLockLanguageSwitchCapable</key>
 	<true/>
 	<key>TISIconIsTemplate</key>
-	<false/>
+	<true/>
 	<key>TISInputSourceID</key>
 	<string>org.projectkey.inputmethod.ProjectKey</string>
 	<key>TISIntendedLanguage</key>

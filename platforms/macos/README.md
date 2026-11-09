@@ -56,7 +56,7 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 
 設定 App（`~/Applications/Project Key 設定.app`，可從 Launchpad 或 Spotlight 開啟）是同一個設定視窗，獨立於輸入法執行，輸入法沒加入或沒在執行時也能改設定。它的 bundle ID 是 `org.projectkey.Settings`，與輸入法不同，所以系統不會把它當成第二份輸入法；設定直接寫入輸入法的 defaults（`org.projectkey.inputmethod.ProjectKey`）。輸入法放在記憶體裡的狀態以 distributed notification 通知：清除選字紀錄時設定 App 先刪掉 `personal.txt` 再通知，輸入法確認檔案已刪除才清空記憶體中的紀錄（其他 App 也能發這個通知，但沙盒中的 App 刪不了這個檔案）；下載新模型後通知輸入法改用新模型。輸入法沒在執行時，下次啟動就會讀到這些變更。「更新到」換掉的是 `~/Library/Input Methods/ProjectKey.app`，並重新開啟輸入法，設定 App 本身不會跟著更新。
 
-選單列圖示是 `icon.tiff`：強調色底上的白色「ㄅ」，與 Windows 相同。歡迎與設定視窗的 App 圖示是 `AppIcon.icns`，由 `tools/icon/make-app-icon.swift` 依 macOS 的圖示格線從同一個「ㄅ」畫成。
+選單列圖示是模板圖 `icon.tiff`：鏤空「ㄅ」的徽章，由系統上色，外觀與系統輸入法的徽章一致。歡迎與設定視窗的 App 圖示是 `AppIcon.icns`，由 `tools/icon/make-app-icon.swift` 依 macOS 的圖示格線從同一個「ㄅ」畫成。
 
 ## 可疑處的判斷
 
