@@ -128,6 +128,37 @@ platforms/macos/build.sh            # 再建置一次，把模型放進 App
 
 選字的評測工具在 [tools/corpus-evaluator](tools/corpus-evaluator/)。
 
+### 資料處理流程
+
+```mermaid
+flowchart LR
+  subgraph src["來源"]
+    direction TB
+    wiki["中文維基百科<br>20231101 第一個分片"]
+    gazette["立法院公報<br>第 11 屆"]
+    chewing["新酷音詞庫<br>libchewing-data"]
+    mcb["McBopomofo data.txt"]
+  end
+
+  wiki & gazette --> extract["extract.py<br>取出段落"]
+  extract --> opencc["OpenCC s2twp<br>轉臺灣正體，布、台、帳改回"]
+  opencc --> text[("訓練文字<br>text-N.txt")]
+
+  chewing & mcb & text --> supplement["supplement.py、mine.cpp<br>補詞：新酷音獨有的詞、<br>常相連的詞＋單字"]
+  supplement --> lexicon[("data.txt<br>補詞後的詞庫")]
+
+  lexicon & text --> train["train.cpp<br>依詞庫斷詞，數詞對"]
+  text --> chars["chars.cpp<br>數單字、字對、三字組"]
+  train --> bigram[("bigram.bin<br>詞 bigram、trigram")]
+  chars --> charbin[("chars.bin<br>字 trigram")]
+
+  text --> lm["prepare.py、train.py、export.py<br>字元級 GPT-2（需 CUDA）"]
+  lm --> sentence[("sentence.bin<br>選用")]
+
+  lexicon & bigram & charbin & sentence --> release["gh release models-YYYY-MM-DD<br>fetch-models.sh 下載並核對 SHA-256"]
+  release --> app["建置進輸入法<br>或在設定下載"]
+```
+
 ### 整句模型（選用）
 
 詞模型僅依據前兩個詞評分，出現次數極少的詞對可能取得過高的分數，例如將「網頁太單調了」選為「網液態單調了」。`sentence.bin` 為約 1,400 萬參數的字元級 GPT-2；組字器取分數最高的 10 個整句候選，依此模型評估整句的語言機率後重新排序。此檔案與上述兩個模型置於同一資料夾，建置時若存在即一併納入，發行版與 `fetch-models.sh` 亦包含此檔案；未提供時，選字結果與先前相同。
