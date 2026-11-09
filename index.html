@@ -454,7 +454,7 @@
     </section>
 
     <section class="block" id="download">
-      <h2>Project Key <span class="mono">0.5.0</span></h2>
+      <h2>Project Key <span class="mono" data-version>0.6.2</span></h2>
       <div class="download">
         <div>
           <div class="seg" role="tablist" aria-label="平台" id="seg">
@@ -492,6 +492,13 @@
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
   <script>
+  // 版本：頁面內建的，或本機記住的較新版本；載入後再向 GitHub 查最新版，查不到時沿用這個。
+  const BUILT_IN_VERSION = '0.6.2', VERSION_KEY = 'project-key-latest-version';
+  const isVersion = v => /^\d+\.\d+\.\d+$/.test(v);
+  let cachedVersion = null;
+  try { cachedVersion = localStorage.getItem(VERSION_KEY); } catch (_) { /* 瀏覽器不讓用儲存空間時，只用內建版本 */ }
+  let version = isVersion(cachedVersion) && cachedVersion.localeCompare(BUILT_IN_VERSION, undefined, { numeric: true }) > 0 ? cachedVersion : BUILT_IN_VERSION;
+
   // 鍵盤配列：[字面, 注音, class, 寬度, 代號]。ds 只在桌面出現，mo 只在手機出現。
   const ROWS = [
     [['`',,'ds'],['1','ㄅ'],['2','ㄉ'],['3','ˇ'],['4','ˋ'],['5','ㄓ'],['6','ˊ'],['7','˙'],['8','ㄚ'],['9','ㄞ'],['0','ㄢ'],['-','ㄦ','ds'],['=',,'ds'],['Backspace',,'fn ds',2]],
@@ -501,7 +508,7 @@
     [['Ctrl',,'fn ds',1.25],['Win',,'fn ds',1.25],['Alt',,'fn ds',1.25],['一聲・開啟候選',,'fn space',6.25,'space'],['Alt',,'fn ds',1.25],['←',,'fn ds',1.25],['↓ 開啟候選',,'fn ds',1.25,'down'],['→',,'fn ds',1.25],['Enter',,'enter mo',3,'enterM']],
   ];
   document.getElementById('heroBoard').innerHTML = ROWS.map(r => '<div class="kr">' + r.map(([label, zy, cls = '', w = 1, key = zy]) => {
-    if (cls.includes('enter')) return `<a class="cap ${cls}" style="--w:${w}" href="#download" aria-label="下載 0.5.0"><div><b>下載</b> <span class="mono">0.5.0</span></div><em aria-hidden="true">⏎</em></a>`;
+    if (cls.includes('enter')) return `<a class="cap ${cls}" style="--w:${w}" href="#download" data-version-label aria-label="下載 ${version}"><div><b>下載</b> <span class="mono" data-version>${version}</span></div><em aria-hidden="true">⏎</em></a>`;
     return `<div class="cap ${cls}" style="--w:${w}" ${key ? `data-k="${key}"` : ''} aria-hidden="true"><span class="l">${label}</span>${zy ? `<span class="z">${zy}</span>` : ''}</div>`;
   }).join('') + '</div>').join('');
   const heroCaps = new Map([...document.querySelectorAll('#heroBoard [data-k]')].map(c => [c.dataset.k, c]));
@@ -522,12 +529,11 @@
   }
 
   // 平台：安裝指令與需求（取自 README）。
-  const REL = 'https://github.com/KoukeNeko/Project-Key/releases/download/v0.5.0';
   const PLATFORMS = {
     mac: { req: 'Apple 晶片，macOS 13 以上；以 Homebrew 安裝', cmds: ['brew install --cask koukeneko/tap/project-key'],
            note: '安裝後的歡迎視窗裡按「加入」，就能開始使用。' },
     win: { req: 'Windows x64；以 Scoop 安裝', cmds: ['scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket', 'scoop install koukeneko/project-key'],
-           alt: `沒有 Scoop：<a class="btn" href="${REL}/ProjectKey-0.5.0-windows-x64.zip">下載 ProjectKey-0.5.0-windows-x64.zip</a>解壓縮後在該資料夾的 PowerShell 執行：`,
+           alt: () => `沒有 Scoop：<a class="btn" href="https://github.com/KoukeNeko/Project-Key/releases/download/v${version}/ProjectKey-${version}-windows-x64.zip">下載 ProjectKey-${version}-windows-x64.zip</a>解壓縮後在該資料夾的 PowerShell 執行：`,
            altCmd: 'powershell -ExecutionPolicy Bypass -File .\\install.ps1 -Source .',
            note: '安裝時會請求一次系統管理員權限。裝好後的歡迎視窗裡按「加入」，切換過去就能開始打字；開始功能表裡有 Project Key 的設定。' },
     linux: { req: 'Fcitx5；以 Homebrew 從原始碼建置', cmds: ['brew install koukeneko/tap/fcitx5-projectkey', 'projectkey-link'],
@@ -549,7 +555,7 @@
     const p = PLATFORMS[key];
     const cmd = c => `<div class="cmd"><code>${c}</code><button class="btn" type="button" data-copy="${c}">複製</button></div>`;
     const cmds = p.cmds.map(cmd).join('');
-    panel.innerHTML = `<p class="req">${p.req}</p>${cmds ? `<div class="cmds">${cmds}</div>` : ''}${p.alt ? `<p class="alt">${p.alt}</p><div class="cmds">${cmd(p.altCmd)}</div>` : ''}<p class="note">${p.note}</p>`;
+    panel.innerHTML = `<p class="req">${p.req}</p>${cmds ? `<div class="cmds">${cmds}</div>` : ''}${p.alt ? `<p class="alt">${p.alt()}</p><div class="cmds">${cmd(p.altCmd)}</div>` : ''}<p class="note">${p.note}</p>`;
   }
   function selectPlatform(b) {
     seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', x === b));
@@ -571,6 +577,22 @@
   const ua = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent;
   const os = /Win/i.test(ua) ? 'win' : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? 'linux' : 'mac';
   selectPlatform(seg.querySelector(`[data-p="${os}"]`));
+  function showVersion(latest) {
+    version = latest;
+    document.querySelectorAll('[data-version]').forEach(e => (e.textContent = version));
+    document.querySelectorAll('[data-version-label]').forEach(e => e.setAttribute('aria-label', `下載 ${version}`));
+    renderPlatform(seg.querySelector('[aria-selected="true"]').dataset.p);
+  }
+  showVersion(version);  // 靜態 HTML 寫的是內建版本，本機記住的可能較新
+  fetch('https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest')
+    .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then(release => {
+      const latest = String(release.tag_name).replace(/^v/, '');
+      if (!isVersion(latest)) return;
+      try { localStorage.setItem(VERSION_KEY, latest); } catch (_) { /* 只是下次少一份備援 */ }
+      if (latest !== version) showVersion(latest);
+    })
+    .catch(() => { /* 查不到時維持內建或本機記住的版本 */ });
   document.fonts.ready.then(() => placeSlide(seg.querySelector('[aria-selected="true"]'), false));
   addEventListener('resize', () => placeSlide(seg.querySelector('[aria-selected="true"]'), false));
 
