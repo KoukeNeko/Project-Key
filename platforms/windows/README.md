@@ -25,8 +25,6 @@ scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket
 scoop install koukeneko/project-key
 ```
 
-也可下載 [GitHub 發行版](https://github.com/KoukeNeko/Project-Key/releases)的 `ProjectKey-<版本>-windows-x64.msi` 安裝，移除時使用 Windows 的「已安裝的應用程式」。安裝與升級均不需要重新開機；正在使用舊版的 App 要重新開啟才會換成新版。以 `platforms\windows\build-msi.ps1 -Version <版本> -Output <檔案>` 可自行建置，需先執行 `build.ps1`。
-
 自行建置需要 Visual Studio 2026（「使用 C++ 的桌面開發」，含 Windows SDK）、.NET 10 SDK 與 [uv](https://docs.astral.sh/uv/)（產生詞庫用的 Python）。設定視窗使用系統的 Windows App Runtime 2（Windows 11 已內建）。
 
 ```powershell
@@ -112,4 +110,4 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 自行建置的上下文模型：`tools/bigram-trainer` 的訓練腳本是 shell script，在 Windows 上需要另外執行，或用 Git Bash 執行 `fetch-models.sh` 下載發行版那一組；有 `bigram.bin`、`chars.bin` 時 `build.ps1` 會一併安裝；有補詞後的 `data.txt` 時，以它取代 McBopomofo 的詞庫。沒有它時選字與 McBopomofo 相同。發行版已附上。
 - 選過的字只存在伺服器記憶體，登出或重新安裝後清空（同 macOS）；從送出的文字學到的字串次數存在 `%LOCALAPPDATA%\Project Key\personal.txt`，設定的「清除」一併清空。Store App、沙盒中與低完整性的 App 不從這份紀錄排序，也不會加入紀錄，以免從候選順序讀出在其他 App 打過的字。
 - 組字一律當成句首：文字服務只在英文模式按 Tab 時把游標前的文字傳給伺服器，macOS 則接著游標前的漢字選字。
-- 程式碼簽章；安裝檔未簽章，只支援 x64。
+- 程式碼簽章與安裝程式；目前用 PowerShell 腳本安裝，只支援 x64。
