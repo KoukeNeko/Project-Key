@@ -87,7 +87,6 @@ int Settings::DefaultValue(Setting setting) {
       return 1;  // Acrylic; macOS registers its own default
     case Setting::kCapsLockToggle:
     case Setting::kAbbreviated:
-    case Setting::kKeypadPicks:
     case Setting::kCandidatePosition:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:

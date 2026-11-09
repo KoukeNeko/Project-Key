@@ -596,7 +596,7 @@ int main(int argc, char** argv) {
   Type(controller, "2");
   assert(client.marked == picked + "ㄉ");
   EscapeAll(controller, client);
-  settings.remove(Setting::kKeypadPicks);
+  settings.set(Setting::kKeypadPicks, 0);
   Type(controller, "su3");
   assert(controller.handleKey(keypad) && HasSuffix(client.marked, "ㄉ"));  // 妳ㄉ: the choice above is remembered
   EscapeAll(controller, client);

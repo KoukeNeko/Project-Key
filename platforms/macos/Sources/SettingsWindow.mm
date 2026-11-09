@@ -76,7 +76,7 @@ void PKEditUserPhrases(void) {
     PKChoosingProofKey : @1,
     PKCandidatePositionKey : @1,  // before the cursor, as the system Zhuyin input does
     PKNextDoubtfulKey : @YES,
-    PKKeypadPicksKey : @NO,
+    PKKeypadPicksKey : @YES,
   }];
 }
 

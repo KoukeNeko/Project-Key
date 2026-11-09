@@ -5,7 +5,7 @@ import SwiftUI
 
 struct SettingsForm: View {
   @AppStorage(PKAbbreviatedKey) private var abbreviated = false
-  @AppStorage(PKKeypadPicksKey) private var keypadPicks = false
+  @AppStorage(PKKeypadPicksKey) private var keypadPicks = true
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
   @AppStorage(PKCapsLockToggleKey) private var capsLockToggle = false
