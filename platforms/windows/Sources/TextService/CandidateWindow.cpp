@@ -114,18 +114,6 @@ D2D1_COLOR_F Fill(int appearance) {
   return appearance == 0 ? Color(kBackground) : appearance == 1 ? Color(kBackground, kAcrylicTint) : D2D1::ColorF(0, 0, 0, 0);
 }
 
-// The material's tint fades with what is drawn over it; the dark window is opaque throughout.
-D2D1_COLOR_F FadedFill(int appearance, float alpha) {
-  D2D1_COLOR_F fill = Fill(appearance);
-  if (appearance != 0) fill.a *= alpha;
-  return fill;
-}
-
-void PushOpacity(ID2D1RenderTarget* target, ID2D1Layer* layer, float alpha) {
-  target->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::IdentityMatrix(), alpha),
-                    layer);
-}
-
 void Cloak(HWND hwnd, BOOL on) {
   DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &on, sizeof(on));
 }
@@ -217,9 +205,11 @@ bool CandidateWindow::ensureWindow() {
   if (!fonts_.ok()) return false;
   if (!factory_ && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory_.GetAddressOf()))) return false;
   RegisterClassOnce(kCandidateClass, WindowProc, CS_DROPSHADOW);
-  hwnd_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, kCandidateClass, L"", WS_POPUP, 0, 0, 1, 1, nullptr,
-                          nullptr, gInstance, this);
+  // Layered for its opacity (applyFade), which takes the material along.
+  hwnd_ = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST, kCandidateClass, L"", WS_POPUP, 0, 0, 1, 1,
+                          nullptr, nullptr, gInstance, this);
   if (!hwnd_) return false;
+  SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
   applyAppearance(0);
   return true;
 }
@@ -417,6 +407,7 @@ void CandidateWindow::prepareToAppear() {
   hiding_ = false;
   fading_ = !ReducesMotion();
   fadeStart_ = GetTickCount64();
+  applyFade();
 }
 
 void CandidateWindow::appear() {
@@ -432,8 +423,13 @@ float CandidateWindow::fadeAlpha() const {
   return fadeFrom_ + (fadeTo_ - fadeFrom_) * t;
 }
 
+void CandidateWindow::applyFade() {
+  SetLayeredWindowAttributes(hwnd_, 0, static_cast<BYTE>(std::lround(fadeAlpha() * 255)), LWA_ALPHA);
+}
+
 void CandidateWindow::tick() {
   ULONGLONG now = GetTickCount64();
+  bool wasFading = fading_;
   if (fading_ && now - fadeStart_ >= static_cast<ULONGLONG>(kWindowFadeMs)) {
     fading_ = false;
     if (hiding_) {
@@ -441,6 +437,7 @@ void CandidateWindow::tick() {
       return;
     }
   }
+  if (wasFading) applyFade();
   if (sliding_ && now - slideStart_ >= static_cast<ULONGLONG>(kSlideMs)) sliding_ = false;
   if (resizing_) {
     float t = std::min(1.f, static_cast<float>(now - resizeStart_) / kResizeMs);
@@ -507,11 +504,7 @@ void CandidateWindow::paint() {
   float width = client.right / scale_, height = client.bottom / scale_;
 
   target_->BeginDraw();
-  // A material cannot fade with its window (layered windows take none), so what is over it fades in.
-  float alpha = fadeAlpha();
-  target_->Clear(FadedFill(appearance_, alpha));
-  ComPtr<ID2D1Layer> layer;
-  if (alpha < 1 && SUCCEEDED(target_->CreateLayer(&layer))) PushOpacity(target_.Get(), layer.Get(), alpha);
+  target_->Clear(Fill(appearance_));
   // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
   // the window resizes; when it comes, goes or changes sides, it fades between its places.
   bool moves = proofMoves();
@@ -525,7 +518,6 @@ void CandidateWindow::paint() {
     drawCandidates(target_.Get(), shownRowTop(), width);
     if (clip) target_->PopAxisAlignedClip();
   }
-  if (layer) target_->PopLayer();
   if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
 
@@ -535,7 +527,11 @@ void CandidateWindow::drawProofRow(ID2D1RenderTarget* target, const PanelContent
   float rowHeight = kProofPad + kProofLine + kProofPad;
   float top = below ? height - rowHeight : 0;
   ComPtr<ID2D1Layer> layer;
-  if (alpha < 1 && SUCCEEDED(target->CreateLayer(&layer))) PushOpacity(target, layer.Get(), alpha);
+  if (alpha < 1 && SUCCEEDED(target->CreateLayer(&layer))) {
+    target->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+                                            D2D1::IdentityMatrix(), alpha),
+                      layer.Get());
+  }
   if (!c.rows.empty()) {
     auto line = Brush(target, Color(kLine, material() ? 0.6f : 1));
     float y = below ? top - 1 : rowHeight;
@@ -738,8 +734,9 @@ POINT Beside(POINT position, SIZE size, const RECT& rect, int gap) {
 
 }  // namespace
 
-// A layered window for the dark badge, a plain one for a material; switching
-// between the two makes a new window.
+// Layered either way, but drawn differently: the dark badge is one bitmap
+// (UpdateLayeredWindow), a material's is painted with an opacity (SetLayeredWindowAttributes), and
+// a window can do only one, so switching between the two makes a new window.
 bool ModeBadge::ensureWindow(int appearance) {
   if (hwnd_ && (appearance != 0) != (appearance_ != 0)) {
     target_.Reset();
@@ -748,8 +745,7 @@ bool ModeBadge::ensureWindow(int appearance) {
   }
   if (!hwnd_) {
     RegisterClassOnce(kBadgeClass, WindowProc, 0);
-    DWORD layered = appearance == 0 ? WS_EX_LAYERED : 0;
-    hwnd_ = CreateWindowExW(layered | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TRANSPARENT, kBadgeClass, L"", WS_POPUP,
+    hwnd_ = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TRANSPARENT, kBadgeClass, L"", WS_POPUP,
                             0, 0, 1, 1, nullptr, nullptr, gInstance, this);
     if (!hwnd_) return false;
     appearance_ = -1;  // apply below
@@ -785,7 +781,7 @@ void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, 
       Cloak(hwnd_, true);
       cloaked_ = true;
     }
-    alpha_ = 0;
+    SetLayeredWindowAttributes(hwnd_, 0, 0, LWA_ALPHA);
     SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);
     SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     InvalidateRect(hwnd_, nullptr, FALSE);
@@ -813,9 +809,9 @@ void ModeBadge::paint() {
   target_->SetDpi(96 * scale_, 96 * scale_);
   target_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
   target_->BeginDraw();
-  target_->Clear(FadedFill(appearance_, alpha_));
+  target_->Clear(Fill(appearance_));
   Line line = Measure(fonts_, label_, fonts_.badge());
-  auto text = Brush(target_.Get(), Color(kText, alpha_));
+  auto text = Brush(target_.Get(), Color(kText));
   DrawLine(target_.Get(), line, (client.right / scale_ - line.width) / 2, 0, kBadgeSide, text.Get());
   if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
@@ -867,14 +863,11 @@ void ModeBadge::tick() {
     hide();
     return;
   }
+  BYTE opacity = static_cast<BYTE>(std::lround(alpha * 255));
   if (appearance_ == 0) {
-    present(static_cast<BYTE>(std::lround(alpha * 255)));
-  } else if (alpha != alpha_) {
-    // shortcut: a material cannot fade with its window (layered windows take none), so only its
-    // tint and text do; fade it through DirectComposition if the bare material shows.
-    alpha_ = alpha;
-    InvalidateRect(hwnd_, nullptr, FALSE);
-    UpdateWindow(hwnd_);
+    present(opacity);
+  } else {
+    SetLayeredWindowAttributes(hwnd_, 0, opacity, LWA_ALPHA);
   }
 }
 

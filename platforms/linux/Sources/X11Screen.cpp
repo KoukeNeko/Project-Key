@@ -69,7 +69,7 @@ class X11Screen final : public Screen {
   xcb_visualtype_t* visual_ = nullptr;
   uint8_t depth_ = 0;
   xcb_colormap_t colormap_ = 0;
-  xcb_atom_t compositorAtom_ = 0, blurAtom_ = 0;
+  xcb_atom_t compositorAtom_ = 0, blurAtom_ = 0, opacityAtom_ = 0;
   bool argb_ = false;
   float scale_ = 1;
   std::unique_ptr<fcitx::EventSourceIO> io_;
@@ -85,6 +85,13 @@ class X11Window final : public Window {
   void map(fcitx::InputContext&) override;
   void unmap() override;
   void setBlur(bool on) override;
+  // KWin dims a window's blur with its opacity; a painted alpha would leave the blur at full strength.
+  bool setOpacity(float alpha) override {
+    if (!blurred) return false;
+    uint32_t value = static_cast<uint32_t>(std::lround(alpha * 0xffffffffu));
+    xcb_change_property(screen_.connection_, XCB_PROP_MODE_REPLACE, id_, screen_.opacityAtom_, XCB_ATOM_CARDINAL, 32, 1, &value);
+    return true;
+  }
   cairo_t* beginPaint() override { return cairo_create(surface_); }
   void endPaint(cairo_t* cr) override {
     cairo_destroy(cr);
@@ -125,6 +132,7 @@ X11Screen::X11Screen(fcitx::EventLoop& loop, xcb_connection_t* connection, int s
   }
   compositorAtom_ = Atom(connection_, "_NET_WM_CM_S" + std::to_string(screenNumber));
   blurAtom_ = Atom(connection_, "_KDE_NET_WM_BLUR_BEHIND_REGION");
+  opacityAtom_ = Atom(connection_, "_NET_WM_WINDOW_OPACITY");
   scale_ = DpiScale(connection_, screen_);
 
   io_ = loop.addIOEvent(xcb_get_file_descriptor(connection_), fcitx::IOEventFlag::In, [this](fcitx::EventSourceIO*, int, fcitx::IOEventFlags) {

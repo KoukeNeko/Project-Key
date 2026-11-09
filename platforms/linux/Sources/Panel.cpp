@@ -362,6 +362,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
     progress_ = 1;
     panel_->place(target);
   }
+  panel_->setOpacity(fadeAlpha(panelFade_));  // before the window shows
   panel_->map(ic);
   paintPanel();
   if (badge_ && badge_->mapped) {  // the badge and the panel both sit under the caret
@@ -479,6 +480,7 @@ void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
   // Placed without room for a hint under it, the window may have to go above the text now.
   if (!hadHint && !proofBelow_) show(ic, PanelContent(*content_), anchor_);
   placeHint();
+  hint_->setOpacity(fadeAlpha(hintFade_));
   hint_->map(ic);
   paintHint();
   if (hintFade_.start) startTimer(panelTimer_, &Panel::tickPanel);
@@ -535,7 +537,8 @@ void Panel::paintHint() {
   DrawBackground(cr, width, height, rounded_, blurred);
   drawProof(cr, *shown, 0, width);
   cairo_pop_group_to_source(cr);
-  PaintGroup(cr, fadeAlpha(hintFade_));
+  float alpha = fadeAlpha(hintFade_);
+  PaintGroup(cr, hint_->setOpacity(alpha) ? 1 : alpha);
   hint_->endPaint(cr);
 }
 
@@ -571,7 +574,8 @@ void Panel::paintPanel() {
   }
 
   cairo_pop_group_to_source(cr);
-  PaintGroup(cr, fadeAlpha(panelFade_));
+  float alpha = fadeAlpha(panelFade_);
+  PaintGroup(cr, panel_->setOpacity(alpha) ? 1 : alpha);
   panel_->endPaint(cr);
 }
 
@@ -845,7 +849,7 @@ void Panel::paintBadge() {
   SetColor(cr, kText);
   line.draw(cr, (width - line.width) / 2, 0, kBadgeSide);
   cairo_pop_group_to_source(cr);
-  PaintGroup(cr, badgeAlpha_);
+  PaintGroup(cr, badge_->setOpacity(badgeAlpha_) ? 1 : badgeAlpha_);
   badge_->endPaint(cr);
 }
 

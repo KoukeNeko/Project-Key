@@ -150,6 +150,17 @@ class GnomeWindow final : public Window {
     message.send();
   }
   void setBlur(bool on) override { blurred = on; }  // the next frame carries it
+  // The extension fades its actor, blur and all; a painted alpha would leave the blur at full strength.
+  bool setOpacity(float alpha) override {
+    if (!blurred) return false;
+    int32_t opacity = static_cast<int32_t>(std::lround(alpha * 255));
+    if (opacity == opacity_) return true;
+    opacity_ = opacity;
+    auto message = screen_.call("Opacity");
+    message << id_ << opacity;
+    message.send();
+    return true;
+  }
 
   cairo_t* beginPaint() override {
     if (!mapped) return nullptr;
@@ -193,6 +204,7 @@ class GnomeWindow final : public Window {
   std::string id_;
   std::string files_[2];
   int next_ = 0;
+  int32_t opacity_ = 255;  // what the extension was last told
   cairo_surface_t* image_ = nullptr;
 };
 

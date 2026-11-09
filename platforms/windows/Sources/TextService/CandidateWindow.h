@@ -42,6 +42,7 @@ class CandidateWindow {
   void appear();                         // after it
   void finishHide();                     // once it has faded out
   float fadeAlpha() const;
+  void applyFade();                      // sets the window's opacity to fadeAlpha
   void paint();
   void tick();
   D2D1_SIZE_F fittingSize() const;
@@ -109,11 +110,9 @@ class ModeBadge {
   void paint();
   void tick();
 
-  // Dark: a layered window that fades. With a material: a plain window, as
-  // layered windows take no system backdrop.
+  // A layered window that fades, material and all.
   HWND hwnd_ = nullptr;
   int appearance_ = 0;
-  float alpha_ = 1;        // of what is over a material
   bool cloaked_ = false;   // with a material: mapped but out of sight, between showings
   bool settling_ = false;  // its material was just set, and is not up yet
   Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;

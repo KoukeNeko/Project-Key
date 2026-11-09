@@ -37,6 +37,9 @@ class Window {
   virtual void unmap() = 0;
   // Blurs what is behind the window's rounded rectangle.
   virtual void setBlur(bool on) = 0;
+  // Fades the whole window, blur included, where the desktop can: then it paints at full
+  // strength. False where the alpha it paints with has to do it.
+  virtual bool setOpacity(float) { return false; }
   // A context covering the window from the frame's origin; nullptr when it
   // cannot be painted now, in which case it calls exposed once it can.
   virtual cairo_t* beginPaint() = 0;

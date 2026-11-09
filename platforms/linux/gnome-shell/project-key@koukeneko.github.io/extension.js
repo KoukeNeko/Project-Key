@@ -34,6 +34,10 @@ const PANEL = `<node>
     <method name="Reactive">
       <arg type="s" name="id" direction="in"/>
     </method>
+    <method name="Opacity">
+      <arg type="s" name="id" direction="in"/>
+      <arg type="i" name="opacity" direction="in"/>
+    </method>
     <method name="Refresh"/>
   </interface>
 </node>`;
@@ -42,6 +46,7 @@ export default class ProjectKeyExtension extends Extension {
     enable() {
         this._windows = new Map();
         this._reactive = new Set();
+        this._opacity = new Map();
         this._panel = Gio.DBusExportedObject.wrapJSObject(PANEL, this);
         this._panel.export(Gio.DBus.session, '/org/projectkey/Panel');
         this._name = Gio.bus_own_name_on_connection(Gio.DBus.session, NAME, Gio.BusNameOwnerFlags.REPLACE, null, null);
@@ -79,7 +84,7 @@ export default class ProjectKeyExtension extends Extension {
             return;
         let actor = this._windows.get(id);
         if (!actor) {
-            actor = new St.Widget({reactive: this._reactive.has(id), can_focus: false, track_hover: false});
+            actor = new St.Widget({reactive: this._reactive.has(id), can_focus: false, track_hover: false, opacity: this._opacity.get(id) ?? 255});
             actor.connect('button-release-event', (_, event) => this._clicked(id, actor, event));
             actor._blur = new St.Widget();
             actor._image = new St.Widget();
@@ -160,6 +165,14 @@ export default class ProjectKeyExtension extends Extension {
         const actor = this._windows.get(id);
         if (actor)
             actor.reactive = true;
+    }
+
+    // D-Bus: the whole window's opacity, 0 to 255, its blur included.
+    Opacity(id, opacity) {
+        this._opacity.set(id, opacity);
+        const actor = this._windows.get(id);
+        if (actor)
+            actor.opacity = opacity;
     }
 
     _clicked(id, actor, event) {
