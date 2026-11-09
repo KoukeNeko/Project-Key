@@ -1,6 +1,6 @@
 Project Key: dictionary and context models
 
-The program is under the MIT License. The three data files below are
+The program is under the MIT License. The data files below are
 distributed with it under their own licenses. They are separate files the
 program reads at run time; each can be replaced or removed, and the program
 falls back to McBopomofo's dictionary and ranking without them. They were made
@@ -9,7 +9,7 @@ rebuilds them from the sources listed here.
 
 bigram.bin, chars.bin
   Word and character n-gram statistics counted from:
-  - Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard), by
+  - Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, all shards), by
     Wikipedia contributors, under CC BY-SA 4.0
     (https://creativecommons.org/licenses/by-sa/4.0/). The text was converted
     to Taiwan Traditional Chinese with OpenCC and only counted; no text is
@@ -22,8 +22,8 @@ bigram.bin, chars.bin
 
 sentence.bin
   The weights of a character-level GPT-2 trained by tools/lm-trainer on
-  Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard), by
-  Wikipedia contributors, under CC BY-SA 4.0
+  Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, all shards) and 立法院公報,
+  by Wikipedia contributors, under CC BY-SA 4.0
   (https://creativecommons.org/licenses/by-sa/4.0/), converted to Taiwan
   Traditional Chinese with OpenCC; no text is included. This file is licensed
   under CC BY-SA 4.0.
@@ -39,23 +39,47 @@ data.txt
   - road and district names from 全國路名資料 (national road names, year 115
     edition), 資料提供者：內政部戶政司 (https://data.gov.tw/dataset/35321), under
     the Open Government Data License, version 1.0
-    (https://data.gov.tw/license).
+    (https://data.gov.tw/license);
+  - names of places, schools, departments, agencies, listed companies and
+    shopping districts, never a person's name field, from:
+    內政部地政司 2026 臺灣地區地名資料_聚落類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_具有地標意義公共設施類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_行政區域類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_自然地理實體類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_街道類（2026-11-09 取得）
+    內政部地政司 2026 地名譯寫資料（2026-11-09 取得）
+    教育部統計處 2026 大專校院名錄（2026-11-09 取得）
+    教育部統計處 2026 國民中學名錄（2026-11-09 取得）
+    教育部統計處 2026 國民小學名錄（2026-11-09 取得）
+    教育部統計處 2026 大專校院各校科系別概況（2026-11-09 取得）
+    國家發展委員會檔案管理局 2026 公文電子交換系統地址簿（2026-11-09 取得）
+    數位發展部 2026 政府機關唯一識別代碼(OID)（2026-11-09 取得）
+    金融監督管理委員會證券期貨局 2026 上市公司基本資料（2026-11-09 取得）
+    金融監督管理委員會證券期貨局 2026 上櫃公司基本資料（2026-11-09 取得）
+    金融監督管理委員會證券期貨局 2026 興櫃公司基本資料（2026-11-09 取得）
+    經濟部商業發展署 2026 全國商圈盤點清冊（2026-11-09 取得）
+    此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，使用者於遵守本條款各項規定之前提下，得利用之。
+    政府資料開放授權條款：https://data.gov.tw/license
   This file is licensed under LGPL-2.1-or-later; the license text is in
   LICENSE-LGPL-2.1.txt. Its source form is the file itself, and
   tools/bigram-trainer/train.sh rebuilds it.
+
+lexicon.bin
+  data.txt compiled for lookup by tools/bigram-trainer/lexicon.cpp, under the
+  same sources and license as data.txt.
 
 ---
 
 Project Key：詞庫與上下文模型
 
-程式本身以 MIT 授權發布。以下三個資料檔隨程式散布，各有自己的授權。它們是
+程式本身以 MIT 授權發布。以下資料檔隨程式散布，各有自己的授權。它們是
 程式執行時讀取的獨立檔案，可以替換或移除；沒有它們時，程式改用 McBopomofo
 的詞庫與排序。這些檔案由 https://github.com/KoukeNeko/Project-Key 的
 tools/bigram-trainer 產生，可依下列來源重新建置。
 
 bigram.bin、chars.bin
   從下列文字統計出的詞與字 n-gram：
-  - 中文維基百科（wikimedia/wikipedia 20231101.zh 第一個分片），維基百科貢獻
+  - 中文維基百科（wikimedia/wikipedia 20231101.zh 全部分片），維基百科貢獻
     者，CC BY-SA 4.0（https://creativecommons.org/licenses/by-sa/4.0/）。文字
     經 OpenCC 轉為臺灣正體後只做統計，不含原文。
   - 立法院公報，資料提供者：立法院，經 g0v 立法院 API
@@ -65,7 +89,7 @@ bigram.bin、chars.bin
 
 sentence.bin
   由 tools/lm-trainer 訓練的字元級 GPT-2 權重，訓練文字為中文維基百科
-  （wikimedia/wikipedia 20231101.zh 第一個分片），維基百科貢獻者，CC BY-SA 4.0
+  （wikimedia/wikipedia 20231101.zh 全部分片）與立法院公報，維基百科貢獻者，CC BY-SA 4.0
   （https://creativecommons.org/licenses/by-sa/4.0/），經 OpenCC 轉為臺灣正體，
   不含原文。這個檔案以 CC BY-SA 4.0 授權。
 
@@ -78,6 +102,28 @@ data.txt
   - 從上述訓練文字找出的詞；
   - 全國路名資料（115 年版）的路名與鄉鎮市區名，資料提供者：內政部戶政司
     （https://data.gov.tw/dataset/35321），政府資料開放授權條款第 1 版
-    （https://data.gov.tw/license）。
+    （https://data.gov.tw/license）；
+  - 地名、學校、科系、機關、上市櫃公司與商圈的名稱（不使用任何個人姓名欄位），來源：
+    內政部地政司 2026 臺灣地區地名資料_聚落類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_具有地標意義公共設施類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_行政區域類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_自然地理實體類（2026-11-09 取得）
+    內政部地政司 2026 臺灣地區地名資料_街道類（2026-11-09 取得）
+    內政部地政司 2026 地名譯寫資料（2026-11-09 取得）
+    教育部統計處 2026 大專校院名錄（2026-11-09 取得）
+    教育部統計處 2026 國民中學名錄（2026-11-09 取得）
+    教育部統計處 2026 國民小學名錄（2026-11-09 取得）
+    教育部統計處 2026 大專校院各校科系別概況（2026-11-09 取得）
+    國家發展委員會檔案管理局 2026 公文電子交換系統地址簿（2026-11-09 取得）
+    數位發展部 2026 政府機關唯一識別代碼(OID)（2026-11-09 取得）
+    金融監督管理委員會證券期貨局 2026 上市公司基本資料（2026-11-09 取得）
+    金融監督管理委員會證券期貨局 2026 上櫃公司基本資料（2026-11-09 取得）
+    金融監督管理委員會證券期貨局 2026 興櫃公司基本資料（2026-11-09 取得）
+    經濟部商業發展署 2026 全國商圈盤點清冊（2026-11-09 取得）
+    此開放資料依政府資料開放授權條款 (Open Government Data License) 進行公眾釋出，使用者於遵守本條款各項規定之前提下，得利用之。
+    政府資料開放授權條款：https://data.gov.tw/license
   這個檔案以 LGPL-2.1-or-later 授權，條文見 LICENSE-LGPL-2.1.txt。檔案本身
   即為原始形式，tools/bigram-trainer/train.sh 可重新建置。
+
+lexicon.bin
+  tools/bigram-trainer/lexicon.cpp 由 data.txt 編譯出的查詢檔，來源與授權同 data.txt。

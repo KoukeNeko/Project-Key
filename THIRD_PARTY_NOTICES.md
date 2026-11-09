@@ -49,6 +49,8 @@ Linux 版安裝時隨附 [LibreOffice dictionaries](https://github.com/LibreOffi
 | `bigram.bin`、`chars.bin` | 從[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）與[立法院公報](https://ppg.ly.gov.tw)（資料提供者：立法院，政府資料開放授權條款第 1 版）統計的詞與字 n-gram，不含原文 | CC BY-SA 4.0 |
 | `data.txt` | McBopomofo 詞庫（MIT），加上 [libchewing-data](https://github.com/chewing/libchewing-data) `tsi.csv`（commit `c44e81aef24b06f1509f19e1be54c99812d0c43f`，LGPL-2.1-or-later）的詞、[全國路名資料](https://data.gov.tw/dataset/35321)（115 年版，資料提供者：內政部戶政司，政府資料開放授權條款第 1 版）的路名與鄉鎮市區名，以及從上述訓練文字找出的詞 | LGPL-2.1-or-later |
 
+`data.txt` 另收錄政府開放資料的地名、學校、機關與公司名稱，依政府資料開放授權條款要求的顯名聲明列於隨附的 `MODELS-NOTICE.txt`。`lexicon.bin` 是 `data.txt` 編譯後的查詢檔，來源與授權相同。
+
 程式在執行時讀取這些檔案，可以直接替換或移除；沒有它們時改用 McBopomofo 的詞庫與排序。
 
 自 models-2026-11-09 起，模型另附 `sentence.bin`：`tools/lm-trainer` 訓練的整句模型（字元級 GPT-2 的權重），以[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）經 OpenCC 轉為臺灣正體後訓練，不含原文，以 CC BY-SA 4.0 授權。此檔案為選用；未提供時，引擎不重新排序整句候選。

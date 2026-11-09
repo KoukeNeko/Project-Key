@@ -3,7 +3,7 @@
 Usage:
   supplement.py chewing <data.txt> <tsi.csv>      libchewing words data.txt lacks
   supplement.py mined <data.txt> <candidates.tsv> words mine.cpp found
-  supplement.py places <data.txt> <roads.csv>     road and district names data.txt lacks
+  supplement.py places <data.txt> <roads.csv> <names dir>  place, school, agency and company names data.txt lacks
   supplement.py merge <data.txt> <lines>...        data.txt with the lines added
 
 Scores are put on data.txt's scale by fitting its scores of the words both
@@ -16,6 +16,8 @@ import math
 import re
 import statistics
 import sys
+import unicodedata
+from pathlib import Path
 
 HEADER = "# format org.openvanilla.mcbopomofo.sorted\n"
 MIN_COUNT = 50            # mined words seen fewer times are too uncertain
@@ -24,6 +26,13 @@ CONTAINED = 0.8           # a candidate seen mostly inside a longer one is a fra
 MAX_READING_VARIANTS = 4
 FLOOR = -6.8              # data.txt's score for a character's rare readings (葉 ㄕㄜˋ)
 ROAD_SUFFIX = re.compile(r"(大道|路|街|巷|道)$")
+MAX_NAME = 8              # ReadingGrid::kMaximumSpanLength: longer words can never be typed as one
+SCHOOL_OWNER = re.compile(r"^(?:[一-鿿]{2}[縣市])?(?:國立|市立|縣立|私立)")
+COMPANY_FORM = re.compile(r"(?:股份)?有限公司$")
+DEPARTMENT = re.compile(r"(?:系|所|學程|科)$")
+AGENCY = re.compile(r"(?:部|署|局|處|院|廳|委員會|公所|法院|檢察署|研究所|戶政事務所|地政事務所)$")
+NOT_AGENCY = re.compile(r"(?:診所|醫院|藥局|律師事務所)$")
+NOT_PLACE = re.compile(r"(?:公墓|納骨|活動中心|行刑場)")
 
 
 def is_han(text):
@@ -133,17 +142,65 @@ def place_readings(known, name):
     return readings
 
 
-def places(data_path, roads_path):
+def clean(name):
+    # Some government lists use compatibility ideographs that look the same but do not compare equal.
+    return unicodedata.normalize("NFC", name or "").strip("　 ")
+
+
+def rows_of(path):
+    with open(path, encoding="utf-8-sig", errors="replace", newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def official_names(folder):
+    """Names from the open government lists in tools/bigram-trainer/MODELS-NOTICE.txt; never a person's name field."""
+    names = set()
+    for kind in ("admin", "natural", "street", "landmark", "settlement", "romanized"):
+        for row in rows_of(folder / f"place-{kind}.csv"):
+            for name in (clean(row["PlaceName"]), clean(row.get("AnotherName"))):
+                if NOT_PLACE.search(name):
+                    continue
+                # Two-character hamlet names would mostly shadow ordinary words of the same reading.
+                if len(name) >= 3 or kind in ("admin", "natural"):
+                    names.add(name)
+                if kind == "admin" and len(name) >= 3 and name[-1] in "里村":
+                    names.add(name[:-1])
+    for kind in ("university", "junior", "elementary"):
+        for row in rows_of(folder / f"school-{kind}.csv"):
+            name = clean(row["學校名稱"])
+            names |= {name, SCHOOL_OWNER.sub("", name)}
+    for row in rows_of(folder / "departments.csv"):
+        name = re.split(r"[(（]", clean(row["科系名稱"]))[0]
+        if DEPARTMENT.search(name):
+            names.add(name)
+    for path, field in (("agency-addressbook.csv", "ORGNAME"), ("agency-oid.csv", "OrgName")):
+        for row in rows_of(folder / path):
+            name = clean(row[field])
+            if AGENCY.search(name) and not NOT_AGENCY.search(name):
+                names.add(name)
+    for kind in ("listed", "otc", "emerging"):
+        for row in rows_of(folder / f"company-{kind}.csv"):
+            names |= {COMPANY_FORM.sub("", clean(row["公司名稱"])), clean(row["公司簡稱"])}
+    for row in rows_of(folder / "shopping-areas.csv"):
+        name = clean(row["商圈名稱"])
+        names |= {name, name.removesuffix("形象商圈"), name.removesuffix("商圈")}
+    return names
+
+
+def places(data_path, roads_path, names_folder):
     """Road and district names from 全國路名資料, with and without 路/街/鄉/區, so 福興路口 and 仁和大智路口 both type."""
     known = read_data(data_path)
-    with open(roads_path, encoding="utf-8-sig") as f:
-        rows = list(csv.DictReader(f))
-    roads = {r["road"].strip("　 ") for r in rows}
-    roads = {r for r in roads if len(r) >= 3 and is_han(r) and ROAD_SUFFIX.search(r)}
-    districts = {r["site_id"][3:] for r in rows}  # site_id is the county followed by the district
+    rows = rows_of(roads_path)
+    roads = {clean(r["road"]) for r in rows}
+    roads = {r for r in roads if len(r) >= 2 and is_han(r)}  # 半山雅 and 前街 are roads too
+    districts = {clean(r["site_id"])[3:] for r in rows}  # site_id is the county followed by the district
     names = roads | {d for d in districts if is_han(d)}
-    names |= {ROAD_SUFFIX.sub("", r) for r in roads} | {d[:-1] for d in districts if len(d) >= 3}
-    names = {n for n in names if len(n) >= 2 and is_han(n)}
+    names |= {ROAD_SUFFIX.sub("", r) for r in roads if ROAD_SUFFIX.search(r)} | {d[:-1] for d in districts if len(d) >= 3}
+    names |= {f"{n}{unit}" for n in "一二三四五六七八九十" for unit in "段巷弄"}  # the road list has no sections
+    names |= official_names(Path(names_folder))
+    # People type 台 for most names written 臺 in the lists, and the training text does too.
+    names |= {n.replace("臺", "台") for n in names}
+    names = {n for n in names if 2 <= len(n) <= MAX_NAME and is_han(n)}
     quartiles = {b: statistics.quantiles([max(known[n].values()) for n in names if n in known and bucket(n) == b], n=4)[0]
                  for b in (2, 3, 4)}
     for name in sorted(names - known.keys()):
