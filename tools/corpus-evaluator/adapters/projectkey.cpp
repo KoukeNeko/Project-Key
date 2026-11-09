@@ -55,6 +55,12 @@ int main(int argc, char** argv) {
   ProjectKey::Composer composer(model, bigram, nullptr, argc >= 4 ? std::stod(argv[3]) : ProjectKey::Composer::kContextWeight, argc >= 5 ? std::stod(argv[4]) : ProjectKey::Composer::kTrigramWeight,
                                 chars, argc >= 6 ? std::stod(argv[5]) : ProjectKey::Composer::kCharWeight, personal);
 
+  auto sentences = std::make_shared<ProjectKey::SentenceModel>();
+  if (argc >= 3) {
+    std::string path = argv[2];
+    if (sentences->load(path.substr(0, path.find_last_of('/') + 1) + "sentence.bin")) composer.setSentenceModel(sentences);
+  }
+
   std::string line;
   while (std::getline(std::cin, line)) {
     composer.clear();
