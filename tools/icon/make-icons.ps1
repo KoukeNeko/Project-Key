@@ -4,7 +4,7 @@
 # fifth of its size. Run on Windows, which has the font; commit the results.
 #   platforms/linux/fcitx-projectkey.svg   64x64, the ㄅ as outlines so no font is needed
 #   platforms/linux/fcitx-projectkey-symbolic.svg   the same in one color, the ㄅ cut out
-#   platforms/macos/Resources/icon.tiff    a 22x16 pt template input source icon at 1x and 2x, as macOS's own
+#   platforms/macos/Resources/icon.tiff    a 22x16 pt input source icon at 1x and 2x, the size of macOS's own
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $root = Join-Path $PSScriptRoot '..\..'
@@ -70,20 +70,14 @@ function MacFrame([int]$scale) {
   $g.SmoothingMode = 'AntiAlias'
   $g.PixelOffsetMode = 'Half'  # or the frame's first row and column come out half covered
   $g.ScaleTransform($scale, $scale)
-  $g.FillPath([Drawing.SolidBrush]::new($accent), (RoundedRect 0 0 22 16 4.75))
+  # A rim in the color of macOS's own badges, so the icon looks as large as they do beside them.
+  $g.FillPath([Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(224, 224, 224)), (RoundedRect 0 0 22 16 4.75))
+  $g.FillPath([Drawing.SolidBrush]::new($accent), (RoundedRect 1 1 20 14 3.75))
   # The corners and the ㄅ's height match the badges macOS draws for its own input sources.
   $glyph = Glyph 0 0 22 16 0.76
   $g.FillPath([Drawing.Brushes]::White, $glyph)
   $g.DrawPath([Drawing.Pen]::new([Drawing.Color]::White, 0.35), $glyph)
   $g.Dispose()
-  # A template image: black where the shape is, the ㄅ cut out, so macOS colors it as its own badges.
-  for ($y = 0; $y -lt $bitmap.Height; $y++) {
-    for ($x = 0; $x -lt $bitmap.Width; $x++) {
-      $pixel = $bitmap.GetPixel($x, $y)
-      $glyphCoverage = [Math]::Min(1.0, ($pixel.R - $accent.R) / (255.0 - $accent.R))
-      $bitmap.SetPixel($x, $y, [Drawing.Color]::FromArgb([int]($pixel.A * (1 - $glyphCoverage)), 0, 0, 0))
-    }
-  }
   $bitmap
 }
 $tiff = [Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/tiff' }

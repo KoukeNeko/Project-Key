@@ -26,8 +26,6 @@
 		<dict>
 			<key>org.projectkey.inputmethod.ProjectKey.Bopomofo</key>
 			<dict>
-				<key>TISIconIsTemplate</key>
-				<true/>
 				<key>TISIconLabels</key>
 				<dict>
 					<key>Primary</key>
@@ -74,8 +72,6 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>TICapsLockLanguageSwitchCapable</key>
-	<true/>
-	<key>TISIconIsTemplate</key>
 	<true/>
 	<key>TISInputSourceID</key>
 	<string>org.projectkey.inputmethod.ProjectKey</string>
