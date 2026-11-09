@@ -23,6 +23,9 @@
       <tk:SettingsCard Header="選完跳到下一個可疑處">
         <ToggleSwitch x:Name="NextDoubtful" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
+      <tk:SettingsCard Header="省略聲調" Description="開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ">
+        <ToggleSwitch x:Name="OmitTones" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
       <tk:SettingsCard Header="簡拼" Description="開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音">
         <ToggleSwitch x:Name="Abbreviated" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>

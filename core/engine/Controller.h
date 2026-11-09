@@ -72,6 +72,7 @@ enum class Setting {
   kProofPreviewLastOn,  // the mode ⌃⇧P turns back on; absent until first toggled
   kChoosingProofLastOn,
   kAbbreviated,         // 簡拼: a lone symbol stands for a syllable, and a key that cannot extend the open one starts the next
+  kOmitTones,           // without 簡拼, a Zhuyin key in the place a whole syllable ends in starts the next, instead of replacing it
   kRememberChoices,     // the user override model
   kShiftToggle,         // a lone Shift switches 中/英
   kCapsLockToggle,      // Caps Lock switches 中/英 and letters stay lowercase
@@ -272,7 +273,7 @@ class Controller {
   bool typed_ = false;        // this key typed or deleted at the cursor
   std::optional<size_t> rowSegment_;  // the segment whose words the row shown while typing offers
   std::string shown_;  // the composition as last shown, pending reading included
-  bool abbreviated_ = false, rememberChoices_ = false;  // the settings composer_ was made with
+  bool abbreviated_ = false, omitTones_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   unsigned models_ = 0;                                // and Environment::models
   uint64_t userPhrasesVersion_ = 0;                    // and Environment::userPhrasesVersion
   // What English mode let through since the last other key, so Tab

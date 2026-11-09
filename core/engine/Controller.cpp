@@ -87,6 +87,7 @@ int Settings::DefaultValue(Setting setting) {
       return 1;  // Acrylic; macOS registers its own default
     case Setting::kCapsLockToggle:
     case Setting::kAbbreviated:
+    case Setting::kOmitTones:
     case Setting::kKeypadPicks:
     case Setting::kCandidatePosition:
     case Setting::kProofPreviewLastOn:
@@ -104,6 +105,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kProofPreviewLastOn: return "ProofPreviewLastOn";
     case Setting::kChoosingProofLastOn: return "ChoosingProofLastOn";
     case Setting::kAbbreviated: return "Abbreviated";
+    case Setting::kOmitTones: return "OmitTones";
     case Setting::kRememberChoices: return "RememberChoices";
     case Setting::kShiftToggle: return "ShiftToggle";
     case Setting::kCapsLockToggle: return "CapsLockToggle";
@@ -126,20 +128,22 @@ Controller::Controller(Environment& environment, Client& client, bool personal)
 void Controller::makeComposer() {
   if (!composer_) replacing_ = 0;
   bool abbreviated = env_.settings->flag(Setting::kAbbreviated);
+  bool omitTones = env_.settings->flag(Setting::kOmitTones);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
   ReloadUserPhrases(env_);
   // The composer keeps the words it looked up, so new user phrases need a new one.
-  if (composer_ && abbreviated == abbreviated_ && rememberChoices == rememberChoices_ && env_.models == models_ &&
+  if (composer_ && abbreviated == abbreviated_ && omitTones == omitTones_ && rememberChoices == rememberChoices_ && env_.models == models_ &&
       env_.userPhrasesVersion == userPhrasesVersion_) {
     return;
   }
   userPhrasesVersion_ = env_.userPhrasesVersion;
   abbreviated_ = abbreviated;
+  omitTones_ = omitTones;
   rememberChoices_ = rememberChoices;
   models_ = env_.models;
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight,
-                                         rememberChoices && personal_ ? env_.personal : nullptr, abbreviated);
+                                         rememberChoices && personal_ ? env_.personal : nullptr, abbreviated, omitTones);
   if (env_.sentences) composer_->setSentenceModel(env_.sentences);
 }
 

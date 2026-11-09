@@ -4,6 +4,7 @@ import CryptoKit
 import SwiftUI
 
 struct SettingsForm: View {
+  @AppStorage(PKOmitTonesKey) private var omitTones = false
   @AppStorage(PKAbbreviatedKey) private var abbreviated = false
   @AppStorage(PKKeypadPicksKey) private var keypadPicks = false
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
@@ -29,6 +30,10 @@ struct SettingsForm: View {
           Text("游標前（macOS）").tag(1)
         }
         Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
+        Toggle(isOn: $omitTones) {
+          Text("省略聲調")
+          Text("開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ")
+        }
         Toggle(isOn: $abbreviated) {
           Text("簡拼")
           Text("開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音")

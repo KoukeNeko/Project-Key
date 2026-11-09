@@ -60,14 +60,16 @@ class Composer {
   // With a user model, choices are remembered by the word before them and the
   // reading, and a remembered word wins the walk the next time.
   // Without abbreviated, a lone symbol is no syllable of its own and a Zhuyin key edits the open
-  // syllable (ㄅ then ㄆ is ㄆ) until it is a whole one; then a key that cannot extend it starts
-  // the next (ㄖㄣㄨㄟ for 認為), and the open syllable shows as its symbols until it ends.
+  // syllable (ㄅ then ㄆ is ㄆ) until it is a whole one; then a key before the symbol it ends in
+  // starts the next (ㄖㄣㄨㄟ for 認為), one in that symbol's place replaces it (ㄋㄧ then ㄨ is
+  // ㄋㄨ) or, with omitTones, starts the next too (ㄕㄉㄜ for 是的), and the open syllable shows
+  // as its symbols until it ends.
   explicit Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram = nullptr,
                     std::shared_ptr<McBopomofo::UserOverrideModel> userModel = nullptr,
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
                     std::shared_ptr<const CharModel> chars = nullptr,
                     double charWeight = kCharWeight,
-                    std::shared_ptr<const PersonalModel> personal = nullptr, bool abbreviated = true);
+                    std::shared_ptr<const PersonalModel> personal = nullptr, bool abbreviated = true, bool omitTones = false);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5;
   // How much the character model's log10 probability adds to a word's score (it only works with a Bigram).
@@ -172,6 +174,7 @@ class Composer {
   std::shared_ptr<const SentenceModel> sentences_;
   SentenceModel::Cache sentenceCache_;  // states for the sentences of the keys before
   bool abbreviated_;
+  bool omitTones_;
   Formosa::Gramambular2::ReadingGrid grid_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
   bool readingShown_ = false;  // the open syllable is in the grid, toneless, right before the cursor

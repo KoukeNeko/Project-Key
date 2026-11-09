@@ -84,6 +84,7 @@ FCITX_CONFIGURATION(
     fcitx::OptionWithAnnotation<Appearance, AppearanceI18NAnnotation> appearance{
         this, "Appearance", "候選視窗外觀", static_cast<Appearance>(Settings::DefaultValue(Setting::kAppearance))};
     fcitx::Option<bool> nextDoubtful{this, "NextDoubtful", "選完跳到下一個可疑處", DefaultFlag(Setting::kNextDoubtful)};
+    fcitx::Option<bool> omitTones{this, "OmitTones", "省略聲調", DefaultFlag(Setting::kOmitTones)};
     fcitx::Option<bool> abbreviated{this, "Abbreviated", "簡拼", DefaultFlag(Setting::kAbbreviated)};
     fcitx::Option<bool> keypadPicks{this, "KeypadPicks", "數字鍵盤選字", DefaultFlag(Setting::kKeypadPicks)};
     fcitx::Option<bool> rememberChoices{this, "RememberChoices", "記住選過的字", DefaultFlag(Setting::kRememberChoices)};
@@ -110,6 +111,7 @@ class ConfigSettings : public Settings {
       case Setting::kProofPreviewLastOn: return LastOn(*config_.proofPreviewLastOn);
       case Setting::kChoosingProofLastOn: return LastOn(*config_.choosingProofLastOn);
       case Setting::kAbbreviated: return *config_.abbreviated;
+      case Setting::kOmitTones: return *config_.omitTones;
       case Setting::kKeypadPicks: return *config_.keypadPicks;
       case Setting::kRememberChoices: return *config_.rememberChoices;
       case Setting::kShiftToggle: return *config_.shiftToggle;

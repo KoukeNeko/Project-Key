@@ -566,6 +566,22 @@ int main(int argc, char** argv) {
   Type(controller, "su3c");
   assert(client.marked == "你ㄏ" && client.panelVisible && client.panel.rows[0][0] == "你");
   EscapeAll(controller, client);
+  // A key in the place a whole syllable ends in replaces what is there, as in an ordinary Zhuyin
+  // input method; with 省略聲調, it starts the next syllable.
+  Type(controller, "suj");  // ㄋㄧ then ㄨ
+  assert(client.marked == "ㄋㄨ");
+  EscapeAll(controller, client);
+  Type(controller, "g2");  // ㄕ then ㄉ
+  assert(client.marked == "ㄉ");
+  EscapeAll(controller, client);
+  settings.set(Setting::kOmitTones, 1);
+  Type(controller, "suj");
+  assert(HasSuffix(client.marked, "ㄨ") && Utf16Length(client.marked) == 2 && client.marked != "ㄋㄨ");
+  EscapeAll(controller, client);
+  Type(controller, "g2");
+  assert(HasSuffix(client.marked, "ㄉ") && Utf16Length(client.marked) == 2);
+  EscapeAll(controller, client);
+  settings.remove(Setting::kOmitTones);
   settings.set(Setting::kAbbreviated, 1);
   Type(controller, "ja");
   assert(client.marked == "我ㄇ");

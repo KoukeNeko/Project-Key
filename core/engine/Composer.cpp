@@ -214,7 +214,7 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, std::shared_ptr<const CharModel> chars,
-                   double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated)
+                   double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated, bool omitTones)
     : lm_(lm),
       dictionary_(std::make_shared<TonelessModel>(lm, abbreviated)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
@@ -225,6 +225,7 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
       personal_(std::move(personal)),
       userModel_(std::move(userModel)),
       abbreviated_(abbreviated),
+      omitTones_(omitTones),
       grid_(dictionary_),
       reading_(BopomofoKeyboardLayout::StandardLayout()) {}
 
@@ -269,8 +270,8 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
 }
 
 // With a whole syllable open and no tone typed, whether `key` begins the next syllable:
-// it goes in the place of a symbol already there or before one (the order is
-// consonant, medial, vowel), or it makes a syllable the dictionary lacks.
+// it goes before the symbol the syllable ends in (the order is consonant, medial, vowel), or
+// in its place if tones are omitted, or it makes a syllable the dictionary lacks.
 bool Composer::startsSyllable(char key) const {
   // Without abbreviated, only once the open syllable is a whole one (ㄖㄣ, not ㄅ): until then
   // each key edits it (ㄅ then ㄆ is ㄆ).
@@ -279,6 +280,8 @@ bool Composer::startsSyllable(char key) const {
   if (typed.hasToneMarker()) return false;
   auto lastPlace = [](const BopomofoSyllable& s) { return s.hasVowel() ? 3 : s.hasMiddleVowel() ? 2 : s.hasConsonant() ? 1 : 0; };
   BopomofoSyllable open = reading_.syllable();
+  // In the place the syllable ends in, as an ordinary Zhuyin input method: it replaces what is there.
+  if (!abbreviated_ && !omitTones_ && lastPlace(typed) == lastPlace(open)) return false;
   if (lastPlace(typed) <= lastPlace(open)) return true;
   std::string joined = (open + typed).composedString();
   return !dictionary_->hasUnigrams(joined + kAnyTone);

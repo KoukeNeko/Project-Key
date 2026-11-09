@@ -5,6 +5,7 @@
 NSString *const PKProofPreviewKey = @"ProofPreview";
 NSString *const PKChoosingProofKey = @"ChoosingProof";
 NSString *const PKAbbreviatedKey = @"Abbreviated";
+NSString *const PKOmitTonesKey = @"OmitTones";
 NSString *const PKRememberChoicesKey = @"RememberChoices";
 NSString *const PKShiftToggleKey = @"ShiftToggle";
 NSString *const PKCapsLockToggleKey = @"CapsLockToggle";
@@ -66,6 +67,7 @@ void PKEditUserPhrases(void) {
 + (void)registerDefaults {
   [PKDefaults() registerDefaults:@{
     PKAbbreviatedKey : @NO,
+    PKOmitTonesKey : @NO,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,
     PKCapsLockToggleKey : @NO,
