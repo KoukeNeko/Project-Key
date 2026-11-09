@@ -37,6 +37,20 @@ float Ease(float t) {
   return 1 - std::pow(1 - t, 3.f);
 }
 
+// Replaces the window with the group popped to the source, at an opacity.
+void PaintGroup(cairo_t* cr, float alpha) {
+  if (alpha >= 1) {
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    cairo_paint(cr);
+    return;
+  }
+  // SOURCE with an alpha would keep part of the last frame, which is the last showing's.
+  cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+  cairo_paint(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
+  cairo_paint_with_alpha(cr, alpha);
+}
+
 void SetColor(cairo_t* cr, uint32_t rgb, float alpha = 1) {
   cairo_set_source_rgba(cr, ((rgb >> 16) & 0xff) / 255.0, ((rgb >> 8) & 0xff) / 255.0, (rgb & 0xff) / 255.0, alpha);
 }
@@ -307,6 +321,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   if (!wasVisible) {
     rounded_ = screen_->composited();
     panel_->setBlur(blurs());
+    panelFadeStart_ = fadeStart();
   }
 
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
@@ -356,13 +371,25 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
     placeHint();
     paintHint();
   }
-  if (sliding_ || resizing_) startTimer(panelTimer_, &Panel::tickPanel);
+  if (sliding_ || resizing_ || panelFadeStart_) startTimer(panelTimer_, &Panel::tickPanel);
   screen_->sync();
+}
+
+// Without a compositor a window has no alpha to fade with: 0, for no fade.
+uint64_t Panel::fadeStart() {
+  return screen_->composited() ? NowMs() : 0;
+}
+
+float Panel::fadeAlpha(uint64_t start) const {
+  return start ? std::min(1.f, static_cast<float>(NowMs() - start) / kWindowFadeMs) : 1;
 }
 
 bool Panel::tickPanel() {
   if (!panel_->mapped) return false;
   uint64_t now = NowMs();
+  if (panelFadeStart_ && now - panelFadeStart_ >= static_cast<uint64_t>(kWindowFadeMs)) panelFadeStart_ = 0;
+  bool hintFaded = hintFadeStart_ != 0;  // paints once more when it ends, at full strength
+  if (hintFaded && now - hintFadeStart_ >= static_cast<uint64_t>(kWindowFadeMs)) hintFadeStart_ = 0;
   if (sliding_ && now - slideStart_ >= static_cast<uint64_t>(kSlideMs)) sliding_ = false;
   if (resizing_) {
     float t = std::min(1.f, static_cast<float>(now - resizeStart_) / kResizeMs);
@@ -379,13 +406,15 @@ bool Panel::tickPanel() {
     }
   }
   paintPanel();
-  return sliding_ || resizing_;
+  if (hintFaded) paintHint();
+  return sliding_ || resizing_ || panelFadeStart_ || hintFadeStart_;
 }
 
 void Panel::hide(const fcitx::InputContext& ic) {
   if (!panel_ || &ic != owner_) return;
   if (panelTimer_) panelTimer_->setEnabled(false);
   sliding_ = resizing_ = false;
+  panelFadeStart_ = 0;
   oldContent_.reset();
   progress_ = 1;
   panel_->unmap();
@@ -399,7 +428,10 @@ void Panel::hide(const fcitx::InputContext& ic) {
 void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
   if (!ok() || !panel_ || !panel_->mapped || &ic != owner_) return;
   if (!hint_) hint_ = screen_->createWindow([this] { paintHint(); }, [this] { paintHint(); });
-  if (!hint_->mapped) hint_->setBlur(blurs());
+  if (!hint_->mapped) {
+    hint_->setBlur(blurs());
+    hintFadeStart_ = fadeStart();
+  }
   bool hadHint = hintContent_.has_value();
   hintContent_ = hint;
   // Placed without room for a hint under it, the window may have to go above the text now.
@@ -407,11 +439,13 @@ void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
   placeHint();
   hint_->map(ic);
   paintHint();
+  if (hintFadeStart_) startTimer(panelTimer_, &Panel::tickPanel);
   screen_->sync();
 }
 
 void Panel::hideHint() {
   if (!hint_) return;
+  hintFadeStart_ = 0;
   hint_->unmap();
   hintContent_.reset();
 }
@@ -447,8 +481,7 @@ void Panel::paintHint() {
   DrawBackground(cr, width, height, rounded_, blurred);
   drawProof(cr, *hintContent_, 0, width);
   cairo_pop_group_to_source(cr);
-  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-  cairo_paint(cr);
+  PaintGroup(cr, fadeAlpha(hintFadeStart_));
   hint_->endPaint(cr);
 }
 
@@ -484,8 +517,7 @@ void Panel::paintPanel() {
   }
 
   cairo_pop_group_to_source(cr);
-  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-  cairo_paint(cr);
+  PaintGroup(cr, fadeAlpha(panelFadeStart_));
   panel_->endPaint(cr);
 }
 
@@ -759,8 +791,7 @@ void Panel::paintBadge() {
   SetColor(cr, kText);
   line.draw(cr, (width - line.width) / 2, 0, kBadgeSide);
   cairo_pop_group_to_source(cr);
-  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-  cairo_paint_with_alpha(cr, badgeAlpha_);
+  PaintGroup(cr, badgeAlpha_);
   badge_->endPaint(cr);
 }
 

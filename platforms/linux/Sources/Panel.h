@@ -63,6 +63,8 @@ class Panel {
   bool blurs();
   void setFontOptions(bool blurred);
   void startTimer(std::unique_ptr<fcitx::EventSourceTime>& timer, bool (Panel::*tick)());
+  uint64_t fadeStart();                 // when a window appearing now starts to fade in; 0 for not at all
+  float fadeAlpha(uint64_t start) const;
 
   // Candidate window.
   void paintPanel();
@@ -122,10 +124,12 @@ class Panel {
   std::optional<PanelContent> oldContent_;
   bool oldProofBelow_ = false;
   float oldRowTop_ = 0, progress_ = 1;
+  uint64_t panelFadeStart_ = 0;  // 0 once it has faded in
   std::unique_ptr<fcitx::EventSourceTime> panelTimer_;
 
   std::unique_ptr<Window> hint_;
   std::optional<PanelContent> hintContent_;
+  uint64_t hintFadeStart_ = 0;
 
   std::unique_ptr<Window> badge_;
   std::string badgeLabel_;
