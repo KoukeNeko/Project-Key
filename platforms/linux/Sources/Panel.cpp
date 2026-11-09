@@ -305,7 +305,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
                                      if (owner_ && content_ && panel_->mapped) show(*owner_, PanelContent(*content_), anchor_);
                                    });
   }
-  bool wasVisible = panel_->mapped;
+  bool wasVisible = panel_->mapped && !panelFade_.hiding();
   // One window changing shape: it moves and resizes to the new content, across the text when it
   // changes sides, while the highlight slides, the rows move with it and the proof row fades
   // between its places.
@@ -321,7 +321,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   if (!wasVisible) {
     rounded_ = screen_->composited();
     panel_->setBlur(blurs());
-    panelFadeStart_ = fadeStart();
+    startFade(panelFade_, 1);
   }
 
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
@@ -371,25 +371,45 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
     placeHint();
     paintHint();
   }
-  if (sliding_ || resizing_ || panelFadeStart_) startTimer(panelTimer_, &Panel::tickPanel);
+  if (sliding_ || resizing_ || panelFade_.start) startTimer(panelTimer_, &Panel::tickPanel);
   screen_->sync();
 }
 
-// Without a compositor a window has no alpha to fade with: 0, for no fade.
-uint64_t Panel::fadeStart() {
-  return screen_->composited() ? NowMs() : 0;
+// From where the window is now, so one fading out turns back. False without a
+// compositor, as a window then has no alpha to fade with.
+bool Panel::startFade(Fade& fade, float to) {
+  if (!screen_->composited()) return false;
+  float from = fade.start ? fadeAlpha(fade) : to > 0 ? 0 : 1;
+  fade = {NowMs(), from, to};
+  return true;
 }
 
-float Panel::fadeAlpha(uint64_t start) const {
-  return start ? std::min(1.f, static_cast<float>(NowMs() - start) / kWindowFadeMs) : 1;
+float Panel::fadeAlpha(const Fade& fade) const {
+  if (!fade.start) return 1;
+  float t = std::min(1.f, static_cast<float>(NowMs() - fade.start) / kWindowFadeMs);
+  return fade.from + (fade.to - fade.from) * t;
+}
+
+// Ends a fade whose time is up; whether that was a window fading out.
+bool Panel::endFade(Fade& fade, uint64_t now) {
+  if (!fade.start || now - fade.start < static_cast<uint64_t>(kWindowFadeMs)) return false;
+  bool out = fade.hiding();
+  fade = {};
+  return out;
 }
 
 bool Panel::tickPanel() {
-  if (!panel_->mapped) return false;
+  if (!panel_->mapped) {  // its connection closed
+    if (panelFade_.hiding()) finishHide();
+    return false;
+  }
   uint64_t now = NowMs();
-  if (panelFadeStart_ && now - panelFadeStart_ >= static_cast<uint64_t>(kWindowFadeMs)) panelFadeStart_ = 0;
-  bool hintFaded = hintFadeStart_ != 0;  // paints once more when it ends, at full strength
-  if (hintFaded && now - hintFadeStart_ >= static_cast<uint64_t>(kWindowFadeMs)) hintFadeStart_ = 0;
+  bool hintFaded = hintFade_.start != 0;  // paints once more when it ends, at full strength
+  if (endFade(hintFade_, now)) finishHideHint();
+  if (endFade(panelFade_, now)) {
+    finishHide();
+    return false;
+  }
   if (sliding_ && now - slideStart_ >= static_cast<uint64_t>(kSlideMs)) sliding_ = false;
   if (resizing_) {
     float t = std::min(1.f, static_cast<float>(now - resizeStart_) / kResizeMs);
@@ -407,20 +427,29 @@ bool Panel::tickPanel() {
   }
   paintPanel();
   if (hintFaded) paintHint();
-  return sliding_ || resizing_ || panelFadeStart_ || hintFadeStart_;
+  return sliding_ || resizing_ || panelFade_.start || hintFade_.start;
 }
 
 void Panel::hide(const fcitx::InputContext& ic) {
   if (!panel_ || &ic != owner_) return;
+  owner_ = nullptr;  // ic may be going away; the fade needs only what it drew
+  hideHint();
+  if (panel_->mapped && startFade(panelFade_, 0)) {
+    startTimer(panelTimer_, &Panel::tickPanel);
+    return;
+  }
+  finishHide();
+}
+
+void Panel::finishHide() {
   if (panelTimer_) panelTimer_->setEnabled(false);
   sliding_ = resizing_ = false;
-  panelFadeStart_ = 0;
+  panelFade_ = {};
   oldContent_.reset();
   progress_ = 1;
   panel_->unmap();
   content_.reset();
-  owner_ = nullptr;
-  hideHint();
+  if (hint_) finishHideHint();
 }
 
 // MARK: Tab hint
@@ -428,10 +457,11 @@ void Panel::hide(const fcitx::InputContext& ic) {
 void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
   if (!ok() || !panel_ || !panel_->mapped || &ic != owner_) return;
   if (!hint_) hint_ = screen_->createWindow([this] { paintHint(); }, [this] { paintHint(); });
-  if (!hint_->mapped) {
+  if (!hint_->mapped || hintFade_.hiding()) {
     hint_->setBlur(blurs());
-    hintFadeStart_ = fadeStart();
+    startFade(hintFade_, 1);
   }
+  fadingHint_.reset();
   bool hadHint = hintContent_.has_value();
   hintContent_ = hint;
   // Placed without room for a hint under it, the window may have to go above the text now.
@@ -439,15 +469,26 @@ void Panel::showHint(fcitx::InputContext& ic, const PanelContent& hint) {
   placeHint();
   hint_->map(ic);
   paintHint();
-  if (hintFadeStart_) startTimer(panelTimer_, &Panel::tickPanel);
+  if (hintFade_.start) startTimer(panelTimer_, &Panel::tickPanel);
   screen_->sync();
 }
 
 void Panel::hideHint() {
-  if (!hint_) return;
-  hintFadeStart_ = 0;
+  if (!hint_ || hintFade_.hiding()) return;
+  if (hintContent_) fadingHint_ = std::move(hintContent_);
+  hintContent_.reset();
+  if (hint_->mapped && fadingHint_ && startFade(hintFade_, 0)) {
+    startTimer(panelTimer_, &Panel::tickPanel);
+    return;
+  }
+  finishHideHint();
+}
+
+void Panel::finishHideHint() {
+  hintFade_ = {};
   hint_->unmap();
   hintContent_.reset();
+  fadingHint_.reset();
 }
 
 int Panel::hintHeight() const {
@@ -469,7 +510,8 @@ void Panel::placeHint() {
 }
 
 void Panel::paintHint() {
-  if (!hintContent_ || !hint_->mapped) return;
+  const std::optional<PanelContent>& shown = hintContent_ ? hintContent_ : fadingHint_;
+  if (!shown || !hint_->mapped) return;
   cairo_t* cr = hint_->beginPaint();
   if (!cr) return;
   bool blurred = hint_->blurred;
@@ -479,9 +521,9 @@ void Panel::paintHint() {
   cairo_scale(cr, scale_, scale_);
   float width = hint_->frame.width / scale_, height = hint_->frame.height / scale_;
   DrawBackground(cr, width, height, rounded_, blurred);
-  drawProof(cr, *hintContent_, 0, width);
+  drawProof(cr, *shown, 0, width);
   cairo_pop_group_to_source(cr);
-  PaintGroup(cr, fadeAlpha(hintFadeStart_));
+  PaintGroup(cr, fadeAlpha(hintFade_));
   hint_->endPaint(cr);
 }
 
@@ -517,7 +559,7 @@ void Panel::paintPanel() {
   }
 
   cairo_pop_group_to_source(cr);
-  PaintGroup(cr, fadeAlpha(panelFadeStart_));
+  PaintGroup(cr, fadeAlpha(panelFade_));
   panel_->endPaint(cr);
 }
 
