@@ -26,7 +26,7 @@ class CandidateWindow {
   // The Tab hint's own window: next to `panel`, on the side away from the text.
   void showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance);
   void hide();
-  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_); }
+  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !cloaked_; }
   RECT frame() const;
   const std::optional<PanelContent>& content() const { return content_; }
 
@@ -34,6 +34,9 @@ class CandidateWindow {
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
   bool ensureWindow();
   void applyAppearance(int appearance);  // Setting::kAppearance
+  void prepareToAppear();                // before the first paint of a showing
+  void appear();                         // after it
+  float fadeAlpha() const;
   void paint();
   void tick();
   D2D1_SIZE_F fittingSize() const;
@@ -72,6 +75,10 @@ class CandidateWindow {
   std::optional<PanelContent> oldContent_;
   bool oldProofBelow_ = false;
   float oldRowTop_ = 0, progress_ = 1;
+  bool cloaked_ = false;   // mapped but out of sight, between showings
+  bool settling_ = false;  // its material was just set, and is not up yet
+  bool fading_ = false;
+  ULONGLONG fadeStart_ = 0;
 };
 
 class ModeBadge {
@@ -84,7 +91,7 @@ class ModeBadge {
   // Moves a showing badge to a new anchor without restarting its fade.
   void follow(const RECT& anchor, const RECT* avoid);
   void hide();
-  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_); }
+  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !cloaked_; }
 
  private:
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -99,6 +106,9 @@ class ModeBadge {
   // layered windows take no system backdrop.
   HWND hwnd_ = nullptr;
   int appearance_ = 0;
+  float alpha_ = 1;        // of what is over a material
+  bool cloaked_ = false;   // with a material: mapped but out of sight, between showings
+  bool settling_ = false;  // its material was just set, and is not up yet
   Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;
   Layout::Fonts fonts_;
   Microsoft::WRL::ComPtr<ID2D1Factory> factory_;

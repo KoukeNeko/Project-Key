@@ -112,6 +112,28 @@ D2D1_COLOR_F Fill(int appearance) {
   return appearance == 0 ? Color(kBackground) : appearance == 1 ? Color(kBackground, kAcrylicTint) : D2D1::ColorF(0, 0, 0, 0);
 }
 
+// The material's tint fades with what is drawn over it; the dark window is opaque throughout.
+D2D1_COLOR_F FadedFill(int appearance, float alpha) {
+  D2D1_COLOR_F fill = Fill(appearance);
+  if (appearance != 0) fill.a *= alpha;
+  return fill;
+}
+
+void PushOpacity(ID2D1RenderTarget* target, ID2D1Layer* layer, float alpha) {
+  target->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1::IdentityMatrix(), alpha),
+                    layer);
+}
+
+void Cloak(HWND hwnd, BOOL on) {
+  DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, &on, sizeof(on));
+}
+
+// Two compositions: DWM brings up a new material over the first and shows it in the second.
+void WaitForMaterial() {
+  DwmFlush();
+  DwmFlush();
+}
+
 void RegisterClassOnce(const wchar_t* name, WNDPROC proc, UINT style) {
   WNDCLASSEXW existing{sizeof(existing)};
   if (GetClassInfoExW(gInstance, name, &existing)) return;
@@ -178,6 +200,7 @@ void CandidateWindow::applyAppearance(int appearance) {
   appearance_ = ClampAppearance(appearance);
   ApplyAppearance(hwnd_, appearance_);
   target_.Reset();
+  settling_ = true;
 }
 
 float CandidateWindow::proofHeight() const {
@@ -319,14 +342,12 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
     progress_ = 1;
     SetWindowPos(hwnd_, HWND_TOPMOST, frame.left, frame.top, width, height, SWP_NOACTIVATE);
   }
-  if (!wasVisible) {
-    ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
-    if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
-  }
+  if (!wasVisible) prepareToAppear();
   NotifyWinEvent(wasVisible ? EVENT_OBJECT_IME_CHANGE : EVENT_OBJECT_IME_SHOW, hwnd_, OBJID_CLIENT, CHILDID_SELF);
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
-  if (sliding_ || resizing_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+  if (!wasVisible) appear();
+  if (sliding_ || resizing_ || fading_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
 }
 
 void CandidateWindow::showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance) {
@@ -347,16 +368,40 @@ void CandidateWindow::showBeside(const PanelContent& content, const CandidateWin
   placed_.bottom = placed_.top + height;
   SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
   SetWindowPos(hwnd_, HWND_TOPMOST, placed_.left, placed_.top, width, height, SWP_NOACTIVATE);
-  if (!wasVisible) {
-    ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
-    if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
-  }
+  if (!wasVisible) prepareToAppear();
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
+  if (!wasVisible) appear();
+  if (fading_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+}
+
+// A window that just appeared shows no material for its first frames, so it comes up cloaked and
+// stays mapped between uses, its material ready; hide() cloaks it again.
+void CandidateWindow::prepareToAppear() {
+  if (!IsWindowVisible(hwnd_)) {
+    Cloak(hwnd_, true);
+    cloaked_ = true;
+  }
+  if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
+  if (!IsWindowVisible(hwnd_)) ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+  fading_ = !ReducesMotion();
+  fadeStart_ = GetTickCount64();
+}
+
+void CandidateWindow::appear() {
+  if (settling_) WaitForMaterial();
+  settling_ = false;
+  Cloak(hwnd_, false);
+  cloaked_ = false;
+}
+
+float CandidateWindow::fadeAlpha() const {
+  return fading_ ? std::min(1.f, static_cast<float>(GetTickCount64() - fadeStart_) / kWindowFadeMs) : 1;
 }
 
 void CandidateWindow::tick() {
   ULONGLONG now = GetTickCount64();
+  if (fading_ && now - fadeStart_ >= static_cast<ULONGLONG>(kWindowFadeMs)) fading_ = false;
   if (sliding_ && now - slideStart_ >= static_cast<ULONGLONG>(kSlideMs)) sliding_ = false;
   if (resizing_) {
     float t = std::min(1.f, static_cast<float>(now - resizeStart_) / kResizeMs);
@@ -373,16 +418,17 @@ void CandidateWindow::tick() {
   }
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
-  if (!sliding_ && !resizing_) KillTimer(hwnd_, kAnimationTimer);
+  if (!sliding_ && !resizing_ && !fading_) KillTimer(hwnd_, kAnimationTimer);
 }
 
 void CandidateWindow::hide() {
   if (!visible()) return;
   KillTimer(hwnd_, kAnimationTimer);
-  sliding_ = resizing_ = false;
+  sliding_ = resizing_ = fading_ = false;
   oldContent_.reset();
   progress_ = 1;
-  ShowWindow(hwnd_, SW_HIDE);
+  Cloak(hwnd_, true);
+  cloaked_ = true;
   NotifyWinEvent(EVENT_OBJECT_IME_HIDE, hwnd_, OBJID_CLIENT, CHILDID_SELF);
   content_.reset();
 }
@@ -410,7 +456,11 @@ void CandidateWindow::paint() {
   float width = client.right / scale_, height = client.bottom / scale_;
 
   target_->BeginDraw();
-  target_->Clear(Fill(appearance_));
+  // A material cannot fade with its window (layered windows take none), so what is over it fades in.
+  float alpha = fadeAlpha();
+  target_->Clear(FadedFill(appearance_, alpha));
+  ComPtr<ID2D1Layer> layer;
+  if (alpha < 1 && SUCCEEDED(target_->CreateLayer(&layer))) PushOpacity(target_.Get(), layer.Get(), alpha);
   // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
   // the window resizes; when it comes, goes or changes sides, it fades between its places.
   bool moves = proofMoves();
@@ -424,6 +474,7 @@ void CandidateWindow::paint() {
     drawCandidates(target_.Get(), shownRowTop(), width);
     if (clip) target_->PopAxisAlignedClip();
   }
+  if (layer) target_->PopLayer();
   if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
 
@@ -433,11 +484,7 @@ void CandidateWindow::drawProofRow(ID2D1RenderTarget* target, const PanelContent
   float rowHeight = kProofPad + kProofLine + kProofPad;
   float top = below ? height - rowHeight : 0;
   ComPtr<ID2D1Layer> layer;
-  if (alpha < 1 && SUCCEEDED(target->CreateLayer(&layer))) {
-    target->PushLayer(D2D1::LayerParameters(D2D1::InfiniteRect(), nullptr, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-                                            D2D1::IdentityMatrix(), alpha),
-                      layer.Get());
-  }
+  if (alpha < 1 && SUCCEEDED(target->CreateLayer(&layer))) PushOpacity(target, layer.Get(), alpha);
   if (!c.rows.empty()) {
     auto line = Brush(target, Color(kLine, material() ? 0.6f : 1));
     float y = below ? top - 1 : rowHeight;
@@ -655,10 +702,12 @@ bool ModeBadge::ensureWindow(int appearance) {
                             0, 0, 1, 1, nullptr, nullptr, gInstance, this);
     if (!hwnd_) return false;
     appearance_ = -1;  // apply below
+    cloaked_ = false;
   }
   if (appearance != appearance_ && appearance != 0) {
     ApplyAppearance(hwnd_, appearance);
     target_.Reset();
+    settling_ = true;
   }
   appearance_ = appearance;
   return true;
@@ -678,12 +727,22 @@ void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, 
   if (appearance_ == 0) {
     render();
     present(0);
-  }
-  SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-  if (appearance_ != 0) {
+    SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  } else {
+    // As the candidate window: cloaked until its material is ready, and only cloaked between uses.
+    if (!IsWindowVisible(hwnd_)) {
+      Cloak(hwnd_, true);
+      cloaked_ = true;
+    }
+    alpha_ = 0;
     SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);
+    SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     InvalidateRect(hwnd_, nullptr, FALSE);
     UpdateWindow(hwnd_);
+    if (settling_) WaitForMaterial();
+    settling_ = false;
+    Cloak(hwnd_, false);
+    cloaked_ = false;
   }
   SetTimer(hwnd_, kAnimationTimer, kFrameMs * 2, nullptr);
 }
@@ -703,9 +762,9 @@ void ModeBadge::paint() {
   target_->SetDpi(96 * scale_, 96 * scale_);
   target_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
   target_->BeginDraw();
-  target_->Clear(Fill(appearance_));
+  target_->Clear(FadedFill(appearance_, alpha_));
   Line line = Measure(fonts_, label_, fonts_.badge());
-  auto text = Brush(target_.Get(), Color(kText));
+  auto text = Brush(target_.Get(), Color(kText, alpha_));
   DrawLine(target_.Get(), line, (client.right / scale_ - line.width) / 2, 0, kBadgeSide, text.Get());
   if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
@@ -725,7 +784,7 @@ void ModeBadge::follow(const RECT& anchor, const RECT* avoid) {
 }
 
 void ModeBadge::avoid(const RECT& rect) {
-  if (!hwnd_ || !IsWindowVisible(hwnd_)) return;
+  if (!visible()) return;
   POINT moved = Beside(position_, size_, rect, static_cast<int>(std::lround(kGapToText * DpiOf(GetWindow(hwnd_, GW_OWNER)) / 96.f)));
   if (moved.x == position_.x && moved.y == position_.y) return;
   position_ = moved;
@@ -735,7 +794,12 @@ void ModeBadge::avoid(const RECT& rect) {
 void ModeBadge::hide() {
   if (!hwnd_) return;
   KillTimer(hwnd_, kAnimationTimer);
-  ShowWindow(hwnd_, SW_HIDE);
+  if (appearance_ != 0) {
+    Cloak(hwnd_, true);
+    cloaked_ = true;
+  } else {
+    ShowWindow(hwnd_, SW_HIDE);
+  }
 }
 
 void ModeBadge::tick() {
@@ -752,9 +816,15 @@ void ModeBadge::tick() {
     hide();
     return;
   }
-  // shortcut: a window with a material cannot be layered, so it appears and
-  // disappears without fading; fade it through DirectComposition if that matters.
-  if (appearance_ == 0) present(static_cast<BYTE>(std::lround(alpha * 255)));
+  if (appearance_ == 0) {
+    present(static_cast<BYTE>(std::lround(alpha * 255)));
+  } else if (alpha != alpha_) {
+    // shortcut: a material cannot fade with its window (layered windows take none), so only its
+    // tint and text do; fade it through DirectComposition if the bare material shows.
+    alpha_ = alpha;
+    InvalidateRect(hwnd_, nullptr, FALSE);
+    UpdateWindow(hwnd_);
+  }
 }
 
 void ModeBadge::render() {
