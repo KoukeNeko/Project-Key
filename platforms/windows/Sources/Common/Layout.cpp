@@ -57,7 +57,7 @@ float Fonts::cellWidth(const std::wstring& candidate) const {
 
 int Fonts::span(const std::wstring& candidate) const {
   int span = static_cast<int>(std::ceil((cellWidth(candidate) + kCellGap) / (columnWidth_ + kCellGap)));
-  return std::max(1, std::min(kGridColumns, span));
+  return std::max(1, std::min(kMaxGridColumns, span));
 }
 
 }  // namespace ProjectKey::Layout

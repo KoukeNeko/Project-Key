@@ -18,7 +18,8 @@ FOUNDATION_EXPORT NSString *const PKEnglishToZhuyinKey;  // that Shift turns Zhu
 FOUNDATION_EXPORT NSString *const PKZhuyinToEnglishKey;  // and English typed in 中 back into English
 FOUNDATION_EXPORT NSString *const PKCandidatePositionKey;  // candidates for the word: 0 after the cursor, 1 before it
 FOUNDATION_EXPORT NSString *const PKNextDoubtfulKey;       // picking a candidate moves on to the next doubtful word
-FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's 1-6 pick from the row shown while typing
+FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's digits pick from the row shown while typing
+FOUNDATION_EXPORT NSString *const PKGridColumnsKey;        // candidates per row: 0 to 3 for 6 to 9
 
 // The dictionary and context models the engine uses, and where the settings window puts a
 // newer release for it (core/engine/Models.h).

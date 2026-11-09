@@ -196,7 +196,7 @@ int main() {
     for (NSArray<NSString *> *row in PKCandidatePanel.shared.content.rows) {
       NSInteger columns = 0;
       for (NSString *candidate in row) columns += [PKCandidatePanel columnsSpannedBy:candidate];
-      assert(columns <= PKGridColumns);
+      assert(columns <= PKMaxGridColumns);
     }
     assert([controller handleEvent:Key(@"", kVK_DownArrow) client:client]);
     PKPanelContent *grid = PKCandidatePanel.shared.content;

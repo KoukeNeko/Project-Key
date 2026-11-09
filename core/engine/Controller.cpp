@@ -90,6 +90,7 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kOmitTones:
     case Setting::kKeypadPicks:
     case Setting::kCandidatePosition:
+    case Setting::kGridColumns:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
       return 0;
@@ -115,6 +116,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kCandidatePosition: return "CandidatePosition";
     case Setting::kNextDoubtful: return "NextDoubtful";
     case Setting::kKeypadPicks: return "KeypadPicks";
+    case Setting::kGridColumns: return "GridColumns";
   }
   return "";
 }
@@ -411,6 +413,7 @@ void Controller::showEnglishHint() {
   }
   typeKeys(keys);
   PanelContent content;
+  content.columns = columns();
   content.segments = {composer_->text()};
   content.doubtful = {false};
   content.caret = Utf16Length(content.segments[0]);
@@ -605,8 +608,8 @@ bool Controller::handleComposing(const KeyEvent& event) {
   if (key < 0x20 || key > 0x7e) return !empty;
   cursorMoved_ = false;
   typed_ = true;
-  // The keypad's 1-6 pick from the row shown while typing, as its digits say; typing goes on.
-  if (event.numpad && key >= '1' && key <= '6' && rowSegment_ && env_.settings->flag(Setting::kKeypadPicks)) {
+  // The keypad's digits pick from the row shown while typing, as they say; typing goes on.
+  if (event.numpad && key >= '1' && key < '1' + columns() && rowSegment_ && env_.settings->flag(Setting::kKeypadPicks)) {
     pickFromTypingRow(key - '1');
     return true;
   }
@@ -709,7 +712,7 @@ bool Controller::handleChoosing(const KeyEvent& event) {
       break;
     default: {
       char c = SingleCharacter(event);
-      if (c >= '1' && c < '1' + kGridColumns) {
+      if (c >= '1' && c < '1' + columns()) {
         int index = rowStarts_[row] + (c - '1');  // the selection's row carries the labels
         if (index < rowEnd(row)) pick(index);
         return true;
@@ -763,13 +766,17 @@ std::optional<size_t> Controller::segmentBeforeCursor() const {
   return std::nullopt;
 }
 
+int Controller::columns() const {
+  return kGridColumns + std::clamp(env_.settings->get(Setting::kGridColumns), 0, kMaxGridColumns - kGridColumns);
+}
+
 int Controller::span(const std::string& candidate) const {
-  return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, kGridColumns);
+  return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, columns());
 }
 
 size_t Controller::firstRowSize(const std::vector<std::string>& words) const {
   size_t count = 0;
-  for (int used = 0; count < words.size() && used + span(words[count]) <= kGridColumns; count++) used += span(words[count]);
+  for (int used = 0; count < words.size() && used + span(words[count]) <= columns(); count++) used += span(words[count]);
   return count;
 }
 
@@ -799,7 +806,7 @@ bool Controller::choosesFromEnd() const {
 std::vector<std::string> Controller::choicesFor(const Segment& segment, int* readingIndex) const {
   std::vector<std::string> candidates = composer_->candidates(segment, choosesFromEnd());
   // The syllables' Zhuyin itself, as the system keyboards offer it: last in the first row when
-  // all six columns hold one candidate each (iOS) and it fits that column, otherwise right after
+  // every column holds one candidate each (iOS) and it fits that column, otherwise right after
   // the first row, which keeps the candidates' digits and leaves no column empty.
   *readingIndex = -1;
   if (candidates.empty() || segment.reading.rfind("_", 0) == 0) return candidates;  // punctuation readings start with _
@@ -809,7 +816,7 @@ std::vector<std::string> Controller::choicesFor(const Segment& segment, int* rea
   }
   if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
     int firstRow = static_cast<int>(firstRowSize(candidates));
-    *readingIndex = firstRow < kGridColumns || span(zhuyin) > 1 ? firstRow : kGridColumns - 1;
+    *readingIndex = firstRow < columns() || span(zhuyin) > 1 ? firstRow : columns() - 1;
     candidates.insert(candidates.begin() + *readingIndex, zhuyin);
   }
   return candidates;
@@ -818,9 +825,9 @@ std::vector<std::string> Controller::choicesFor(const Segment& segment, int* rea
 void Controller::pack(const std::vector<std::string>& words, std::vector<int>* rowStarts, std::vector<int>* columns) const {
   rowStarts->clear();
   columns->clear();
-  int column = kGridColumns;
+  int limit = this->columns(), column = limit;  // the parameter columns shadows the method
   for (int i = 0; i < static_cast<int>(words.size()); i++) {
-    if (column + span(words[i]) > kGridColumns) {
+    if (column + span(words[i]) > limit) {
       rowStarts->push_back(i);
       column = 0;
     }
@@ -972,6 +979,7 @@ void Controller::refresh() {
   }
 
   PanelContent content;
+  content.columns = columns();
   std::u16string marked;
   bool hasActive = false;
   uint32_t activeStart = 0, activeLength = 0;
@@ -1051,6 +1059,7 @@ void Controller::refresh() {
   auto showRow = [&](PanelContent& panel) {
     if (guesses.empty()) return;
     panel.rows = {guesses};
+    panel.columns = columns();
     panel.selectedRow = -1;
     panel.selection = guessAt;
     panel.pageLabel = guessPage;

@@ -19,19 +19,20 @@ FOUNDATION_EXPORT BOOL PKGlassAvailable(void);  // C linkage, for SettingsForm.s
 @property(nonatomic, copy, nullable) NSString *keyHint;  // a key drawn as a keycap at the end of the proof row
 @property(nonatomic, copy, nullable) NSString *replacedText;  // struck out before the proof text, with an arrow
 // Visible rows of the candidate grid; nil hides the candidate area. Each row
-// holds at most PKGridColumns columns, and a long candidate spans several.
+// holds `columns` columns, and a long candidate spans several.
 @property(nonatomic, copy, nullable) NSArray<NSArray<NSString *> *> *rows;
-@property(nonatomic) NSInteger selectedRow;  // index into rows; only this row carries the 1-6 labels
+@property(nonatomic) NSInteger columns;      // grid columns per row, 6 to PKMaxGridColumns
+@property(nonatomic) NSInteger selectedRow;  // index into rows; only this row carries the 1-9 labels
 @property(nonatomic) NSInteger selection;    // index within the selected row
 @property(nonatomic, copy, nullable) NSString *pageLabel;               // "1/3", nil for a single page
 @property(nonatomic) BOOL expanded;  // several rows unfold; otherwise a page label means ↓ unfolds them
 @end
 
-extern const NSInteger PKGridColumns;
+extern const NSInteger PKMaxGridColumns;
 
 @interface PKCandidatePanel : NSObject
 + (instancetype)shared;
-// Grid columns `candidate` takes, 1 to PKGridColumns.
+// Grid columns `candidate` takes, 1 to PKMaxGridColumns.
 + (NSInteger)columnsSpannedBy:(NSString *)candidate;
 // lineRect is the composition's first line in screen coordinates.
 - (void)show:(PKPanelContent *)content below:(NSRect)lineRect;

@@ -5,7 +5,7 @@
 #include "PanelMetrics.h"
 
 NSString *const PKAppearanceKey = @"Appearance";
-const NSInteger PKGridColumns = 6;
+const NSInteger PKMaxGridColumns = 9;
 
 BOOL PKGlassAvailable(void) {
   if (@available(macOS 26.0, *)) return YES;
@@ -98,7 +98,7 @@ CGFloat ColumnWidth() {
 
 NSInteger Span(NSString *candidate) {
   NSInteger span = (NSInteger)ceil((CellWidth(candidate) + kCellGap) / (ColumnWidth() + kCellGap));
-  return MAX(1, MIN(PKGridColumns, span));
+  return MAX(1, MIN(PKMaxGridColumns, span));
 }
 
 NSDictionary *Attributes(NSFont *font, NSColor *color) {
@@ -175,7 +175,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     spans.emplace_back();
     for (NSString *word in row) spans.back().push_back(static_cast<int>(Span(word)));
   }
-  return HitCandidates(spans, self.content.pageLabel != nil, point.x, point.y - self.shownRowTop, ColumnWidth(), static_cast<int>(PKGridColumns));
+  return HitCandidates(spans, self.content.pageLabel != nil, point.x, point.y - self.shownRowTop, ColumnWidth(), static_cast<int>(self.content.columns));
 }
 
 // Whether the proof row fades between two places rather than staying where it is.
@@ -219,7 +219,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + key + kProofRight);
   }
   if (self.content.rows) {
-    CGFloat row = kRowLeft + PKGridColumns * (ColumnWidth() + kCellGap) + self.tailWidth;
+    CGFloat row = kRowLeft + self.content.columns * (ColumnWidth() + kCellGap) + self.tailWidth;
     width = MAX(width, row);
   }
   CGFloat separator = self.content.showsProof && self.content.rows ? 1 : 0;

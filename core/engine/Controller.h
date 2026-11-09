@@ -15,8 +15,8 @@
 
 namespace ProjectKey {
 
-// Grid columns per candidate row, as on macOS.
-constexpr int kGridColumns = 6;
+// Grid columns per candidate row: the default, and all iOS shows, up to the most Setting::kGridColumns allows.
+constexpr int kGridColumns = 6, kMaxGridColumns = 9;
 
 // What the candidate window shows; mirrors the macOS PKPanelContent. Strings
 // are UTF-8; caret and ranges count UTF-16 code units, as TSF does.
@@ -31,7 +31,8 @@ struct PanelContent {
   std::string replacedText;     // struck out before the proof text, with an arrow; empty for none
   // Visible rows of the candidate grid; empty hides the candidate area.
   std::vector<std::vector<std::string>> rows;
-  int selectedRow = 0;          // only this row carries the 1-6 labels; -1 while typing, none does
+  int columns = kGridColumns;   // grid columns per row, Setting::kGridColumns
+  int selectedRow = 0;          // only this row carries the 1-9 labels; -1 while typing, none does
   int selection = 0;            // index within the selected row; while typing, the guess in row 0 (-1 for none)
   std::string pageLabel;        // "1/3", empty for a single page
   bool expanded = false;        // several rows unfold; otherwise a page label means ↓ unfolds them
@@ -81,7 +82,8 @@ enum class Setting {
   kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
   kCandidatePosition,   // candidates for the word: 0 after the cursor (Windows), 1 before it (macOS)
   kNextDoubtful,        // picking a candidate moves on to the next doubtful word
-  kKeypadPicks,         // the keypad's 1-6 pick from the row shown while typing
+  kKeypadPicks,         // the keypad's digits pick from the row shown while typing
+  kGridColumns,         // candidates per row: 0 to 3 for 6 to 9 columns
 };
 
 class Settings {
@@ -121,7 +123,7 @@ struct Environment {
   Settings* settings = nullptr;
   // Whether text (letters and spaces) is correctly spelled English.
   std::function<bool(const std::string&)> isEnglish;
-  // Grid columns a candidate takes, 1 to kGridColumns.
+  // Grid columns a candidate takes, 1 to kMaxGridColumns.
   std::function<int(const std::string&)> columnsSpannedBy;
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
   std::string tabKeycap = "Tab";  // the key the conversion previews end with
@@ -229,6 +231,8 @@ class Controller {
   // The segment holding the syllable still open without a tone, while its word shows.
   std::optional<size_t> openSegment() const;
   std::optional<size_t> segmentBeforeCursor() const;
+  // Grid columns per row, as Setting::kGridColumns says.
+  int columns() const;
   int span(const std::string& candidate) const;
   // How many of words, from the first, fit one grid row.
   size_t firstRowSize(const std::vector<std::string>& words) const;
@@ -264,7 +268,7 @@ class Controller {
   std::vector<std::string> candidates_;
   int readingIndex_ = -1;  // where the syllables' Zhuyin sits in candidates_; -1 for none
   int selection_ = 0;
-  // Candidates packed into grid rows of kGridColumns columns: where each row
+  // Candidates packed into grid rows of columns() columns: where each row
   // starts, and the column each candidate starts at.
   std::vector<int> rowStarts_;
   std::vector<int> columns_;

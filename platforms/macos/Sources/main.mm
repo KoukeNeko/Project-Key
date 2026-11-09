@@ -62,6 +62,7 @@ int main(int argc, const char *argv[]) {
       content.showsProof = YES;
       content.activeSegment = 3;
       content.rows = @[ @[ @"程式", @"城市", @"成事", @"乘勢", @"呈示", @"程" ] ];
+      content.columns = 6;
       content.selectedRow = 0;
       content.selection = 0;
       content.pageLabel = @"1/9";

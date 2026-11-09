@@ -49,6 +49,7 @@ PKPanelContent *Content(const ProjectKey::PanelContent &panel) {
     }
     content.rows = rows;
   }
+  content.columns = panel.columns;
   content.selectedRow = panel.selectedRow;
   content.selection = panel.selection;
   content.pageLabel = OptionalString(panel.pageLabel);

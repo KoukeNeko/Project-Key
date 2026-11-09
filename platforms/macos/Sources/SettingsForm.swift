@@ -17,6 +17,7 @@ struct SettingsForm: View {
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
   @AppStorage(PKCandidatePositionKey) private var candidatePosition = 1
   @AppStorage(PKNextDoubtfulKey) private var nextDoubtful = true
+  @AppStorage(PKGridColumnsKey) private var gridColumns = 0
   @State private var cleared = false
   @State private var update = UpdateState.checking
   @ObservedObject var models: ModelsUpdater
@@ -29,6 +30,9 @@ struct SettingsForm: View {
           Text("游標後（Windows）").tag(0)
           Text("游標前（macOS）").tag(1)
         }
+        Picker("每列欄數", selection: $gridColumns) {
+          ForEach(0..<4) { Text("\($0 + 6)").tag($0) }
+        }
         Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
         Toggle(isOn: $omitTones) {
           Text("省略聲調")
@@ -40,7 +44,7 @@ struct SettingsForm: View {
         }
         Toggle(isOn: $keypadPicks) {
           Text("數字鍵盤選字")
-          Text("開啟時數字鍵盤的 1–6 直接選字；主鍵盤的 1–6 仍是注音")
+          Text("開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音")
         }
         Toggle("記住選過的字", isOn: $rememberChoices)
         LabeledContent("選字紀錄") {

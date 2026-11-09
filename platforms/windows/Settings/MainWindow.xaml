@@ -20,6 +20,14 @@
           <x:String>游標前（macOS）</x:String>
         </ComboBox>
       </tk:SettingsCard>
+      <tk:SettingsCard Header="每列欄數">
+        <ComboBox x:Name="GridColumns" MinWidth="160">
+          <x:String>6</x:String>
+          <x:String>7</x:String>
+          <x:String>8</x:String>
+          <x:String>9</x:String>
+        </ComboBox>
+      </tk:SettingsCard>
       <tk:SettingsCard Header="選完跳到下一個可疑處">
         <ToggleSwitch x:Name="NextDoubtful" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
@@ -29,7 +37,7 @@
       <tk:SettingsCard Header="簡拼" Description="開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音">
         <ToggleSwitch x:Name="Abbreviated" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
-      <tk:SettingsCard Header="數字鍵盤選字" Description="開啟時數字鍵盤的 1–6 直接選字；主鍵盤的 1–6 仍是注音">
+      <tk:SettingsCard Header="數字鍵盤選字" Description="開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音">
         <ToggleSwitch x:Name="KeypadPicks" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
       <tk:SettingsCard Header="記住選過的字">

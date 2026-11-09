@@ -11,7 +11,7 @@ $pipe.ReadMode = [IO.Pipes.PipeTransmissionMode]::Message
 
 function Send([byte]$type, [byte]$key = 0, [string]$chars = '', [byte]$flags = 0) {
   $m = [IO.MemoryStream]::new(); $w = [IO.BinaryWriter]::new($m)
-  $w.Write([uint32]3); $w.Write($type); $w.Write($key)  # Protocol.h kVersion
+  $w.Write([uint32]4); $w.Write($type); $w.Write($key)  # Protocol.h kVersion
   $b = [Text.Encoding]::UTF8.GetBytes($chars); $w.Write([uint32]$b.Length); $w.Write($b); $w.Write($flags)
   $w.Write([byte]0); $w.Write([uint32]0)
   $bytes = $m.ToArray(); $pipe.Write($bytes, 0, $bytes.Length); $pipe.Flush()

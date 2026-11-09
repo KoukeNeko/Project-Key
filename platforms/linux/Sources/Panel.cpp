@@ -175,7 +175,7 @@ std::vector<std::string> Panel::problems() const {
 int Panel::span(const std::string& candidate) const {
   float cell = kCellSide + width("6", labelFont_) + kLabelGap + width(candidate, candidateFont_) + kCellSide;
   int span = static_cast<int>(std::ceil((cell + kCellGap) / (columnWidth_ + kCellGap)));
-  return std::clamp(span, 1, kGridColumns);
+  return std::clamp(span, 1, kMaxGridColumns);
 }
 
 // MARK: Windows
@@ -245,7 +245,7 @@ float Panel::proofWidth(const PanelContent& c) const {
 float Panel::fittingWidth() const {
   float result = content_->showsProof ? proofWidth(*content_) : 0;
   if (!content_->rows.empty()) {
-    float row = kRowLeft + kGridColumns * (columnWidth_ + kCellGap);
+    float row = kRowLeft + content_->columns * (columnWidth_ + kCellGap);
     result = std::max(result, row + tailWidth());
   }
   return result;
@@ -384,7 +384,7 @@ void Panel::clickPanel(int x, int y) {
     spans.emplace_back();
     for (const std::string& word : row) spans.back().push_back(span(word));
   }
-  PanelHit hit = HitCandidates(spans, !content_->pageLabel.empty(), x / scale_, y / scale_ - shownRowTop(), columnWidth_, kGridColumns);
+  PanelHit hit = HitCandidates(spans, !content_->pageLabel.empty(), x / scale_, y / scale_ - shownRowTop(), columnWidth_, content_->columns);
   if (hit.kind != PanelHit::kNone) clicked(*owner_, hit);
 }
 

@@ -51,6 +51,8 @@ constexpr char kConfigPath[] = "conf/projectkey.conf";
 
 enum class ProofMode { Always, WhenDoubtful, Off };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(ProofMode, N_("永遠"), N_("有可疑字時"), N_("關閉"));
+enum class GridColumns { Six, Seven, Eight, Nine };  // Setting::kGridColumns: 6 to 9 columns
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(GridColumns, N_("6"), N_("7"), N_("8"), N_("9"));
 enum class CandidatePosition { AfterCursor, BeforeCursor };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(CandidatePosition, N_("游標後"), N_("游標前"));
 // Setting::kAppearance's first two values: the dark window, and a dark tint over the blurred windows behind it.
@@ -81,6 +83,8 @@ FCITX_CONFIGURATION(
     fcitx::OptionWithAnnotation<CandidatePosition, CandidatePositionI18NAnnotation> candidatePosition{
         this, "CandidatePosition", "選字位置",
         static_cast<CandidatePosition>(Settings::DefaultValue(Setting::kCandidatePosition))};
+    fcitx::OptionWithAnnotation<GridColumns, GridColumnsI18NAnnotation> gridColumns{
+        this, "GridColumns", "每列欄數", static_cast<GridColumns>(Settings::DefaultValue(Setting::kGridColumns))};
     fcitx::OptionWithAnnotation<Appearance, AppearanceI18NAnnotation> appearance{
         this, "Appearance", "候選視窗外觀", static_cast<Appearance>(Settings::DefaultValue(Setting::kAppearance))};
     fcitx::Option<bool> nextDoubtful{this, "NextDoubtful", "選完跳到下一個可疑處", DefaultFlag(Setting::kNextDoubtful)};
@@ -121,6 +125,7 @@ class ConfigSettings : public Settings {
       case Setting::kCandidatePosition: return static_cast<int>(*config_.candidatePosition);
       case Setting::kNextDoubtful: return *config_.nextDoubtful;
       case Setting::kAppearance: return static_cast<int>(*config_.appearance);
+      case Setting::kGridColumns: return static_cast<int>(*config_.gridColumns);
     }
     return std::nullopt;
   }
@@ -153,7 +158,7 @@ int Span(const std::string& candidate) {
     if (c < 0x80) width += 0.5;
     else if ((c & 0xc0) != 0x80) width += 1;
   }
-  return std::clamp(static_cast<int>((width + 1.9) / 2), 1, kGridColumns);
+  return std::clamp(static_cast<int>((width + 1.9) / 2), 1, kMaxGridColumns);
 }
 
 // English spelling, for the Tab conversion of English typed in 中: every word

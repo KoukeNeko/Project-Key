@@ -121,7 +121,7 @@ int Span(const std::string& candidate) {
     if (c < 0x80) width += 0.5;
     else if ((c & 0xc0) != 0x80) width += 1;
   }
-  return std::max(1, std::min(kGridColumns, static_cast<int>((width + 1.5) / 2.4) + 1));
+  return std::max(1, std::min(kMaxGridColumns, static_cast<int>((width + 1.5) / 2.4) + 1));
 }
 
 }  // namespace
@@ -390,6 +390,25 @@ int main(int argc, char** argv) {
   assert(client.marked.rfind(secondRowLast, 0) == 0);
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));
   assert(client.marked.empty() && client.committed.size() == before);
+
+  // Nine columns: the rows are as wide, the panel says so, and the digits reach the ninth.
+  settings.set(Setting::kGridColumns, 3);
+  env.columnsSpannedBy = columnsOf;  // a column per two characters
+  Type(controller, "su3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  assert(client.panel.columns == kMaxGridColumns);
+  assert(client.panel.rows[0].size() > static_cast<size_t>(kGridColumns));
+  for (const auto& row : client.panel.rows) {
+    int columns = 0;
+    for (const std::string& candidate : row) columns += columnsOf(candidate);
+    assert(columns <= kMaxGridColumns);
+  }
+  std::string ninth = client.panel.rows[0][8];
+  assert(controller.handleKey(Press("9")));
+  assert(client.marked.rfind(ninth, 0) == 0);
+  EscapeAll(controller, client);
+  env.columnsSpannedBy = Span;
+  settings.remove(Setting::kGridColumns);
 
   // With nothing composed, editing keys belong to the app.
   assert(!controller.handleKey(Special(ProjectKey::Key::kBackspace)));

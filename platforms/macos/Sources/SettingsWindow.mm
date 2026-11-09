@@ -14,6 +14,7 @@ NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
 NSString *const PKCandidatePositionKey = @"CandidatePosition";
 NSString *const PKNextDoubtfulKey = @"NextDoubtful";
 NSString *const PKKeypadPicksKey = @"KeypadPicks";
+NSString *const PKGridColumnsKey = @"GridColumns";
 NSString *const PKInputMethodBundleID = @"org.projectkey.inputmethod.ProjectKey";
 NSString *const PKClearChoicesNotification = @"org.projectkey.inputmethod.ProjectKey.ClearChoices";
 NSString *const PKReloadModelsNotification = @"org.projectkey.inputmethod.ProjectKey.ReloadModels";
@@ -79,6 +80,7 @@ void PKEditUserPhrases(void) {
     PKCandidatePositionKey : @1,  // before the cursor, as the system Zhuyin input does
     PKNextDoubtfulKey : @YES,
     PKKeypadPicksKey : @NO,
+    PKGridColumnsKey : @0,
   }];
 }
 

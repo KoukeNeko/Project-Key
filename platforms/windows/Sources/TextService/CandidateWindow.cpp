@@ -197,7 +197,7 @@ PanelHit CandidateWindow::hitAt(POINT client) const {
     for (const std::string& word : row) spans.back().push_back(fonts_.span(Widen(word)));
   }
   return HitCandidates(spans, !content_->pageLabel.empty(), client.x / scale_, client.y / scale_ - shownRowTop(), fonts_.columnWidth(),
-                       kGridColumns);
+                       content_->columns);
 }
 
 bool CandidateWindow::ensureWindow() {
@@ -257,7 +257,7 @@ D2D1_SIZE_F CandidateWindow::fittingSize() const {
     width = std::max(width, kProofLeft + fonts_.widthOf(Widen(sentence), fonts_.proof()) + key + kProofRight);
   }
   if (!content_->rows.empty()) {
-    float row = kRowLeft + kGridColumns * (fonts_.columnWidth() + kCellGap);
+    float row = kRowLeft + content_->columns * (fonts_.columnWidth() + kCellGap);
     width = std::max(width, row + tailWidth());
   }
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
