@@ -102,6 +102,7 @@ class TextService : public ITfTextInputProcessorEx,
   KeyEvent keyEvent(WPARAM wParam) const;
   void keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten, bool testing);
   void keyUp(ITfContext* context, WPARAM wParam);
+  void candidateClicked(const Metrics::PanelHit& hit);
   void updateLangBar();
 
   LONG refs_ = 1;

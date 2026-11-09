@@ -145,10 +145,16 @@ std::unique_ptr<Window> X11Screen::createWindow(std::function<void()> exposed, s
 
 void X11Screen::sync() {
   while (xcb_generic_event_t* event = xcb_poll_for_event(connection_)) {
-    if ((event->response_type & ~0x80) == XCB_EXPOSE) {
+    uint8_t type = event->response_type & ~0x80;
+    if (type == XCB_EXPOSE) {
       xcb_window_t id = reinterpret_cast<xcb_expose_event_t*>(event)->window;
       for (X11Window* window : windows_) {
         if (window->id_ == id) window->exposed_();
+      }
+    } else if (type == XCB_BUTTON_RELEASE) {
+      auto* button = reinterpret_cast<xcb_button_release_event_t*>(event);
+      for (X11Window* window : windows_) {
+        if (window->id_ == button->event && button->detail == XCB_BUTTON_INDEX_1 && window->clicked) window->clicked(button->event_x, button->event_y);
       }
     }
     free(event);
@@ -178,7 +184,7 @@ X11Window::X11Window(X11Screen& screen, std::function<void()> exposed) : screen_
   xcb_connection_t* connection = screen_.connection_;
   id_ = xcb_generate_id(connection);
   uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_BORDER_PIXEL | XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK | XCB_CW_COLORMAP;
-  uint32_t values[] = {0, 0, 1, XCB_EVENT_MASK_EXPOSURE, screen_.colormap_};
+  uint32_t values[] = {0, 0, 1, XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE, screen_.colormap_};
   xcb_create_window(connection, screen_.depth_, id_, screen_.screen_->root, 0, 0, 1, 1, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
                     screen_.visual_->visual_id, mask, values);
   // Compositors treat it as a popup: no decoration, focus or taskbar entry.

@@ -702,6 +702,33 @@ int main(int argc, char** argv) {
   assert(client.marked != "鍵小");
   EscapeAll(controller, client);
 
+  // A click picks what it lands on, in the row, in the unfolded grid and in the row shown while
+  // typing. Last, as what it picks is remembered.
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  std::string clicked = client.panel.rows[0][1];
+  controller.clickCandidate(0, 1);
+  assert(Contains(client.marked, clicked));
+  EscapeAll(controller, client);
+  Type(controller, "rup wu0 ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  controller.toggleGrid();
+  assert(client.panel.expanded && client.panel.rows.size() > 1);
+  controller.toggleGrid();
+  assert(!client.panel.expanded);
+  controller.toggleGrid();
+  clicked = client.panel.rows.back().back();
+  controller.clickCandidate(static_cast<int>(client.panel.rows.size()) - 1, static_cast<int>(client.panel.rows.back().size()) - 1);
+  assert(Contains(client.marked, clicked));
+  EscapeAll(controller, client);
+  Type(controller, "rup ");
+  assert(client.panel.selectedRow == -1 && client.panel.rows[0].size() > 1);
+  clicked = client.panel.rows[0][1];
+  controller.clickCandidate(0, 1);
+  assert(Contains(client.marked, clicked));
+  controller.clickCandidate(5, 0);  // nothing there
+  EscapeAll(controller, client);
+
   std::printf("ControllerTest passed\n");
   return 0;
 }

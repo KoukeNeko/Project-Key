@@ -41,6 +41,8 @@ extern const NSInteger PKGridColumns;
 - (void)hide;
 @property(nonatomic, readonly, getter=isVisible) BOOL visible;
 @property(nonatomic, readonly, nullable) PKPanelContent *content;
+// A left click on the candidate at rows[row][index], or on the chevron (row -1). While nil, clicks go to the app.
+@property(nonatomic, copy, nullable) void (^clicked)(NSInteger row, NSInteger index);
 // Renders the window without showing it, at 2x, for design review.
 + (NSData *)pngForContent:(PKPanelContent *)content proofBelow:(BOOL)proofBelow;
 @end

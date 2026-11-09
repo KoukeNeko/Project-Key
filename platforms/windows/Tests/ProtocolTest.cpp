@@ -48,7 +48,15 @@ int main() {
   bytes = Protocol::WriteMessage(message);
   Protocol::Message readMessage;
   assert(Protocol::ReadMessage(bytes, readMessage) && readMessage.type == Protocol::Request::kShift && readMessage.context == "abc");
-  for (size_t length = 0; length < bytes.size(); length++) assert(!Protocol::ReadMessage(bytes.substr(0, length), readMessage));
+  // Without the click's row and index, as a text service from before clicks sends it, and otherwise cut short.
+  assert(Protocol::ReadMessage(bytes.substr(0, bytes.size() - 8), readMessage) && readMessage.context == "abc");
+  for (size_t length = 0; length < bytes.size(); length++) {
+    if (length != bytes.size() - 8) assert(!Protocol::ReadMessage(bytes.substr(0, length), readMessage));
+  }
+  Protocol::Message click{Protocol::Request::kClickCandidate};
+  click.row = 2;
+  click.index = 3;
+  assert(Protocol::ReadMessage(Protocol::WriteMessage(click), readMessage) && readMessage.row == 2 && readMessage.index == 3);
   Protocol::Message keypad{Protocol::Request::kKeyDown, {}, false, ""};
   keypad.key.characters = "1";
   keypad.key.numpad = true;

@@ -121,6 +121,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 - (void)moveSelectionAnimated:(BOOL)animated;
 // Where the rows start, as drawn now.
 - (CGFloat)shownRowTop;
+// What a click at this point in the window lands on.
+- (PanelHit)hitAt:(NSPoint)location;
 // A change of shape, as the window moves and resizes to the new content: the rows move from
 // rowTop to where the content puts them, and a proof row that comes, goes or changes sides
 // fades out of its old place and into its new one. progress runs from 0 to 1.
@@ -164,6 +166,16 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 - (CGFloat)shownRowTop {
   return _oldRowTop + (self.rowTop - _oldRowTop) * _progress;
+}
+
+- (PanelHit)hitAt:(NSPoint)location {
+  NSPoint point = [self convertPoint:location fromView:nil];
+  std::vector<std::vector<int>> spans;
+  for (NSArray<NSString *> *row in self.content.rows) {
+    spans.emplace_back();
+    for (NSString *word in row) spans.back().push_back(static_cast<int>(Span(word)));
+  }
+  return HitCandidates(spans, self.content.pageLabel != nil, point.x, point.y - self.shownRowTop, ColumnWidth(), static_cast<int>(PKGridColumns));
 }
 
 // Whether the proof row fades between two places rather than staying where it is.
@@ -479,6 +491,20 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 
 @end
 
+// Never the key window, so it hears of a click here rather than through its views' responder chain.
+@interface PKClickablePanel : NSPanel
+@property(nonatomic, copy) void (^released)(NSPoint location);
+@end
+
+@implementation PKClickablePanel
+
+- (void)sendEvent:(NSEvent *)event {
+  if (event.type == NSEventTypeLeftMouseUp && self.released) self.released(event.locationInWindow);
+  [super sendEvent:event];
+}
+
+@end
+
 @implementation PKCandidatePanel {
   NSPanel *_panel;
   PKCandidateView *_view;
@@ -506,9 +532,23 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   return hint;
 }
 
+- (void)setClicked:(void (^)(NSInteger, NSInteger))clicked {
+  _clicked = [clicked copy];
+  _panel.ignoresMouseEvents = !clicked;
+}
+
+- (void)releasedAt:(NSPoint)location {
+  if (_hiding || !self.clicked) return;
+  PanelHit hit = [_view hitAt:location];
+  if (hit.kind == PanelHit::kCandidate) self.clicked(hit.row, hit.index);
+  if (hit.kind == PanelHit::kChevron) self.clicked(-1, -1);
+}
+
 - (instancetype)init {
   if ((self = [super init])) {
-    _panel = [[NSPanel alloc] initWithContentRect:NSZeroRect
+    PKClickablePanel *clickable = [PKClickablePanel alloc];
+    __weak PKCandidatePanel *weakSelf = self;
+    _panel = clickable = [clickable initWithContentRect:NSZeroRect
                                         styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
                                           backing:NSBackingStoreBuffered
                                             defer:YES];
@@ -517,6 +557,9 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     _panel.backgroundColor = NSColor.clearColor;
     _panel.hasShadow = YES;
     _panel.ignoresMouseEvents = YES;
+    clickable.released = ^(NSPoint location) {
+      [weakSelf releasedAt:location];
+    };
     // "Hide Others" in the app being typed into hides this background process too.
     _panel.canHide = NO;
     _panel.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;

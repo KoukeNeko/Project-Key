@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <wrl/client.h>
 
+#include <functional>
 #include <optional>
 #include <string>
 
@@ -29,9 +30,12 @@ class CandidateWindow {
   bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !cloaked_ && !hiding_; }
   RECT frame() const;
   const std::optional<PanelContent>& content() const { return content_; }
+  // A left click on a candidate or the chevron; unset, clicks go to the app.
+  std::function<void(const Metrics::PanelHit&)> clicked;
 
  private:
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+  Metrics::PanelHit hitAt(POINT client) const;
   bool ensureWindow();
   void applyAppearance(int appearance);  // Setting::kAppearance
   void prepareToAppear();                // before the first paint of a showing
@@ -81,6 +85,7 @@ class CandidateWindow {
   bool fading_ = false, hiding_ = false;  // hiding_: fading out, already gone to the text service
   float fadeFrom_ = 0, fadeTo_ = 1;
   ULONGLONG fadeStart_ = 0;
+  Metrics::PanelHit pressed_;  // what the left button went down on
 };
 
 class ModeBadge {

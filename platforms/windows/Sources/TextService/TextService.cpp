@@ -167,6 +167,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
     items->AddItem(langBar_);
     items->Release();
   }
+  candidates_.clicked = [this](const Metrics::PanelHit& hit) { candidateClicked(hit); };
   // Starts the server if needed and learns the mode for the language bar.
   if (std::optional<Protocol::Reply> reply = engine_.send({Protocol::Request::kState})) {
     englishMode_ = reply->englishMode;
@@ -391,6 +392,14 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
 void TextService::keyUp(ITfContext* context, WPARAM wParam) {
   if (wParam != VK_SHIFT || !context || keyboardDisabled(context)) return;
   request(context, {Protocol::Request::kShift, {}, false});
+}
+
+void TextService::candidateClicked(const Metrics::PanelHit& hit) {
+  if (!compositionContext_) return;
+  Protocol::Message message{hit.kind == Metrics::PanelHit::kChevron ? Protocol::Request::kToggleGrid : Protocol::Request::kClickCandidate};
+  message.row = hit.row;
+  message.index = hit.index;
+  request(compositionContext_, message);
 }
 
 void TextService::toggleMode() {

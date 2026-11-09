@@ -190,6 +190,10 @@ class Controller {
   // touch screen grid that shows them all, past the rows the panel holds.
   const std::vector<std::string>& candidates() const { return candidates_; }
   void choose(int index);
+  // A click on the candidate window: the candidate at PanelContent::rows[row][index], picked
+  // as the keypad's digits pick from the row shown while typing, or the chevron.
+  void clickCandidate(int row, int index);
+  void toggleGrid();
 
   static constexpr int kExpandedRows = 5;  // rows the expanded grid shows at once
 
@@ -238,6 +242,7 @@ class Controller {
   void startChoosingAt(size_t start);
   // moveOn: then to the next doubtful segment, as Setting::kNextDoubtful says.
   void pick(int index, bool moveOn = true);
+  void pickFromTypingRow(int index);  // typing goes on
 
   void commit();
   // Text the composition put in the document, for what the user typed (Environment::personal).

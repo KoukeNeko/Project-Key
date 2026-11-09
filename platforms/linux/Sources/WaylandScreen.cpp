@@ -43,6 +43,8 @@ namespace ProjectKey {
 
 namespace {
 
+class WaylandScreen;
+
 // fcitx::wayland::ZwpInputMethodV2 as Fcitx5's fcitx-wayland library lays it
 // out (src/lib/fcitx-wayland/input-method-v2/zwp_input_method_v2.h, generated
 // and unchanged through 5.1). Fcitx5 installs neither that header nor the
@@ -81,6 +83,11 @@ struct Globals {
   wl_shm* shm = nullptr;
   ext_background_effect_manager_v1* effects = nullptr;  // KWin 6.7, Mutter 51, niri 26.04
   bool blur = false;                                    // effects says it can blur
+  WaylandScreen* screen = nullptr;
+  wl_seat* seat = nullptr;  // shortcut: the first seat only; bind the others if a multi-seat desktop shows up
+  wl_pointer* pointer = nullptr;
+  wl_surface* pointerSurface = nullptr;  // the pointer is over this one of Fcitx5's connection's surfaces
+  int pointerX = 0, pointerY = 0;        // on it
 };
 
 // Hyprland blurs input method popups itself while its decoration:blur:input_methods is on;
@@ -161,6 +168,8 @@ class WaylandScreen final : public Screen {
   friend class WaylandWindow;
   static const wl_registry_listener kRegistryListener;
   static const ext_background_effect_manager_v1_listener kEffectsListener;
+  static const wl_seat_listener kSeatListener;
+  static const wl_pointer_listener kPointerListener;
 
   void connect(wl_display* display, fcitx::FocusGroup* group);
   void disconnect(wl_display* display);
@@ -181,6 +190,7 @@ class WaylandWindow final : public Window {
  public:
   WaylandWindow(WaylandScreen& screen, std::function<void()> exposed, std::function<void()> moved)
       : screen_(screen), exposed_(std::move(exposed)), moved_(std::move(moved)) {
+    surfaceData_.window = this;
     screen_.windows_.push_back(this);
   }
   ~WaylandWindow() override {
@@ -200,6 +210,11 @@ class WaylandWindow final : public Window {
   // Drops the Wayland objects, as their connection closes or the window goes.
   void release();
   wl_display* display() const { return globals_ ? globals_->display : nullptr; }
+  wl_surface* surface() const { return surface_; }
+  // A left click at (x, y) on the surface.
+  void click(int x, int y) {
+    if (mapped && clicked) clicked(x - (frame.x - std::min(0, frame.x)), y - (frame.y - std::min(0, frame.y)));
+  }
 
  private:
   // A shared-memory buffer, busy while the compositor reads it.
@@ -218,17 +233,28 @@ class WaylandWindow final : public Window {
   static const wl_surface_listener kSurfaceListener;
   static const zwp_input_popup_surface_v2_listener kPopupListener;
 
+  // The surface's user data. Fcitx5's own pointer listener shares the connection, and when the
+  // pointer enters this surface takes that data for its fcitx::wayland::WlSurface, reads
+  // userData() from it and leaves alone a surface where it is null: zeros, well past that field.
+  struct SurfaceData {
+    std::array<void*, 32> zeros{};
+    WaylandWindow* window = nullptr;
+  };
+
   void flush() { wl_display_flush(globals_->display); }
   void setBlurRegion(int x, int y);
+  void setInputRegion(int x, int y);
 
   WaylandScreen& screen_;
   std::function<void()> exposed_, moved_;
   const Globals* globals_ = nullptr;
   wl_surface* surface_ = nullptr;
+  SurfaceData surfaceData_;
   zwp_input_method_v2* im_ = nullptr;
   zwp_input_popup_surface_v2* popup_ = nullptr;
   ext_background_effect_surface_v1* effect_ = nullptr;
   std::array<int, 5> blurRegion_{};  // what effect_ was last given: on, x, y, width, height
+  std::array<int, 4> inputRegion_{};  // what the surface takes clicks in: x, y, width, height
   std::array<Buffer, 2> buffers_;
   Buffer* painting_ = nullptr;
   int scale_ = 1;       // the surface's preferred buffer scale
@@ -259,9 +285,57 @@ const wl_registry_listener WaylandScreen::kRegistryListener = {
             globals->effects = static_cast<ext_background_effect_manager_v1*>(
                 wl_registry_bind(registry, name, &ext_background_effect_manager_v1_interface, 1));
             ext_background_effect_manager_v1_add_listener(globals->effects, &kEffectsListener, globals);
+          } else if (std::strcmp(interface, wl_seat_interface.name) == 0 && !globals->seat) {
+            // Version 1: a listener must have every event of the version it binds.
+            globals->seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, 1));
+            wl_seat_add_listener(globals->seat, &kSeatListener, globals);
           }
         },
     .global_remove = [](void*, wl_registry*, uint32_t) {},
+};
+
+const wl_seat_listener WaylandScreen::kSeatListener = {
+    .capabilities =
+        [](void* data, wl_seat* seat, uint32_t capabilities) {
+          auto* globals = static_cast<Globals*>(data);
+          bool has = capabilities & WL_SEAT_CAPABILITY_POINTER;
+          if (has && !globals->pointer) {
+            globals->pointer = wl_seat_get_pointer(seat);
+            wl_pointer_add_listener(globals->pointer, &kPointerListener, globals);
+          } else if (!has && globals->pointer) {
+            wl_pointer_destroy(globals->pointer);
+            globals->pointer = nullptr;
+            globals->pointerSurface = nullptr;
+          }
+        },
+    .name = [](void*, wl_seat*, const char*) {},
+};
+
+const wl_pointer_listener WaylandScreen::kPointerListener = {
+    .enter =
+        [](void* data, wl_pointer*, uint32_t, wl_surface* surface, wl_fixed_t x, wl_fixed_t y) {
+          auto* globals = static_cast<Globals*>(data);
+          globals->pointerSurface = surface;
+          globals->pointerX = wl_fixed_to_int(x);
+          globals->pointerY = wl_fixed_to_int(y);
+        },
+    .leave = [](void* data, wl_pointer*, uint32_t, wl_surface*) { static_cast<Globals*>(data)->pointerSurface = nullptr; },
+    .motion =
+        [](void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
+          auto* globals = static_cast<Globals*>(data);
+          globals->pointerX = wl_fixed_to_int(x);
+          globals->pointerY = wl_fixed_to_int(y);
+        },
+    .button =
+        [](void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
+          auto* globals = static_cast<Globals*>(data);
+          constexpr uint32_t kLeftButton = 0x110;  // BTN_LEFT
+          if (button != kLeftButton || state != WL_POINTER_BUTTON_STATE_RELEASED || !globals->pointerSurface) return;
+          for (WaylandWindow* window : globals->screen->windows_) {
+            if (window->surface() == globals->pointerSurface) window->click(globals->pointerX, globals->pointerY);
+          }
+        },
+    .axis = [](void*, wl_pointer*, uint32_t, uint32_t, wl_fixed_t) {},
 };
 
 WaylandScreen::WaylandScreen(fcitx::AddonInstance* wayland, fcitx::AddonInstance* waylandim) : waylandim_(waylandim) {
@@ -289,6 +363,7 @@ void WaylandScreen::connect(wl_display* display, fcitx::FocusGroup* group) {
   Globals& globals = connections_[display];  // a node: its address stays for the listener
   globals.display = display;
   globals.group = group;
+  globals.screen = this;
   globals.registry = wl_display_get_registry(display);
   wl_registry_add_listener(globals.registry, &kRegistryListener, &globals);
   wl_display_flush(display);
@@ -302,6 +377,8 @@ void WaylandScreen::disconnect(wl_display* display) {
     if (window->display() == display) window->release();
   }
   Globals& globals = found->second;
+  if (globals.pointer) wl_pointer_destroy(globals.pointer);
+  if (globals.seat) wl_seat_destroy(globals.seat);
   if (globals.effects) ext_background_effect_manager_v1_destroy(globals.effects);
   if (globals.shm) wl_shm_destroy(globals.shm);
   if (globals.compositor) wl_compositor_destroy(globals.compositor);
@@ -330,7 +407,7 @@ const wl_surface_listener WaylandWindow::kSurfaceListener = {
     .leave = [](void*, wl_surface*, wl_output*) {},
     .preferred_buffer_scale =
         [](void* data, wl_surface*, int32_t factor) {
-          auto* window = static_cast<WaylandWindow*>(data);
+          WaylandWindow* window = static_cast<SurfaceData*>(data)->window;
           if (factor < 1 || factor == window->scale_) return;
           window->scale_ = factor;
           if (window->mapped) window->exposed_();
@@ -365,8 +442,8 @@ void WaylandWindow::map(fcitx::InputContext& ic) {
     release();
     globals_ = globals;
     surface_ = wl_compositor_create_surface(globals_->compositor);
-    wl_surface_add_listener(surface_, &kSurfaceListener, this);
-    // Clicks go through to the app, as on X11, where the window takes no input either.
+    wl_surface_add_listener(surface_, &kSurfaceListener, &surfaceData_);
+    // Clicks go through to the app, unless a window that takes them sets its frame (setInputRegion).
     wl_region* none = wl_compositor_create_region(globals_->compositor);
     wl_surface_set_input_region(surface_, none);
     wl_region_destroy(none);
@@ -397,6 +474,7 @@ void WaylandWindow::release() {
   if (effect_) ext_background_effect_surface_v1_destroy(effect_);
   effect_ = nullptr;
   blurRegion_ = {};
+  inputRegion_ = {};
   if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
   if (surface_) wl_surface_destroy(surface_);
   if (globals_) flush();
@@ -435,12 +513,24 @@ void WaylandWindow::endPaint(cairo_t* cr) {
   cairo_surface_flush(painting_->surface);
   if (globals_->compositorVersion >= 3) wl_surface_set_buffer_scale(surface_, scale_);
   setBlurRegion(frame.x - std::min(0, frame.x), frame.y - std::min(0, frame.y));  // where beginPaint put the frame
+  setInputRegion(frame.x - std::min(0, frame.x), frame.y - std::min(0, frame.y));
   wl_surface_attach(surface_, painting_->buffer, 0, 0);
   wl_surface_damage(surface_, 0, 0, INT32_MAX, INT32_MAX);
   wl_surface_commit(surface_);
   painting_->busy = true;
   painting_ = nullptr;
   flush();
+}
+
+// The frame only: the gap between it and the text, part of the surface, stays the app's.
+void WaylandWindow::setInputRegion(int x, int y) {
+  std::array<int, 4> wanted{x, y, frame.width, frame.height};
+  if (!clicked || wanted == inputRegion_) return;
+  inputRegion_ = wanted;
+  wl_region* region = wl_compositor_create_region(globals_->compositor);
+  wl_region_add(region, x, y, frame.width, frame.height);
+  wl_surface_set_input_region(surface_, region);
+  wl_region_destroy(region);
 }
 
 // The frame's rounded rectangle at (x, y) in the surface, one row at a time through the

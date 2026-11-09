@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "Controller.h"
+#include "PanelMetrics.h"
 #include "Screen.h"
 
 namespace ProjectKey {
@@ -50,6 +51,8 @@ class Panel {
   // the text (Environment::hintWindow); after show, which it is placed from.
   void showHint(fcitx::InputContext& ic, const PanelContent& hint);
   void hideHint();
+  // A click on a candidate or the chevron of the window ic shows.
+  std::function<void(fcitx::InputContext& ic, const Metrics::PanelHit& hit)> clicked;
 
  private:
   struct Rect {
@@ -78,6 +81,7 @@ class Panel {
   // Candidate window.
   void paintPanel();
   bool tickPanel();
+  void clickPanel(int x, int y);
   float proofHeight() const;
   float rowHeight() const;
   float rowTop() const;

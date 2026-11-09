@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <vector>
 
 #include "Screen.h"
 
@@ -44,11 +45,15 @@ class PanelHost : public fcitx::dbus::ObjectVTable<PanelHost> {
   explicit PanelHost(GnomeScreen& screen) : screen_(screen) {}
   void geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
                 int32_t scale);
+  void clicked(const std::string& id, int32_t x, int32_t y);  // in pixels from the window's corner
 
  private:
   GnomeScreen& screen_;
   FCITX_OBJECT_VTABLE_METHOD(geometry, "Geometry", "iiiiiii", "");
+  FCITX_OBJECT_VTABLE_METHOD(clicked, "Clicked", "sii", "");
 };
+
+class GnomeWindow;
 
 class GnomeScreen final : public Screen {
  public:
@@ -93,6 +98,7 @@ class GnomeScreen final : public Screen {
   }
   const Geometry& geometry() const { return geometry_; }
   int nextId() { return ++windows_; }
+  std::vector<GnomeWindow*> shown;  // for finding a click's window
 
  private:
   fcitx::dbus::Bus* bus_;
@@ -117,15 +123,25 @@ class GnomeWindow final : public Window {
     std::string base = std::string(runtime ? runtime : "/tmp") + "/project-key-" + std::to_string(getpid()) + "-" + id_;
     files_[0] = base + "-a.raw";
     files_[1] = base + "-b.raw";
+    screen_.shown.push_back(this);
   }
   ~GnomeWindow() override {
+    std::erase(screen_.shown, this);
     unmap();
     if (image_) cairo_surface_destroy(image_);
     for (const std::string& file : files_) unlink(file.c_str());
   }
 
   void place(const Frame& to) override { frame = {to.x, to.y, std::max(to.width, 1), std::max(to.height, 1)}; }
-  void map(fcitx::InputContext&) override { mapped = true; }  // the next frame shows it
+  void map(fcitx::InputContext&) override {  // the next frame shows it
+    if (!mapped && clicked) {
+      auto message = screen_.call("Reactive");
+      message << id_;
+      message.send();
+    }
+    mapped = true;
+  }
+  const std::string& id() const { return id_; }
   void unmap() override {
     if (!mapped) return;
     mapped = false;
@@ -179,6 +195,12 @@ class GnomeWindow final : public Window {
   int next_ = 0;
   cairo_surface_t* image_ = nullptr;
 };
+
+void PanelHost::clicked(const std::string& id, int32_t x, int32_t y) {
+  for (GnomeWindow* window : screen_.shown) {
+    if (window->id() == id && window->mapped && window->clicked) window->clicked(x, y);
+  }
+}
 
 std::unique_ptr<Window> GnomeScreen::createWindow(std::function<void()>, std::function<void()>) {
   return std::make_unique<GnomeWindow>(*this);

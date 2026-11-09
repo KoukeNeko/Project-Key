@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 #include "Common/Win.h"
 #include "TextService/Globals.h"
@@ -173,8 +175,23 @@ LRESULT CALLBACK CandidateWindow::WindowProc(HWND hwnd, UINT message, WPARAM wPa
     case WM_TIMER:
       if (self && wParam == kAnimationTimer) self->tick();
       return 0;
-    case WM_NCHITTEST:
-      return HTTRANSPARENT;  // clicks go to the app, as on macOS
+    case WM_NCHITTEST: {
+      // Only what a click does something on takes it; elsewhere it goes to the app.
+      POINT at{static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))};
+      if (!self) return HTTRANSPARENT;
+      ScreenToClient(hwnd, &at);
+      return self->hitAt(at).kind != PanelHit::kNone ? HTCLIENT : HTTRANSPARENT;
+    }
+    case WM_LBUTTONDOWN:
+      if (self) self->pressed_ = self->hitAt({static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))});
+      return 0;
+    case WM_LBUTTONUP:
+      if (self) {
+        PanelHit hit = self->hitAt({static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))});
+        PanelHit pressed = std::exchange(self->pressed_, {});
+        if (hit.kind != PanelHit::kNone && hit.kind == pressed.kind && hit.row == pressed.row && hit.index == pressed.index) self->clicked(hit);
+      }
+      return 0;
     case WM_NCACTIVATE:
       // Mica draws only on an active frame, and this window never takes focus: keep its frame active.
       return DefWindowProcW(hwnd, message, TRUE, lParam);
@@ -182,6 +199,17 @@ LRESULT CALLBACK CandidateWindow::WindowProc(HWND hwnd, UINT message, WPARAM wPa
       return MA_NOACTIVATE;
   }
   return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+PanelHit CandidateWindow::hitAt(POINT client) const {
+  if (!clicked || !content_ || hiding_) return {};
+  std::vector<std::vector<int>> spans;
+  for (const auto& row : content_->rows) {
+    spans.emplace_back();
+    for (const std::string& word : row) spans.back().push_back(fonts_.span(Widen(word)));
+  }
+  return HitCandidates(spans, !content_->pageLabel.empty(), client.x / scale_, client.y / scale_ - shownRowTop(), fonts_.columnWidth(),
+                       kGridColumns);
 }
 
 bool CandidateWindow::ensureWindow() {

@@ -15,11 +15,28 @@ Add-Type -Namespace PK -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hwnd);
 [DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr hwnd, out RECT rect);
+[DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[DllImport("user32.dll")] public static extern void mouse_event(uint flags, int x, int y, uint data, System.UIntPtr extra);
+[DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr hwnd);
+[DllImport("user32.dll")] static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, [MarshalAs(UnmanagedType.LPWStr)] string cls, string title);
+[DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(System.IntPtr hwnd, out uint pid);
 public struct RECT { public int Left, Top, Right, Bottom; }
+public struct POINT { public int X, Y; }
+// The candidate window of one process: every app that has typed keeps its own, cloaked.
+public static System.IntPtr CandidateWindow(uint process) {
+  System.IntPtr at = System.IntPtr.Zero;
+  while ((at = FindWindowExW(System.IntPtr.Zero, at, "IME_Candidate_Window", null)) != System.IntPtr.Zero) {
+    uint pid; GetWindowThreadProcessId(at, out pid);
+    if (pid == process) return at;
+  }
+  return at;
+}
 '@
 
 [void][PK.Native]::SetProcessDPIAware()  # window and screen coordinates in the same pixels
 $capsLockBefore = [Console]::CapsLock
+$cursorBefore = [PK.Native+POINT]::new(); [void][PK.Native]::GetCursorPos([ref]$cursorBefore)
 # A fresh server forgets earlier runs' choices, so the engine guesses the same words each time.
 $server = Get-Process ProjectKeyServer -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path
 if ($server) {
@@ -164,10 +181,34 @@ try {
   Start-Sleep -Milliseconds 300
   "after punctuation: [$(Text)]"
   if (-not (Text).EndsWith('、、「」')) { throw "expected 、、「」, got [$(Text)]" }
+
+  # A real click on the row's third candidate picks it, and the document keeps the focus.
+  Type-Keys 'rup '
+  Press 0x0D
+  Start-Sleep -Milliseconds 300
+  $guess = (Text)
+  Type-Keys 'rup '
+  Start-Sleep -Milliseconds 300
+  $candidate = [PK.Native]::CandidateWindow([uint32]$host_.Id)
+  if ($candidate -eq 0) { throw 'no candidate window to click' }
+  $r = [PK.Native+RECT]::new(); [void][PK.Native]::GetWindowRect($candidate, [ref]$r)
+  $scale = [PK.Native]::GetDpiForWindow($candidate) / 96
+  [void][PK.Native]::SetCursorPos($r.Left + [int](190 * $scale), $r.Bottom - [int](24 * $scale))  # the third column, in the row at the window's bottom
+  Start-Sleep -Milliseconds 100
+  [PK.Native]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero); [PK.Native]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+  Start-Sleep -Milliseconds 300
+  if ([PK.Native]::GetForegroundWindow() -ne $hwnd) { throw 'the click took the focus from the document' }
+  Press 0x0D
+  Start-Sleep -Milliseconds 300
+  "after clicking: [$(Text)]"
+  if ((Text).Length -ne $guess.Length + 1 -or (Text).Substring($guess.Length) -eq $guess.Substring($guess.Length - 1)) {
+    throw "expected the click to pick another word than the guess, got [$(Text)]"
+  }
   'TypingTest passed'
 } finally {
   # The keys it pressed are global: leave no modifier down and Caps Lock as it was, pass or fail.
   foreach ($vk in 0x10, 0x11, 0x12) { [PK.Native]::keybd_event($vk, 0, 2, [UIntPtr]::Zero) }
+  [void][PK.Native]::SetCursorPos($cursorBefore.X, $cursorBefore.Y)
   if ([Console]::CapsLock -ne $capsLockBefore) {
     [PK.Native]::keybd_event(0x14, 0, 0, [UIntPtr]::Zero); [PK.Native]::keybd_event(0x14, 0, 2, [UIntPtr]::Zero)
   }

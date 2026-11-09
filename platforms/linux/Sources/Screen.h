@@ -44,6 +44,8 @@ class Window {
   // The compositor put the window above the caret, as the screen ends below it.
   virtual bool above() const { return false; }
 
+  // A left click, in pixels from the frame's origin; set before the window is mapped.
+  std::function<void(int x, int y)> clicked;
   Frame frame;
   bool mapped = false;
   bool blurred = false;

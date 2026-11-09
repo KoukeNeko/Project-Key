@@ -9,7 +9,7 @@ Fcitx5 注音輸入法（大千鍵盤），按鍵與 [macOS 版](../macos/README
 | 引擎要做的事 | Fcitx5 上的做法 |
 |---|---|
 | 組字區 | preedit，可疑字以外的段落加底線，選字中的段落反白 |
-| 候選字窗、中／英標記 | Project Key 自己畫的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同：X11 上是 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上是輸入法的 popup（`Sources/WaylandScreen.cpp`），GNOME 上由 Project Key 的 GNOME Shell 擴充功能顯示（`Sources/GnomeScreen.cpp`） |
+| 候選字窗、中／英標記 | Project Key 自己畫的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色、動畫與 Windows 版相同，候選字與第一列尾端的頁碼或箭頭可用滑鼠點選：X11 上是 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上是輸入法的 popup（`Sources/WaylandScreen.cpp`），GNOME 上由 Project Key 的 GNOME Shell 擴充功能顯示（`Sources/GnomeScreen.cpp`） |
 | 前文（Tab 英文轉注音、組字接著游標前的字選字） | surrounding text；App 不提供時 Tab 照常輸入，選字當成句首 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
@@ -26,7 +26,7 @@ Fcitx5 注音輸入法（大千鍵盤），按鍵與 [macOS 版](../macos/README
 
 Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連到 Fcitx5 時，候選字窗與中／英標記是畫在 Fcitx5 的 Wayland 連線上的 input popup，由合成器放在游標下方，下方放不下時放在上方（COSMIC 把 popup 的左上角放在游標頂端，Project Key 自己往下讓出游標的高度）；模糊見上表。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）或 KWin 的輸入法（input-method-v1）連線時，以及 X11 上 App 只給相對座標時，改用 Fcitx5 自己的候選面板，外觀跟隨 Fcitx5 主題；操作與其他平台相同：整句預覽和頁碼在第一行，選字列逐格選取，按 ↓ 展開的格線以直排列出最多五列（GNOME 上面板由 App 畫，每個候選只能是一行純文字，所以選中的那列整列反白、選中的字以［］標出）。
 
-GNOME（Mutter）沒有讓輸入法把視窗放在游標處的協定，所以 GNOME 上候選字窗、Tab 提示與中／英標記由 GNOME Shell 擴充功能「Project Key」（`gnome-shell/`，裝在 `/usr/share/gnome-shell/extensions/project-key@koukeneko.github.io`）顯示：Project Key 照常自己畫，把畫好的影像寫到 `XDG_RUNTIME_DIR` 的檔案，經 D-Bus 交給擴充功能放到游標處；擴充功能則回報焦點視窗與工作區的位置，把 App 給的相對座標換成螢幕座標。GNOME Shell 轉送的 App（IBus）與經 Fcitx5 D-Bus 的 App 都適用。安裝後在「擴充功能」App 開啟它（或 `gnome-extensions enable project-key@koukeneko.github.io`，需重新登入）；沒開啟時改用 Fcitx5 的候選面板。動畫與其他桌面相同，每一格畫面都經由擴充功能顯示。
+GNOME（Mutter）沒有讓輸入法把視窗放在游標處的協定，所以 GNOME 上候選字窗、Tab 提示與中／英標記由 GNOME Shell 擴充功能「Project Key」（`gnome-shell/`，裝在 `/usr/share/gnome-shell/extensions/project-key@koukeneko.github.io`）顯示：Project Key 照常自己畫，把畫好的影像寫到 `XDG_RUNTIME_DIR` 的檔案，經 D-Bus 交給擴充功能放到游標處；擴充功能則回報焦點視窗與工作區的位置，把 App 給的相對座標換成螢幕座標。GNOME Shell 轉送的 App（IBus）與經 Fcitx5 D-Bus 的 App 都適用。安裝後在「擴充功能」App 開啟它（或 `gnome-extensions enable project-key@koukeneko.github.io`，需重新登入）；沒開啟時改用 Fcitx5 的候選面板。動畫與其他桌面相同，每一格畫面都經由擴充功能顯示；滑鼠點選由擴充功能回傳給 Project Key，更新後需重新登入才會載入新版擴充功能。
 
 KDE Plasma 的 Wayland 上，KWin 用自己的輸入法協定（input-method-v1）啟動 Fcitx5，候選字預設由 Plasma 的輸入法面板（kimpanel）顯示，外觀跟隨 Plasma 主題；以 `fcitx5 --disable=kimpanel` 啟動時改用 Fcitx5 的面板與下面的主題。
 

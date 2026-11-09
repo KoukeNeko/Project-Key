@@ -304,6 +304,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
                                    [this] {
                                      if (owner_ && content_ && panel_->mapped) show(*owner_, PanelContent(*content_), anchor_);
                                    });
+    panel_->clicked = [this](int x, int y) { clickPanel(x, y); };
   }
   bool wasVisible = panel_->mapped && !panelFade_.hiding();
   // One window changing shape: it moves and resizes to the new content, across the text when it
@@ -373,6 +374,17 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   }
   if (sliding_ || resizing_ || panelFade_.start) startTimer(panelTimer_, &Panel::tickPanel);
   screen_->sync();
+}
+
+void Panel::clickPanel(int x, int y) {
+  if (!clicked || !owner_ || !content_ || panelFade_.hiding()) return;
+  std::vector<std::vector<int>> spans;
+  for (const auto& row : content_->rows) {
+    spans.emplace_back();
+    for (const std::string& word : row) spans.back().push_back(span(word));
+  }
+  PanelHit hit = HitCandidates(spans, !content_->pageLabel.empty(), x / scale_, y / scale_ - shownRowTop(), columnWidth_, kGridColumns);
+  if (hit.kind != PanelHit::kNone) clicked(*owner_, hit);
 }
 
 // From where the window is now, so one fading out turns back. False without a

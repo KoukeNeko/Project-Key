@@ -100,13 +100,13 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 轉換預覽的鍵帽寫「Tab」。
 - 組字中打出不是注音也不是標點的字元時，會送出組字並由輸入法輸入該字元。macOS 把按鍵交還給 App；TSF 不會再把已經判定交給 App 的按鍵送回來，所以改由輸入法輸入。
 - 透過 IMM32 相容層運作的傳統 Win32 文字框（例如 WinForms 的 TextBox）不提供文件內容給 TSF：在這些 App 裡，英文模式不顯示轉注音預覽，Tab 照常輸入。
+- 候選視窗可用滑鼠點選：點候選字即選取，點第一列尾端的頁碼或箭頭展開或收合候選格線。打字時顯示的候選列也可點選，點選後可繼續打字。點在其他位置時，點擊會交給 App。
 
 ## 尚未實作
 
 - 候選清單的 UI Automation 支援（讓朗讀程式讀出候選字）；目前只送出 `EVENT_OBJECT_IME_SHOW／HIDE／CHANGE`。
 - 避開觸控鍵盤、遊戲全螢幕用的 UI Element（`ITfUIElement`）。
-- 聯想詞、滑鼠點選候選。
-- 候選視窗與 Tab 提示出現、消失時的淡入淡出；內容改變時的移動與縮放已與 macOS 相同。
+- 聯想詞。
 - 自行建置的上下文模型：`tools/bigram-trainer` 的訓練腳本是 shell script，在 Windows 上需要另外執行，或用 Git Bash 執行 `fetch-models.sh` 下載發行版那一組；有 `bigram.bin`、`chars.bin` 時 `build.ps1` 會一併安裝；有補詞後的 `data.txt` 時，以它取代 McBopomofo 的詞庫。沒有它時選字與 McBopomofo 相同。發行版已附上。
 - 選過的字只存在伺服器記憶體，登出或重新安裝後清空（同 macOS）；從送出的文字學到的字串次數存在 `%LOCALAPPDATA%\Project Key\personal.txt`，設定的「清除」一併清空。Store App、沙盒中與低完整性的 App 不從這份紀錄排序，也不會加入紀錄，以免從候選順序讀出在其他 App 打過的字。
 - 組字一律當成句首：文字服務只在英文模式按 Tab 時把游標前的文字傳給伺服器，macOS 則接著游標前的漢字選字。

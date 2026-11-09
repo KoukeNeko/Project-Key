@@ -4,6 +4,7 @@
 // and sends the pixels here, in screen coordinates. In return this tells it where the
 // focused window and the screen's work area are, which turn the caret a GNOME app
 // reports (relative to its window) into screen coordinates.
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
@@ -30,6 +31,9 @@ const PANEL = `<node>
     <method name="Hide">
       <arg type="s" name="id" direction="in"/>
     </method>
+    <method name="Reactive">
+      <arg type="s" name="id" direction="in"/>
+    </method>
     <method name="Refresh"/>
   </interface>
 </node>`;
@@ -37,6 +41,7 @@ const PANEL = `<node>
 export default class ProjectKeyExtension extends Extension {
     enable() {
         this._windows = new Map();
+        this._reactive = new Set();
         this._panel = Gio.DBusExportedObject.wrapJSObject(PANEL, this);
         this._panel.export(Gio.DBus.session, '/org/projectkey/Panel');
         this._name = Gio.bus_own_name_on_connection(Gio.DBus.session, NAME, Gio.BusNameOwnerFlags.REPLACE, null, null);
@@ -74,7 +79,8 @@ export default class ProjectKeyExtension extends Extension {
             return;
         let actor = this._windows.get(id);
         if (!actor) {
-            actor = new St.Widget({reactive: false, can_focus: false, track_hover: false});
+            actor = new St.Widget({reactive: this._reactive.has(id), can_focus: false, track_hover: false});
+            actor.connect('button-release-event', (_, event) => this._clicked(id, actor, event));
             actor._blur = new St.Widget();
             actor._image = new St.Widget();
             actor.add_child(actor._blur);
@@ -146,6 +152,25 @@ export default class ProjectKeyExtension extends Extension {
 
     Hide(id) {
         this._windows.get(id)?.hide();
+    }
+
+    // D-Bus: clicks on this window go to Project Key, not to what is under it.
+    Reactive(id) {
+        this._reactive.add(id);
+        const actor = this._windows.get(id);
+        if (actor)
+            actor.reactive = true;
+    }
+
+    _clicked(id, actor, event) {
+        if (event.get_button() !== Clutter.BUTTON_PRIMARY)
+            return Clutter.EVENT_PROPAGATE;
+        const [, x, y] = actor.transform_stage_point(...event.get_coords());
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost1', 'Clicked',
+            new GLib.Variant('(sii)', [id, Math.round(x * scale), Math.round(y * scale)]),
+            null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
+        return Clutter.EVENT_STOP;
     }
 
     // Project Key loaded after the geometry last went out (Fcitx5 loads it when first used).

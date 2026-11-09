@@ -603,15 +603,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
   typed_ = true;
   // The keypad's 1-6 pick from the row shown while typing, as its digits say; typing goes on.
   if (event.numpad && key >= '1' && key <= '6' && rowSegment_ && env_.settings->flag(Setting::kKeypadPicks)) {
-    startChoosingAt(*rowSegment_);
-    int index = key - '1';
-    if (choosing_ && index < rowEnd(0)) {
-      pick(index, /*moveOn=*/false);
-    } else {
-      client_.beep();
-      choosing_ = false;
-      refresh();
-    }
+    pickFromTypingRow(key - '1');
     return true;
   }
   if (!event.shift && composer_->isReadingKey(key)) {
@@ -869,6 +861,37 @@ void Controller::startChoosingAt(size_t start) {
 
 void Controller::choose(int index) {
   if (choosing_ && index >= 0 && index < static_cast<int>(candidates_.size())) pick(index);
+}
+
+void Controller::pickFromTypingRow(int index) {
+  startChoosingAt(*rowSegment_);
+  if (choosing_ && index < rowEnd(0)) {
+    pick(index, /*moveOn=*/false);
+  } else {
+    client_.beep();
+    choosing_ = false;
+    refresh();
+  }
+}
+
+void Controller::clickCandidate(int row, int index) {
+  if (row < 0 || index < 0) return;
+  if (!choosing_) {
+    if (row == 0 && rowSegment_) pickFromTypingRow(index);
+    return;
+  }
+  if (!expanded_ && row != 0) return;
+  int shown = expanded_ ? firstRow_ + row : rowOf(selection_);
+  if (shown >= static_cast<int>(rowStarts_.size())) return;
+  int at = rowStarts_[shown] + index;
+  if (at < rowEnd(shown)) pick(at);
+}
+
+void Controller::toggleGrid() {
+  if (!choosing_ && rowSegment_) startChoosingAt(*rowSegment_);
+  if (!choosing_) return;
+  expanded_ = !expanded_;
+  refresh();
 }
 
 void Controller::pick(int index, bool moveOn) {

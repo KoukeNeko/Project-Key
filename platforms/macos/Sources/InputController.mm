@@ -11,6 +11,7 @@
 using ProjectKey::Key;
 
 @interface PKInputController : IMKInputController
+- (void)clickCandidateRow:(NSInteger)row index:(NSInteger)index;  // row -1: the chevron
 @end
 
 namespace {
@@ -169,6 +170,10 @@ class ClientAdapter : public ProjectKey::Client {
       hidePanel();
       return;
     }
+    __weak PKInputController *owner = controller_;  // the shared window answers to whichever context shows it
+    PKCandidatePanel.shared.clicked = ^(NSInteger row, NSInteger index) {
+      [owner clickCandidateRow:row index:index];
+    };
     [PKCandidatePanel.shared show:Content(panel) below:lineRect()];
   }
 
@@ -328,6 +333,14 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 
 - (void)showSettings:(id)sender {
   PKShowSettings();
+}
+
+- (void)clickCandidateRow:(NSInteger)row index:(NSInteger)index {
+  if (row < 0) {
+    _controller->toggleGrid();
+  } else {
+    _controller->clickCandidate(static_cast<int>(row), static_cast<int>(index));
+  }
 }
 
 - (BOOL)handleEvent:(NSEvent *)event client:(id)client {

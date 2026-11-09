@@ -519,6 +519,15 @@ class Engine : public fcitx::InputMethodEngineV2 {
     };
     environment_.appTypesUnhandledKeys = true;  // a key the engine does not filter reaches the app
     instance_->inputContextManager().registerProperty("projectkey", &factory_);
+    panel_.clicked = [this](fcitx::InputContext& ic, const Metrics::PanelHit& hit) {
+      Session* session = ic.propertyFor(&factory_);
+      Active active(session);
+      if (hit.kind == Metrics::PanelHit::kChevron) {
+        session->controller.toggleGrid();
+      } else {
+        session->controller.clickCandidate(hit.row, hit.index);
+      }
+    };
     // The settings window: from the Fcitx5 menu, as from the macOS input menu and the Windows language bar.
     settingsAction_.setShortText("Project Key 設定…");
     settingsAction_.connect<fcitx::SimpleAction::Activated>([](fcitx::InputContext*) { fcitx::startProcess({PROJECTKEY_SETTINGS}); });

@@ -28,6 +28,8 @@ enum class Request : uint8_t {
   kToggleMode = 9,    // the language bar button
   kShowSettings = 10, // the server starts the settings window, outside any app container
   kReloadModels = 11, // from the settings app, after it downloaded newer models
+  kClickCandidate = 12,  // row, index
+  kToggleGrid = 13,      // a click on the chevron
 };
 
 // What the text service does with the document and windows, in order.
@@ -93,6 +95,7 @@ class Reader {
     return v;
   }
   bool ok() const { return ok_; }
+  bool more() const { return pos_ < size_; }
 
  private:
   void fail() { ok_ = false; pos_ = size_; }
@@ -186,6 +189,7 @@ struct Message {
   KeyEvent key;         // kKeyDown
   bool down = false;    // kShift
   std::string context;  // kKeyDown of Tab in 英: text before the caret, for turning English typed there into Zhuyin
+  int row = 0, index = 0;  // kClickCandidate
 };
 
 inline std::string WriteMessage(const Message& m) {
@@ -195,6 +199,8 @@ inline std::string WriteMessage(const Message& m) {
   WriteKey(w, m.key);
   w.boolean(m.down);
   w.str(m.context);
+  w.i32(m.row);
+  w.i32(m.index);
   return w.bytes();
 }
 
@@ -205,6 +211,11 @@ inline bool ReadMessage(const std::string& bytes, Message& m) {
   m.key = ReadKey(r);
   m.down = r.boolean();
   m.context = r.str();
+  // Absent from apps still running a text service from before clicks, which kVersion must not turn away.
+  if (r.more()) {
+    m.row = r.i32();
+    m.index = r.i32();
+  }
   return r.ok();
 }
 
