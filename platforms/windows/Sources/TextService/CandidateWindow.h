@@ -26,7 +26,7 @@ class CandidateWindow {
   // The Tab hint's own window: next to `panel`, on the side away from the text.
   void showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance);
   void hide();
-  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !cloaked_; }
+  bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !cloaked_ && !hiding_; }
   RECT frame() const;
   const std::optional<PanelContent>& content() const { return content_; }
 
@@ -36,6 +36,7 @@ class CandidateWindow {
   void applyAppearance(int appearance);  // Setting::kAppearance
   void prepareToAppear();                // before the first paint of a showing
   void appear();                         // after it
+  void finishHide();                     // once it has faded out
   float fadeAlpha() const;
   void paint();
   void tick();
@@ -77,7 +78,8 @@ class CandidateWindow {
   float oldRowTop_ = 0, progress_ = 1;
   bool cloaked_ = false;   // mapped but out of sight, between showings
   bool settling_ = false;  // its material was just set, and is not up yet
-  bool fading_ = false;
+  bool fading_ = false, hiding_ = false;  // hiding_: fading out, already gone to the text service
+  float fadeFrom_ = 0, fadeTo_ = 1;
   ULONGLONG fadeStart_ = 0;
 };
 

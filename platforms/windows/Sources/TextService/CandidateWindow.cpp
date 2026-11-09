@@ -384,6 +384,9 @@ void CandidateWindow::prepareToAppear() {
   }
   if (material()) SendMessageW(hwnd_, WM_NCACTIVATE, TRUE, 0);  // see WM_NCACTIVATE in WindowProc
   if (!IsWindowVisible(hwnd_)) ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+  fadeFrom_ = hiding_ ? fadeAlpha() : 0;  // a window fading out turns back from where it is
+  fadeTo_ = 1;
+  hiding_ = false;
   fading_ = !ReducesMotion();
   fadeStart_ = GetTickCount64();
 }
@@ -396,12 +399,20 @@ void CandidateWindow::appear() {
 }
 
 float CandidateWindow::fadeAlpha() const {
-  return fading_ ? std::min(1.f, static_cast<float>(GetTickCount64() - fadeStart_) / kWindowFadeMs) : 1;
+  if (!fading_) return 1;
+  float t = std::min(1.f, static_cast<float>(GetTickCount64() - fadeStart_) / kWindowFadeMs);
+  return fadeFrom_ + (fadeTo_ - fadeFrom_) * t;
 }
 
 void CandidateWindow::tick() {
   ULONGLONG now = GetTickCount64();
-  if (fading_ && now - fadeStart_ >= static_cast<ULONGLONG>(kWindowFadeMs)) fading_ = false;
+  if (fading_ && now - fadeStart_ >= static_cast<ULONGLONG>(kWindowFadeMs)) {
+    fading_ = false;
+    if (hiding_) {
+      finishHide();
+      return;
+    }
+  }
   if (sliding_ && now - slideStart_ >= static_cast<ULONGLONG>(kSlideMs)) sliding_ = false;
   if (resizing_) {
     float t = std::min(1.f, static_cast<float>(now - resizeStart_) / kResizeMs);
@@ -423,13 +434,25 @@ void CandidateWindow::tick() {
 
 void CandidateWindow::hide() {
   if (!visible()) return;
+  NotifyWinEvent(EVENT_OBJECT_IME_HIDE, hwnd_, OBJID_CLIENT, CHILDID_SELF);
+  if (ReducesMotion()) {
+    finishHide();
+    return;
+  }
+  fadeFrom_ = fadeAlpha();
+  fadeTo_ = 0;
+  fadeStart_ = GetTickCount64();
+  fading_ = hiding_ = true;
+  SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+}
+
+void CandidateWindow::finishHide() {
   KillTimer(hwnd_, kAnimationTimer);
-  sliding_ = resizing_ = fading_ = false;
+  sliding_ = resizing_ = fading_ = hiding_ = false;
   oldContent_.reset();
   progress_ = 1;
   Cloak(hwnd_, true);
   cloaked_ = true;
-  NotifyWinEvent(EVENT_OBJECT_IME_HIDE, hwnd_, OBJID_CLIENT, CHILDID_SELF);
   content_.reset();
 }
 
