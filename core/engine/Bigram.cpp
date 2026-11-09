@@ -1,6 +1,7 @@
 #include "Bigram.h"
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
@@ -14,10 +15,17 @@ void Write(std::ofstream& out, const T& value) {
   out.write(reinterpret_cast<const char*>(&value), sizeof value);
 }
 
+uint32_t Hash(std::string_view word) {  // FNV-1a
+  uint32_t hash = 2166136261u;
+  for (char c : word) hash = (hash ^ static_cast<unsigned char>(c)) * 16777619u;
+  return hash;
+}
+
 }  // namespace
 
 bool Bigram::load(const std::string& path) {
-  ids_.clear();
+  wordOffsets_.clear();
+  slots_.clear();
   pairs_ = triples_ = {};
   // The pair and triple tables stay in the mapped file: the system can drop those pages
   // under memory pressure, which an iOS keyboard needs.
@@ -39,7 +47,8 @@ bool Bigram::load(const std::string& path) {
     return true;
   };
   auto fail = [&] {
-    ids_.clear();
+    wordOffsets_.clear();
+    slots_.clear();
     pairs_ = {};
     file_.close();
     return false;
@@ -48,12 +57,18 @@ bool Bigram::load(const std::string& path) {
   if (!take(magic, sizeof magic) || std::memcmp(magic, kMagic, sizeof kMagic) != 0) return fail();
   uint32_t wordCount = 0;
   if (!take(&wordCount, sizeof wordCount)) return fail();
-  ids_.reserve(std::min<size_t>(wordCount, (end - at) / sizeof(uint16_t)));  // a word is at least its length
+  wordOffsets_.reserve(std::min<size_t>(wordCount, (end - at) / sizeof(uint16_t)));  // a word is at least its length
   for (uint32_t id = 0; id < wordCount; id++) {
+    wordOffsets_.push_back(static_cast<uint32_t>(at - file_.data()));
     uint16_t length = 0;
     if (!take(&length, sizeof length) || static_cast<size_t>(end - at) < length) return fail();
-    ids_.emplace(std::string(at, length), id);
     at += length;
+  }
+  slots_.assign(std::bit_ceil(std::max<size_t>(wordCount, 4) * 2), 0);
+  for (uint32_t id = 0; id < wordCount; id++) {
+    size_t slot = Hash(wordAt(id)) & (slots_.size() - 1);
+    while (slots_[slot]) slot = (slot + 1) & (slots_.size() - 1);
+    slots_[slot] = id + 1;
   }
   if (!table(pairs_)) return fail();
   if (!table(triples_)) triples_ = {};  // a bigram-only model
@@ -78,10 +93,19 @@ bool Bigram::save(const std::string& path, const std::vector<std::string>& words
   return static_cast<bool>(out);
 }
 
+std::string_view Bigram::wordAt(uint32_t id) const {
+  const char* entry = file_.data() + wordOffsets_[id];
+  uint16_t length;
+  std::memcpy(&length, entry, sizeof length);
+  return {entry + sizeof length, length};
+}
+
 std::optional<uint32_t> Bigram::id(const std::string& word) const {
-  auto it = ids_.find(word);
-  if (it == ids_.end()) return std::nullopt;
-  return it->second;
+  if (slots_.empty()) return std::nullopt;
+  for (size_t slot = Hash(word) & (slots_.size() - 1); slots_[slot]; slot = (slot + 1) & (slots_.size() - 1)) {
+    if (wordAt(slots_[slot] - 1) == word) return slots_[slot] - 1;
+  }
+  return std::nullopt;
 }
 
 namespace {

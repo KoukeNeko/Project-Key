@@ -176,7 +176,7 @@ bool SentenceModel::load(const std::string& path) {
     return values;
   };
   size_t e = embd;
-  tokenEmbedding_ = take(vocab * e);
+  std::vector<float> embedding = take(vocab * e);
   positionEmbedding_ = take(context * e);
   blocks_.clear();
   for (int l = 0; l < layers && ok; l++) {
@@ -191,9 +191,9 @@ bool SentenceModel::load(const std::string& path) {
   }
   lnfW_ = take(e), lnfB_ = take(e);
   if (!ok) return false;
-  outputEmbedding_.resize(tokenEmbedding_.size());  // [embd][vocab], so MatMul reads it row by row
+  tokenEmbedding_.resize(embedding.size());  // transposed, so MatMul reads it row by row
   for (size_t v = 0; v < static_cast<size_t>(vocab); v++) {
-    for (size_t i = 0; i < e; i++) outputEmbedding_[i * vocab + v] = tokenEmbedding_[v * e + i];
+    for (size_t i = 0; i < e; i++) tokenEmbedding_[i * vocab + v] = embedding[v * e + i];
   }
   zeros_.assign(vocab, 0);
   ids_.clear();
@@ -225,7 +225,7 @@ void SentenceModel::run(std::vector<Node*>& nodes, const std::vector<uint32_t>& 
     node.keys.assign(static_cast<size_t>(layers_) * e, 0);
     node.values.assign(static_cast<size_t>(layers_) * e, 0);
     for (int i = 0; i < e; i++) {
-      x[r * e + i] = tokenEmbedding_[static_cast<size_t>(tokens[r]) * e + i] + positionEmbedding_[node.position * e + i];
+      x[r * e + i] = tokenEmbedding_[static_cast<size_t>(i) * vocab_ + tokens[r]] + positionEmbedding_[node.position * e + i];
     }
   }
   std::vector<float> weights(context_);
@@ -273,7 +273,7 @@ void SentenceModel::run(std::vector<Node*>& nodes, const std::vector<uint32_t>& 
   LayerNorm(x.data(), rows, e, lnfW_, lnfB_, a.data());
   // The normalizer over the whole vocabulary: every logit, against the transposed embedding.
   std::vector<float> all(static_cast<size_t>(rows) * vocab_);
-  MatMul(a.data(), rows, e, outputEmbedding_, zeros_, vocab_, all.data());
+  MatMul(a.data(), rows, e, tokenEmbedding_, zeros_, vocab_, all.data());
   for (int r = 0; r < rows; r++) {
     const float* logits = &all[static_cast<size_t>(r) * vocab_];
     float most = *std::max_element(logits, logits + vocab_);
@@ -325,9 +325,8 @@ std::vector<double> SentenceModel::log10Probabilities(const std::vector<std::vec
       Node& node = cache.nodes.at(prefix);
       node.used = cache.call;
       uint32_t next = i < usable ? sentences[s][i] : kEnd;
-      const float* row = &tokenEmbedding_[static_cast<size_t>(next) * embd_];
       float dot = 0;
-      for (int k = 0; k < embd_; k++) dot += node.output[k] * row[k];
+      for (int k = 0; k < embd_; k++) dot += node.output[k] * tokenEmbedding_[static_cast<size_t>(k) * vocab_ + next];
       total += dot - node.logSum;
       if (i < usable) prefix += static_cast<char32_t>(next);
     }

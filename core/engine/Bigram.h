@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <string_view>
 #include <vector>
 
 #include "MemoryMappedFile.h"
@@ -51,8 +51,12 @@ class Bigram {
   std::optional<double> log10Probability(uint32_t first, uint32_t second, uint32_t next) const;
 
  private:
+  std::string_view wordAt(uint32_t id) const;
+
   McBopomofo::MemoryMappedFile file_;
-  std::unordered_map<std::string, uint32_t> ids_;
+  // Word to id without copying the words out of the mapped file: each id's place in the file,
+  // and an open-addressing table of id + 1 (0 for empty).
+  std::vector<uint32_t> wordOffsets_, slots_;
   Table pairs_, triples_;
 };
 

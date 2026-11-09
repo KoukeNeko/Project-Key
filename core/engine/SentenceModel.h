@@ -37,7 +37,7 @@ class SentenceModel {
     size_t computed = 0;  // nodes run, for measurements
     void clear() { nodes.clear(); }
   };
-  static constexpr size_t kCacheSize = 1024;  // about 20 MB with the 384-wide, 6-layer model
+  static constexpr size_t kCacheSize = 256;  // about 5 MB with the 384-wide, 6-layer model; one call reads fewer
 
   // log10 P(sentence, then its end) for each encoded sentence.
   std::vector<double> log10Probabilities(const std::vector<std::vector<uint32_t>>& sentences, Cache& cache) const;
@@ -50,8 +50,8 @@ class SentenceModel {
   struct Layer {
     std::vector<float> ln1w, ln1b, attnW, attnB, projW, projB, ln2w, ln2b, fcW, fcB, fcProjW, fcProjB;
   };
-  std::vector<float> tokenEmbedding_, positionEmbedding_, lnfW_, lnfB_;
-  std::vector<float> outputEmbedding_, zeros_;  // the token embedding transposed, and a zero bias for it
+  std::vector<float> positionEmbedding_, lnfW_, lnfB_;
+  std::vector<float> tokenEmbedding_, zeros_;  // [embd][vocab], as the output layer reads it, and a zero bias for it
   std::vector<Layer> blocks_;
 };
 
