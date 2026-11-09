@@ -82,14 +82,9 @@ class TonelessModel : public LanguageModel {
       start = end + 1;
     }
     std::vector<std::pair<std::string, Unigram>> found;
-    std::string_view previous;
-    // Every match starts with what was typed before the first kAnyTone; a reading's rows are adjacent.
-    for (std::string_view row : lm_->rowsStartingWith(reading.substr(0, reading.find(Composer::kAnyTone)))) {
-      std::string_view key = row.substr(0, row.find(' '));
-      if (key == previous) continue;
-      previous = key;
-      if (!Matches(typed, key)) continue;
-      std::string toned(key);
+    // Every match starts with what was typed before the first kAnyTone.
+    for (const std::string& toned : lm_->readingsStartingWith(reading.substr(0, reading.find(Composer::kAnyTone)))) {
+      if (!Matches(typed, toned)) continue;
       for (Unigram& unigram : lm_->getUnigrams(toned)) {
         // The dictionary also lists each lone symbol as itself (ㄉ for ㄉ), which is no syllable;
         // the candidates offer the Zhuyin anyway.
@@ -173,10 +168,17 @@ std::string AnyTone(const std::string& reading) {
 }  // namespace
 
 void Lexicon::loadLanguageModel(const char* path) {
-  McBopomofoLM::loadLanguageModel(path);
   if (!path) return;
   rows_.reset();
   file_.close();
+  preparedKey_.clear();
+  std::string folder(path);
+  folder.resize(folder.find_last_of("/\\") + 1);
+  if (compiled_.load(folder + "lexicon.bin")) {
+    prepareRows(" ");
+    return;
+  }
+  McBopomofoLM::loadLanguageModel(path);
   if (file_.open(path)) {
     rows_ = std::make_unique<McBopomofo::ParselessPhraseDB>(file_.data(), file_.length(), /*validate_pragma=*/true);
   }
@@ -202,13 +204,39 @@ void Lexicon::loadUserPhrases(const std::string& path) {
   userReadings_.erase(std::unique(userReadings_.begin(), userReadings_.end()), userReadings_.end());
 }
 
-std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefix) const {
-  std::vector<std::string_view> rows = rows_ ? rows_->findRows(prefix) : std::vector<std::string_view>{};
+// McBopomofo merges the user's words into what its model finds, so it is handed the reading's rows.
+void Lexicon::prepareRows(const std::string& key) {
+  if (!compiled_.isLoaded() || key == preparedKey_) return;
+  preparedKey_ = key;
+  preparedLines_.clear();
+  if (!compiled_.appendLines(key, preparedLines_)) preparedLines_ = "\n";  // a database cannot be empty
+  McBopomofoLM::loadLanguageModel(
+      std::make_unique<McBopomofo::ParselessPhraseDB>(preparedLines_.data(), preparedLines_.size(), /*validate_pragma=*/false));
+}
+
+std::vector<LanguageModel::Unigram> Lexicon::getUnigrams(const std::string& key) {
+  prepareRows(key);
+  return McBopomofoLM::getUnigrams(key);
+}
+
+bool Lexicon::hasUnigrams(const std::string& key) {
+  prepareRows(key);
+  return McBopomofoLM::hasUnigrams(key);
+}
+
+std::vector<std::string> Lexicon::readingsStartingWith(const std::string& prefix) const {
+  std::vector<std::string> readings = compiled_.readingsStartingWith(prefix);
+  if (rows_) {
+    for (std::string_view row : rows_->findRows(prefix)) {
+      std::string_view reading = row.substr(0, row.find(' '));
+      if (readings.empty() || readings.back() != reading) readings.emplace_back(reading);  // a reading's rows are adjacent
+    }
+  }
   for (auto it = std::lower_bound(userReadings_.begin(), userReadings_.end(), prefix);
        it != userReadings_.end() && it->compare(0, prefix.size(), prefix) == 0; ++it) {
-    rows.push_back(*it);
+    if (readings.empty() || readings.back() != *it) readings.push_back(*it);
   }
-  return rows;
+  return readings;
 }
 
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,

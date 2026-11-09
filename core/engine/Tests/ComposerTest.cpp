@@ -373,6 +373,26 @@ int main(int argc, char** argv) {
   type(learning, "xu,4g6");
   assert(learning.text() == "獵食");
 
+  {
+    // lexicon.bin reads back as the rows it was made from, shared endings and starts included.
+    std::string path = std::filesystem::temp_directory_path() / "pk-lexicon-test.bin";
+    using Row = ProjectKey::LexiconFile::Row;
+    assert(ProjectKey::LexiconFile::save(path, {{"ㄅㄚ", "八", -1.5f}, {"ㄅㄚ", "巴", -2.25f}, {"ㄅㄚˇ", "把", -1.f},
+                                                {"ㄆㄚ", "趴", -3.f}, {"ㄆㄚˇ", "𠯿", -4.f}}));
+    ProjectKey::LexiconFile file;
+    assert(file.load(path));
+    std::string lines;
+    assert(file.appendLines("ㄅㄚ", lines) && lines == "ㄅㄚ 八 -1.5\nㄅㄚ 巴 -2.25\n");
+    lines.clear();
+    assert(file.appendLines("ㄆㄚˇ", lines) && lines == "ㄆㄚˇ 𠯿 -4\n");
+    assert(!file.appendLines("ㄅ", lines) && !file.appendLines("ㄇㄚ", lines));
+    assert((file.readingsStartingWith("ㄅ") == std::vector<std::string>{"ㄅㄚ", "ㄅㄚˇ"}));
+    assert((file.readingsStartingWith("ㄆㄚ") == std::vector<std::string>{"ㄆㄚ", "ㄆㄚˇ"}));
+    assert(file.readingsStartingWith("ㄇ").empty());
+    assert(!ProjectKey::LexiconFile::save(path, {Row{"ㄆ", "趴", -1.f}, Row{"ㄅ", "八", -1.f}}));  // not sorted
+    std::filesystem::remove(path);
+  }
+
   std::printf("ComposerTest passed\n");
   return 0;
 }

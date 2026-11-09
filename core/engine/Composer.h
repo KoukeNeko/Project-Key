@@ -13,6 +13,7 @@
 
 #include "Bigram.h"
 #include "CharModel.h"
+#include "LexiconFile.h"
 #include "SentenceModel.h"
 #include "Mandarin/Mandarin.h"
 #include "McBopomofoLM.h"
@@ -32,19 +33,26 @@ struct Segment {
   bool doubtful = false;
 };
 
-// McBopomofo's language model, which also finds data.txt's rows by the start of a reading.
+// McBopomofo's language model, which also finds readings by how they start. It reads lexicon.bin
+// when that is beside data.txt, and data.txt itself otherwise.
 class Lexicon : public McBopomofo::McBopomofoLM {
  public:
   // Hides McBopomofoLM's own, which loads only the exact lookups.
   void loadLanguageModel(const char* path);
+  std::vector<Formosa::Gramambular2::LanguageModel::Unigram> getUnigrams(const std::string& key) override;
+  bool hasUnigrams(const std::string& key) override;
   // The user's own words, one "word reading" line each (小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ), '#' starting a
   // comment; they win over the dictionary's words of the same reading. A missing file has none.
   void loadUserPhrases(const std::string& path);
-  // The "reading word score" rows whose reading starts with `prefix`, then the user's
-  // readings that do, each a row of the reading alone.
-  std::vector<std::string_view> rowsStartingWith(const std::string& prefix) const;
+  // The dictionary's readings that start with `prefix`, then the user's that do.
+  std::vector<std::string> readingsStartingWith(const std::string& prefix) const;
 
  private:
+  void prepareRows(const std::string& key);
+
+  LexiconFile compiled_;
+  // compiled_'s rows for the reading last looked up, as data.txt's lines for McBopomofo to read.
+  std::string preparedKey_, preparedLines_;
   McBopomofo::MemoryMappedFile file_;
   std::unique_ptr<McBopomofo::ParselessPhraseDB> rows_;
   std::string userPhrasesText_;            // the user phrases file, which McBopomofo's points into

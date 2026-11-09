@@ -30,6 +30,7 @@ targets:
       - Keyboard
       - path: ../../core/engine/Composer.cpp
       - path: ../../core/engine/Controller.cpp
+      - path: ../../core/engine/LexiconFile.cpp
       - path: ../../core/engine/Bigram.cpp
       - path: ../../core/engine/CharModel.cpp
       - path: ../../core/engine/SentenceModel.cpp
