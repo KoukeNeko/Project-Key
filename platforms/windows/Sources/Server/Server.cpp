@@ -188,6 +188,7 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
         case Protocol::Request::kClickCandidate: controller->clickCandidate(message.row, message.index); break;
         case Protocol::Request::kToggleGrid: controller->toggleGrid(); break;
+        case Protocol::Request::kShowMode: controller->showMode(); break;
         case Protocol::Request::kShowSettings: LaunchSettings(ModuleDirectory(nullptr)); break;
         case Protocol::Request::kState: break;
       }

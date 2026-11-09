@@ -21,6 +21,19 @@ Add-Type -Namespace PK -Name Native -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr hwnd);
 [DllImport("user32.dll")] static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, [MarshalAs(UnmanagedType.LPWStr)] string cls, string title);
 [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(System.IntPtr hwnd, out uint pid);
+[DllImport("user32.dll")] static extern bool IsWindowVisible(System.IntPtr hwnd);
+[DllImport("user32.dll")] public static extern System.IntPtr GetShellWindow();
+[DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(System.IntPtr hwnd, int attribute, out int value, int size);
+// Whether the process's mode badge is on screen (it stays mapped, cloaked, between uses).
+public static bool BadgeShown(uint process) {
+  System.IntPtr at = System.IntPtr.Zero;
+  while ((at = FindWindowExW(System.IntPtr.Zero, at, "ProjectKeyModeBadge", null)) != System.IntPtr.Zero) {
+    uint pid; GetWindowThreadProcessId(at, out pid);
+    int cloaked = 0;
+    if (pid == process && IsWindowVisible(at) && DwmGetWindowAttribute(at, 14, out cloaked, 4) == 0 && cloaked == 0) return true;
+  }
+  return false;
+}
 public struct RECT { public int Left, Top, Right, Bottom; }
 public struct POINT { public int X, Y; }
 // The candidate window of one process: every app that has typed keeps its own, cloaked.
@@ -204,6 +217,17 @@ try {
   if ((Text).Length -ne $guess.Length + 1 -or (Text).Substring($guess.Length) -eq $guess.Substring($guess.Length - 1)) {
     throw "expected the click to pick another word than the guess, got [$(Text)]"
   }
+  # Focus returning to the field shows the badge, which only reports the mode.
+  Start-Sleep -Milliseconds 1500  # the last badge has faded
+  [PK.Native]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [PK.Native]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+  [void][PK.Native]::SetForegroundWindow([PK.Native]::GetShellWindow())
+  Start-Sleep -Milliseconds 500
+  if ([PK.Native]::BadgeShown([uint32]$host_.Id)) { throw 'the badge stayed after the focus left' }
+  [PK.Native]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [PK.Native]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+  [void][PK.Native]::SetForegroundWindow($hwnd)
+  $shown = $false
+  for ($i = 0; $i -lt 20 -and -not $shown; $i++) { Start-Sleep -Milliseconds 50; $shown = [PK.Native]::BadgeShown([uint32]$host_.Id) }
+  if ($shown) { Shot 'badge-focus' } else { throw 'no badge when the focus returned to the field' }
   'TypingTest passed'
 } finally {
   # The keys it pressed are global: leave no modifier down and Caps Lock as it was, pass or fail.

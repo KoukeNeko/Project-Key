@@ -307,6 +307,12 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
   return NSEventMaskKeyDown | NSEventMaskFlagsChanged;
 }
 
+- (void)activateServer:(id)sender {
+  [super activateServer:sender];
+  _client->client = sender;
+  _controller->showMode();
+}
+
 - (void)deactivateServer:(id)sender {
   _client->client = sender;
   _controller->deactivate();

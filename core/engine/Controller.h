@@ -178,6 +178,8 @@ class Controller {
   void toggleMode();
   // Focus left the document: commit what is composed.
   void deactivate();
+  // A field took focus: the badge shows the current mode without switching it.
+  void showMode() { client_.showIndicator(env_.englishMode ? "A" : "ㄅ"); }
   // The app ended the composition itself: forget it without committing.
   void reset();
 

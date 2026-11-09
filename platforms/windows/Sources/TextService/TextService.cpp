@@ -213,12 +213,18 @@ STDMETHODIMP TextService::Deactivate() {
 // MARK: Focus
 
 // Focus moved to another document: commit, as the macOS version does when the client changes.
-STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr*, ITfDocumentMgr*) {
+STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr* focus, ITfDocumentMgr*) {
   if (composition_) {
     request(compositionContext_, {Protocol::Request::kDeactivate});
   } else {
     candidates_.hide();
     hint_.hide();
+  }
+  // The badge tells which mode the field starts in.
+  ITfContext* context = nullptr;
+  if (focus && SUCCEEDED(focus->GetTop(&context)) && context) {
+    if (!keyboardDisabled(context)) request(context, {Protocol::Request::kShowMode});
+    context->Release();
   }
   return S_OK;
 }

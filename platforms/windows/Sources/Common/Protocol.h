@@ -30,6 +30,7 @@ enum class Request : uint8_t {
   kReloadModels = 11, // from the settings app, after it downloaded newer models
   kClickCandidate = 12,  // row, index
   kToggleGrid = 13,      // a click on the chevron
+  kShowMode = 14,        // a field took focus: show the current mode
 };
 
 // What the text service does with the document and windows, in order.

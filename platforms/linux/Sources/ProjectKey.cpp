@@ -649,6 +649,9 @@ class Engine : public fcitx::InputMethodEngineV2 {
   void activate(const fcitx::InputMethodEntry&, fcitx::InputContextEvent& event) override {
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settingsAction_);
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &checkAction_);
+    Session* session = event.inputContext()->propertyFor(&factory_);
+    Active active(session);
+    session->controller.showMode();
   }
 
   // COSMIC's panel tints a tray icon with its text color, which turns the colored icon into

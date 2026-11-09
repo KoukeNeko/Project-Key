@@ -411,8 +411,13 @@ int main(int argc, char** argv) {
   assert(HasSuffix(client.committed, "A") && Utf16Length(client.committed) == committed + 3 && client.marked.empty());
 
   // Tapping Shift switches to English: keys pass through; tapping again switches back.
+  client.indicator.clear();
+  controller.showMode();  // focus only reports the mode
+  assert(client.indicator == "ㄅ" && !controller.englishMode());
   TapShift(controller);
   assert(controller.englishMode() && client.indicator == "A");
+  controller.showMode();
+  assert(client.indicator == "A" && controller.englishMode());
   assert(!controller.handleKey(Press("r")));
   TapShift(controller);
   assert(!controller.englishMode() && client.indicator == "ㄅ");
