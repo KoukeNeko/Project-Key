@@ -198,6 +198,7 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   auto lm = std::make_shared<Lexicon>();
   lm->loadLanguageModel(Utf8(dir / "data.txt").c_str());
   if (!lm->isDataModelLoaded()) return false;
+  lm->loadEmoji(Utf8(Path(bundled) / "emoji.txt"));  // not a model: the bundled one always serves
   auto bigram = std::make_shared<Bigram>();
   auto chars = std::make_shared<CharModel>();
   env.lm = lm;
@@ -665,7 +666,9 @@ bool Controller::handleComposing(const KeyEvent& event) {
     refresh();
     return true;
   }
-  if (key == '`' && !event.shift && !composer_->hasPendingReading() && openSymbolList("")) return true;
+  if (!composer_->hasPendingReading() && ((key == '`' && openSymbolList("_punctuation_list")) || (key == '~' && openSymbolList("_emoji_groups")))) {
+    return true;
+  }
   // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on '.
   if (key == '\\' && !event.shift) key = '\'';
   if (composer_->insertPunctuation(key)) {
@@ -762,12 +765,12 @@ bool Controller::handleChoosing(const KeyEvent& event) {
         expanded_ = false;
       } else {
         choosing_ = false;
-        if (symbolList_) composer_->backspace();
+        if (!symbolReading_.empty()) composer_->backspace();
       }
       break;
     case Key::kBackspace:
       choosing_ = false;
-      if (symbolList_) composer_->backspace();
+      if (!symbolReading_.empty()) composer_->backspace();
       break;
     case Key::kForwardDelete:
       excludeSelected();
@@ -779,10 +782,11 @@ bool Controller::handleChoosing(const KeyEvent& event) {
         if (index < rowEnd(row)) pick(index);
         return true;
       }
-      if (symbolList_) {  // the list of the key, or none: it is taken out and the key goes on
+      if (!symbolReading_.empty()) {  // the list of the key, or none: it is taken out and the key goes on
+        bool symbols = symbolReading_.rfind("_punctuation_list", 0) == 0;
         composer_->backspace();
-        symbolList_ = false;
-        if (c && openSymbolList(std::string(1, c))) return true;
+        symbolReading_.clear();
+        if (symbols && c && openSymbolList("_punctuation_list_" + std::string(1, c))) return true;
       }
       // Any other typing leaves the choice as it is and keeps composing.
       choosing_ = false;
@@ -922,7 +926,7 @@ std::optional<Segment> Controller::activeSegment() const {
 }
 
 void Controller::startChoosingAt(size_t start) {
-  symbolList_ = false;
+  symbolReading_.clear();
   excludeConfirm_ = false;
   notice_.clear();
   undoLine_.clear();
@@ -951,15 +955,15 @@ void Controller::choose(int index) {
   if (choosing_ && index >= 0 && index < static_cast<int>(candidates_.size())) pick(index);
 }
 
-bool Controller::openSymbolList(const std::string& key) {
-  if (!composer_->insertSymbols("_punctuation_list" + (key.empty() ? "" : "_" + key))) return false;
+bool Controller::openSymbolList(const std::string& reading) {
+  if (!composer_->insertSymbols(reading)) return false;
   startChoosingAt(composer_->cursor() - 1);
   if (!choosing_) {  // no candidates to choose from
     composer_->backspace();
     refresh();
     return true;
   }
-  symbolList_ = true;
+  symbolReading_ = reading;
   return true;
 }
 
@@ -1072,6 +1076,11 @@ void Controller::toggleGrid() {
 }
 
 void Controller::pick(int index, bool moveOn) {
+  if (symbolReading_ == "_emoji_groups") {  // a group: its emoji take the place of the groups
+    composer_->backspace();
+    openSymbolList("_emoji_list_" + std::to_string(index));
+    return;
+  }
   excludeConfirm_ = false;
   notice_.clear();
   undoLine_.clear();

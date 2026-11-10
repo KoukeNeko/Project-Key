@@ -210,6 +210,66 @@ void Lexicon::loadUserPhrases(const std::string& path, const std::string& exclud
   userReadings_.erase(std::unique(userReadings_.begin(), userReadings_.end()), userReadings_.end());
 }
 
+namespace {
+// Below any word of the dictionary, so an emoji is offered but never the default.
+constexpr double kEmojiScore = -10;
+constexpr char kEmojiGroups[] = "_emoji_groups", kEmojiList[] = "_emoji_list_";
+
+std::vector<std::string> Split(const std::string& text, char separator) {
+  std::vector<std::string> parts;
+  std::istringstream stream(text);
+  std::string part;
+  while (std::getline(stream, part, separator)) parts.push_back(part);
+  return parts;
+}
+}  // namespace
+
+void Lexicon::loadEmoji(const std::string& path) {
+  emojiGroups_.clear();
+  emojiByReading_.clear();
+  std::istringstream lines(ReadUserFile(path));
+  std::string line;
+  while (std::getline(lines, line)) {
+    std::vector<std::string> fields = Split(line, '\t');
+    if (fields.size() != 3) continue;
+    if (fields[0] == "G") emojiGroups_.emplace_back(fields[1], Split(fields[2], ' '));
+    if (fields[0] == "K") emojiByReading_[fields[1]] = Split(fields[2], ' ');
+  }
+}
+
+std::vector<Formosa::Gramambular2::LanguageModel::Unigram> Lexicon::getUnigrams(const std::string& key) {
+  using Unigram = Formosa::Gramambular2::LanguageModel::Unigram;
+  std::vector<Unigram> unigrams;
+  // The table's lists, in their order: a score that falls by a little each.
+  auto list = [&unigrams](const std::vector<std::string>& values) {
+    for (size_t i = 0; i < values.size(); i++) unigrams.emplace_back(values[i], -1e-4 * static_cast<double>(i));
+    return unigrams;
+  };
+  if (key == kEmojiGroups) {
+    std::vector<std::string> names;
+    for (const auto& group : emojiGroups_) names.push_back(group.first);
+    return list(names);
+  }
+  if (key.rfind(kEmojiList, 0) == 0) {
+    size_t group = std::strtoul(key.c_str() + sizeof(kEmojiList) - 1, nullptr, 10);
+    return group < emojiGroups_.size() ? list(emojiGroups_[group].second) : unigrams;
+  }
+  unigrams = McBopomofoLM::getUnigrams(key);
+  auto offered = emojiByReading_.find(key);
+  if (offered == emojiByReading_.end()) return unigrams;
+  for (const std::string& emoji : offered->second) {
+    bool known = std::any_of(unigrams.begin(), unigrams.end(), [&emoji](const Unigram& unigram) { return unigram.value() == emoji; });
+    if (!known) unigrams.emplace_back(emoji, kEmojiScore);
+  }
+  return unigrams;
+}
+
+bool Lexicon::hasUnigrams(const std::string& key) {
+  if (key == kEmojiGroups) return !emojiGroups_.empty();
+  if (key.rfind(kEmojiList, 0) == 0) return std::strtoul(key.c_str() + sizeof(kEmojiList) - 1, nullptr, 10) < emojiGroups_.size();
+  return McBopomofoLM::hasUnigrams(key) || emojiByReading_.count(key);
+}
+
 std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefix) const {
   std::vector<std::string_view> rows = rows_ ? rows_->findRows(prefix) : std::vector<std::string_view>{};
   for (auto it = std::lower_bound(userReadings_.begin(), userReadings_.end(), prefix);

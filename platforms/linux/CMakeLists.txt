@@ -122,6 +122,8 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-addon.conf" RENAME project
 install(FILES projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmethod")
 install(FILES "${MCBOPOMOFO}/Source/Data/data.txt" DESTINATION "${DATA_DIR}")
 install(FILES "${MCBOPOMOFO}/LICENSE.txt" RENAME McBopomofo-LICENSE.txt DESTINATION "${DATA_DIR}")
+# The emoji, and the license of their annotations (tools/emoji/build-emoji.py).
+install(FILES ../../core/data/emoji.txt ../../core/data/EMOJI-NOTICE.txt DESTINATION "${DATA_DIR}")
 # From tools/bigram-trainer when it was run: the dictionary with the words McBopomofo
 # lacks (it replaces McBopomofo's) and the context ranking models.
 # REQUIRE_MODELS stops the build without them, as releases need them; models-version.txt is

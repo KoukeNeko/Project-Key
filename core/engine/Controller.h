@@ -243,8 +243,9 @@ class Controller {
   void excludeSelected();
   // ` puts the list of symbols in the composition and chooses from it; a capital letter or a
   // symbol key then swaps it for that key's list (Ａ ａ Ⓐ for A), Escape and Backspace take it out again.
-  bool openSymbolList(const std::string& key);
-  bool symbolList_ = false;  // while choosing, it is such a list
+  // ~ opens the emoji groups the same way, and picking a group swaps them for its emoji.
+  bool openSymbolList(const std::string& reading);
+  std::string symbolReading_;  // while choosing from such a list, its reading
   bool excludeConfirm_ = false;  // Delete was pressed once on the selected candidate
   std::string notice_;           // shown in the proof row until the next key, after a word was excluded
   std::string undoLine_;         // the line of exclude-phrases.txt that Backspace takes out again, while notice_ is shown

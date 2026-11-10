@@ -41,6 +41,12 @@ class Lexicon : public McBopomofo::McBopomofoLM {
   // comment; they win over the dictionary's words of the same reading. The words of the excluded
   // file, in the same form, are never offered. A missing file has none.
   void loadUserPhrases(const std::string& path, const std::string& excludedPath);
+  // The emoji (core/data/emoji.txt; a missing file has none): each word's reading offers its emoji
+  // after the dictionary's words, and the table's groups stand for the readings _emoji_groups (the
+  // groups' names) and _emoji_list_<n> (the n-th group's emoji), which ~ opens.
+  void loadEmoji(const std::string& path);
+  std::vector<Formosa::Gramambular2::LanguageModel::Unigram> getUnigrams(const std::string& key) override;
+  bool hasUnigrams(const std::string& key) override;
   // The "reading word score" rows whose reading starts with `prefix`, then the user's
   // readings that do, each a row of the reading alone.
   std::vector<std::string_view> rowsStartingWith(const std::string& prefix) const;
@@ -51,6 +57,8 @@ class Lexicon : public McBopomofo::McBopomofoLM {
   std::string userPhrasesText_;            // the user phrases file, which McBopomofo's points into
   std::string excludedPhrasesText_;        // the excluded phrases file, likewise
   std::vector<std::string> userReadings_;  // sorted, unique
+  std::vector<std::pair<std::string, std::vector<std::string>>> emojiGroups_;  // name, emoji
+  std::unordered_map<std::string, std::vector<std::string>> emojiByReading_;
 };
 
 class Composer {

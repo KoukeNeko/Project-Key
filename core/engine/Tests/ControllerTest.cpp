@@ -832,6 +832,25 @@ int main(int argc, char** argv) {
   assert(std::find(controller.candidates().begin(), controller.candidates().end(), "Ａ") != controller.candidates().end());
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && client.marked.empty());
 
+  // Emoji: a word's reading offers its emoji after the words, and ~ opens the groups, a group its emoji.
+  std::string emojiPath = (std::filesystem::path(env.userPhrasesPath).parent_path() / "ControllerTest-emoji.txt").string();
+  std::ofstream(emojiPath) << "G\t表情\t😀 😃\nG\t動物\t🐶 🐱\nK\tㄨㄛˇ\t😀\n";
+  env.lm->loadEmoji(emojiPath);
+  Type(controller, "ji3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(std::find(controller.candidates().begin(), controller.candidates().end(), "😀") != controller.candidates().end());
+  EscapeAll(controller, client);
+  Type(controller, "~");
+  assert((controller.candidates() == std::vector<std::string>{"表情", "動物"}));
+  assert(controller.handleKey(Press("2")));  // the group
+  assert((controller.candidates() == std::vector<std::string>{"🐶", "🐱"}));
+  assert(controller.handleKey(Press("2")) && client.marked == "🐱");
+  EscapeAll(controller, client);
+  Type(controller, "~");
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && client.marked.empty());
+  env.lm->loadEmoji("");
+  std::filesystem::remove(emojiPath);
+
   // A click picks what it lands on, in the row, in the unfolded grid and in the row shown while
   // typing. Last, as what it picks is remembered.
   Type(controller, "rup wu0 ");

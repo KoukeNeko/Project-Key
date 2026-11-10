@@ -54,7 +54,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | | Delete | 刪除游標後的字 |
 | | Esc | 清除未完成的注音；再按一次清除整句 |
 | | Shift + 標點鍵 | 全形標點，例如 Shift+, 輸入「，」 |
-| | ` | 開啟符號表，選法同 macOS 版（說明見 macOS README） |
+| | ` 、 ~ | 開啟符號表、表情符號，選法同 macOS 版（說明見 macOS README） |
 | | 標點鍵 | `\` 或 `'` 輸入「、」，`[` `]` 輸入 `「` `」` |
 | | 其他字元（如 Shift+字母） | 送出整句，接著輸入該字元 |
 | | Ctrl+Shift+P | 開關整句預覽 |
