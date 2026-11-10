@@ -793,7 +793,7 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
   assert(controller.panel()->excluding);
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(client.marked != "我" && controller.panel()->segments[0] == "已排除「我」，還原");
+  assert(client.marked != "我" && controller.panel()->segments[0] == "已排除「我」，按 " + env.backspaceKeycap + " 還原");
   assert(controller.panel()->selection == selectedBefore);  // the selection stays on the next candidate
   assert(controller.panel()->rows[controller.panel()->selectedRow][controller.panel()->selection] != "我");
   std::ifstream excludedFile(excludedPath);
@@ -810,7 +810,7 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(client.marked != "我" && controller.panel()->keyHint == env.backspaceKeycap);
+  assert(client.marked != "我" && controller.panel()->keyHint.empty());
   assert(controller.handleKey(Special(ProjectKey::Key::kBackspace)));
   assert(client.marked == "我" && controller.panel()->segments[0] == "已還原「我」");
   std::ifstream undoneFile(excludedPath);

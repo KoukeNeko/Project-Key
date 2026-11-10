@@ -981,7 +981,7 @@ void Controller::excludeSelected() {
     selection_ = std::min(place, static_cast<int>(candidates_.size()) - 1);
     expanded_ = wasExpanded;
   }
-  notice_ = "已排除「" + word + "」，還原";  // in the panel, which the badge under the caret would be pushed aside by
+  notice_ = "已排除「" + word + "」，按 " + env_.backspaceKeycap + " 還原";  // in the panel, which the badge under the caret would be pushed aside by
   undoLine_ = word + ' ' + reading + '\n';
   refresh();
 }
@@ -1268,7 +1268,6 @@ void Controller::refresh() {
       content.caret = Utf16Length(text);
       content.showsProof = true;
       if (excludeConfirm_) content.keyHint = env_.deleteKeycap;  // what Delete would do
-      if (!undoLine_.empty()) content.keyHint = env_.backspaceKeycap;  // and what takes the exclusion back
       content.excluding = excludeConfirm_;
     }
   } else {
