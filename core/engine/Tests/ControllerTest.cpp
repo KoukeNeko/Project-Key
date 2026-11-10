@@ -835,20 +835,20 @@ int main(int argc, char** argv) {
 
   // Emoji: a word's reading offers its emoji after the words, and ~ opens the groups, a group its emoji.
   std::string emojiPath = (std::filesystem::path(env.userPhrasesPath).parent_path() / "ControllerTest-emoji.txt").string();
-  std::ofstream(emojiPath) << "G\tEmoji\t😀 😃\nG\t動物\t🐶 🐱\nK\tㄨㄛˇ\t😀\n";
+  std::ofstream(emojiPath) << "G\t表情\t😀 😃\nG\t動物\t🐶 🐱\nK\tㄨㄛˇ\t😀\n";
   env.lm->loadEmoji(emojiPath);
   Type(controller, "ji3");
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
   assert(std::find(controller.candidates().begin(), controller.candidates().end(), "😀") != controller.candidates().end());
   EscapeAll(controller, client);
   Type(controller, "~");
-  assert((controller.candidates() == std::vector<std::string>{"Emoji", "動物"}));
+  assert((controller.candidates() == std::vector<std::string>{"表情", "動物"}));
   assert(controller.panel()->segments[0] == "Emoji");
   assert(controller.handleKey(Press("2")));  // the group
   assert(controller.panel()->segments[0] == "動物");
   assert((controller.candidates() == std::vector<std::string>{"🐶", "🐱"}));
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));  // back to the groups, on the second
-  assert((controller.candidates() == std::vector<std::string>{"Emoji", "動物"}) && controller.panel()->selection == 1);
+  assert((controller.candidates() == std::vector<std::string>{"表情", "動物"}) && controller.panel()->selection == 1);
   assert(controller.handleKey(Press("2")));
   assert(controller.handleKey(Press("2")) && client.marked == "🐱");
   EscapeAll(controller, client);
