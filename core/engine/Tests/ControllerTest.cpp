@@ -782,6 +782,7 @@ int main(int argc, char** argv) {
   Type(controller, "ji3");
   assert(client.marked == "我");
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  int selectedBefore = controller.panel()->selection;
   // The first Delete only asks, in the proof row, with the selection drawn as a warning; another key takes it back.
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
   assert(controller.panel() && controller.panel()->excluding && controller.panel()->keyHint == env.deleteKeycap &&
@@ -792,7 +793,9 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
   assert(controller.panel()->excluding);
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(client.marked != "我" && client.indicator == "已排除「我」");
+  assert(client.marked != "我" && controller.panel()->segments[0] == "已排除「我」");
+  assert(controller.panel()->selection == selectedBefore);  // the selection stays on the next candidate
+  assert(controller.panel()->rows[controller.panel()->selectedRow][controller.panel()->selection] != "我");
   std::ifstream excludedFile(excludedPath);
   std::string excludedLine;
   std::getline(excludedFile, excludedLine);

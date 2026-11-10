@@ -698,6 +698,7 @@ int Controller::indexInRow(int row, int column) const {
 bool Controller::handleChoosing(const KeyEvent& event) {
   bool confirming = excludeConfirm_ && event.key == Key::kForwardDelete;
   if (!confirming) excludeConfirm_ = false;  // any other key takes the question back
+  notice_.clear();
   int count = static_cast<int>(candidates_.size());
   int row = rowOf(selection_), rows = static_cast<int>(rowStarts_.size());
   int column = columns_[selection_];
@@ -908,6 +909,7 @@ std::optional<Segment> Controller::activeSegment() const {
 
 void Controller::startChoosingAt(size_t start) {
   excludeConfirm_ = false;
+  notice_.clear();
   activeStart_ = start;
   activeEnd_ = SIZE_MAX;
   std::optional<Segment> whole = composer_->segmentFrom(start);
@@ -963,10 +965,17 @@ void Controller::excludeSelected() {
   }
   ReloadUserPhrases(env_);
   composer_->reloadWords();
+  // The selection stays where it was, now on the next candidate, and the grid as open as it was.
+  int place = selection_;
+  bool wasExpanded = expanded_;
   choosing_ = false;
   startChoosingAt(activeStart_);
-  if (!choosing_) refresh();
-  client_.showIndicator("已排除「" + word + "」");
+  if (choosing_) {
+    selection_ = std::min(place, static_cast<int>(candidates_.size()) - 1);
+    expanded_ = wasExpanded;
+  }
+  notice_ = "已排除「" + word + "」";  // in the panel, which the badge under the caret would be pushed aside by
+  refresh();
 }
 
 void Controller::pickFromTypingRow(int index) {
@@ -1002,6 +1011,7 @@ void Controller::toggleGrid() {
 
 void Controller::pick(int index, bool moveOn) {
   excludeConfirm_ = false;
+  notice_.clear();
   zhuyinEdited_ = true;  // also when picked by a click, which passes no key
   std::optional<Segment> segment = activeSegment();
   if (segment && index == readingIndex_) {
@@ -1208,15 +1218,15 @@ void Controller::refresh() {
     content.selection = selection_ - rowStarts_[row];
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
     content.expanded = expanded_;
-    if (excludeConfirm_) {  // what Delete would do, in the proof row, as the Tab hint is
-      std::string question = "排除「" + candidates_[selection_] + "」，之後不再出現";
-      content.segments = {question};
+    if (excludeConfirm_ || !notice_.empty()) {  // in the proof row, as the Tab hint is
+      std::string text = excludeConfirm_ ? "排除「" + candidates_[selection_] + "」，之後不再出現" : notice_;
+      content.segments = {text};
       content.doubtful = {false};
       content.activeSegment = -1;
-      content.caret = Utf16Length(question);
+      content.caret = Utf16Length(text);
       content.showsProof = true;
-      content.keyHint = env_.deleteKeycap;
-      content.excluding = true;
+      if (excludeConfirm_) content.keyHint = env_.deleteKeycap;  // what Delete would do
+      content.excluding = excludeConfirm_;
     }
   } else {
     showRow(content);

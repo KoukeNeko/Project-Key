@@ -241,6 +241,7 @@ class Controller {
   // The selected candidate is never offered again: it goes in exclude-phrases.txt.
   void excludeSelected();
   bool excludeConfirm_ = false;  // Delete was pressed once on the selected candidate
+  std::string notice_;           // shown in the proof row until the next key, after a word was excluded
   // Types the full-width form of a printable ASCII character, when full-width is on.
   bool typeFullWidth(char c);
 
