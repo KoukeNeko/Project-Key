@@ -792,7 +792,7 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
   assert(controller.panel()->excluding);
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(client.marked != "我");
+  assert(client.marked != "我" && client.indicator == "已排除「我」");
   std::ifstream excludedFile(excludedPath);
   std::string excludedLine;
   std::getline(excludedFile, excludedLine);

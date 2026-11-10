@@ -945,7 +945,7 @@ void Controller::excludeSelected() {
     return;
   }
   excludeConfirm_ = false;
-  const std::string& word = candidates_[selection_];
+  std::string word = candidates_[selection_];
   std::string reading = composer_->readingOf(*segment, word, choosesFromEnd());
   if (reading.empty()) {
     client_.beep();
@@ -966,6 +966,7 @@ void Controller::excludeSelected() {
   choosing_ = false;
   startChoosingAt(activeStart_);
   if (!choosing_) refresh();
+  client_.showIndicator("已排除「" + word + "」");
 }
 
 void Controller::pickFromTypingRow(int index) {
