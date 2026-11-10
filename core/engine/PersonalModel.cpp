@@ -40,12 +40,14 @@ void AppendUtf8(std::string& out, uint32_t c) {
 }  // namespace
 
 void PersonalModel::learn(const std::string& text) {
+  uint64_t learned = 0;
   std::vector<uint32_t> run;
   auto endRun = [&] {
     if (run.empty()) return;
     run.insert(run.begin(), {CharModel::kBoundary, CharModel::kBoundary});
     run.push_back(CharModel::kBoundary);
     for (size_t k = 2; k < run.size(); k++) add(Key(Key(run[k - 2], run[k - 1]), run[k]), 1);
+    learned += run.size() - 2;
     run.clear();
   };
   for (uint32_t c : CharModel::CodePoints(text)) {
@@ -56,6 +58,8 @@ void PersonalModel::learn(const std::string& text) {
     }
   }
   endRun();
+  sinceHalving_ += learned;
+  if (sinceHalving_ >= kHalfLife) halve();
   if (triples_.size() > kMaxTriples) {
     // shortcut: drops everything typed once, however recent; a typing history this large
     // would want counts that decay with age instead.
@@ -65,7 +69,15 @@ void PersonalModel::learn(const std::string& text) {
   version_++;
 }
 
+void PersonalModel::halve() {
+  for (auto& entry : triples_) entry.second /= 2;
+  std::erase_if(triples_, [](const auto& entry) { return entry.second == 0; });
+  rebuild();
+  sinceHalving_ = 0;
+}
+
 void PersonalModel::clear() {
+  sinceHalving_ = 0;
   triples_.clear();
   rebuild();
   version_++;
@@ -107,11 +119,16 @@ double PersonalModel::blend(double base, uint32_t first, uint32_t second, uint32
 
 bool PersonalModel::load(const std::string& path) {
   triples_.clear();
+  sinceHalving_ = 0;
   std::ifstream in(PathOf(path));
   std::string line;
   while (std::getline(in, line)) {
     size_t tab = line.find('\t');
     if (tab == std::string::npos) continue;
+    if (line[0] == '#') {
+      sinceHalving_ = std::strtoull(line.c_str() + tab + 1, nullptr, 10);
+      continue;
+    }
     unsigned long count = std::strtoul(line.c_str(), nullptr, 10);
     std::vector<uint32_t> chars;
     std::string text = line.substr(tab + 1);
@@ -125,7 +142,7 @@ bool PersonalModel::load(const std::string& path) {
 }
 
 bool PersonalModel::save(const std::string& path) const {
-  std::string text;
+  std::string text = "#\t" + std::to_string(sinceHalving_) + "\n";
   for (const auto& [triple, count] : triples_) {
     text += std::to_string(count);
     text += '\t';

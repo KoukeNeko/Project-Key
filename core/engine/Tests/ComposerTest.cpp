@@ -352,6 +352,14 @@ int main(int argc, char** argv) {
   auto c = [](const char* utf8) { return ProjectKey::CharModel::CodePoints(utf8)[0]; };
   assert(loaded.blend(1e-4, c("的"), c("程"), c("式")) == personal->blend(1e-4, c("的"), c("程"), c("式")));
   assert(personal->blend(1e-4, c("的"), c("程"), c("式")) > 0.5);
+  // What was typed once fades after enough more is typed: the counts are halved every kHalfLife triples,
+  // and the number learned since the last halving is kept in the file.
+  ProjectKey::PersonalModel fading;
+  fading.learn("我們");
+  assert(fading.blend(1e-4, ProjectKey::CharModel::kBoundary, c("我"), c("們")) > 1e-4);
+  for (uint64_t learned = 0; learned < ProjectKey::PersonalModel::kHalfLife; learned += 3) fading.learn("你好");
+  assert(fading.blend(1e-4, ProjectKey::CharModel::kBoundary, c("我"), c("們")) == 1e-4);  // the 我們 typed once is gone
+  assert(fading.blend(1e-4, ProjectKey::CharModel::kBoundary, c("你"), c("好")) > 1e-4);   // the 你好 typed often is not
   std::remove(personalPath.c_str());
   assert(loaded.load(personalPath) && loaded.empty());
 

@@ -22,8 +22,9 @@ class PersonalModel {
   // Changes whenever the counts do, so scores kept elsewhere can be dropped.
   uint64_t version() const { return version_; }
 
-  // One "count<TAB>three characters" line per triple, '^' for the boundary. A missing file
-  // loads as empty; unreadable lines are skipped.
+  // One "count<TAB>three characters" line per triple, '^' for the boundary, after a "#<TAB>number"
+  // line of the triples learned since the last halving. A missing file loads as empty; unreadable
+  // lines, such as that first one to a version from before it, are skipped.
   bool load(const std::string& path);
   // Written to a temporary file and renamed over the old one; missing folders are made.
   bool save(const std::string& path) const;
@@ -35,16 +36,23 @@ class PersonalModel {
   static constexpr double kConfidence = 32;
   // Above this many triples, the ones typed once are dropped.
   static constexpr size_t kMaxTriples = 200000;
+  // Every count is halved, and the ones left at zero dropped, each time this many triples have
+  // been learned since the last time, so what the user stopped typing fades. Counted in what is
+  // typed, not in time, so a pause does not fade anything (as RIME and libchewing count their
+  // updates). Roughly a month of typing; a judgment, not tuned.
+  static constexpr uint64_t kHalfLife = 100000;
 
  private:
   void add(uint64_t triple, uint32_t count);
   void rebuild();
+  void halve();
 
   std::unordered_map<uint64_t, uint32_t> triples_;   // a << 42 | b << 21 | c
   std::unordered_map<uint64_t, uint32_t> pairs_;     // b << 21 | c, over every a
   std::unordered_map<uint64_t, uint32_t> contexts_;  // a << 21 | b, over every c
   std::unordered_map<uint32_t, uint32_t> singles_;   // b, over every b c
   uint64_t version_ = 0;
+  uint64_t sinceHalving_ = 0;  // triples learned since the counts were last halved; saved with them
 };
 
 }  // namespace ProjectKey
