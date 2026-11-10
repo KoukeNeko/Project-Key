@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 
 #include "Models.h"
 #include "Utf8.h"
@@ -218,6 +219,10 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   return true;
 }
 
+std::string ExcludedPhrasesPath(const Environment& env) {
+  return (std::filesystem::path(env.userPhrasesPath).parent_path() / "exclude-phrases.txt").string();
+}
+
 void ReloadUserPhrases(Environment& env) {
   if (env.userPhrasesPath.empty()) return;
   // UTF-8 paths, which Windows' narrow file calls would read in the ANSI code page.
@@ -226,8 +231,7 @@ void ReloadUserPhrases(Environment& env) {
     auto written = std::filesystem::last_write_time(std::filesystem::path(std::u8string(utf8Path.begin(), utf8Path.end())), error);
     return error ? std::nullopt : std::optional(written);
   };
-  std::string excludedPath =
-      (std::filesystem::path(env.userPhrasesPath).parent_path() / "exclude-phrases.txt").string();
+  std::string excludedPath = ExcludedPhrasesPath(env);
   auto time = writtenAt(env.userPhrasesPath);
   auto excludedTime = writtenAt(excludedPath);
   if (time == env.userPhrasesTime && excludedTime == env.excludedPhrasesTime) return;
@@ -753,6 +757,9 @@ bool Controller::handleChoosing(const KeyEvent& event) {
     case Key::kBackspace:
       choosing_ = false;
       break;
+    case Key::kForwardDelete:
+      excludeSelected();
+      return true;
     default: {
       char c = SingleCharacter(event);
       if (c >= '1' && c < '1' + columns()) {
@@ -921,6 +928,35 @@ void Controller::startChoosingAt(size_t start) {
 
 void Controller::choose(int index) {
   if (choosing_ && index >= 0 && index < static_cast<int>(candidates_.size())) pick(index);
+}
+
+void Controller::excludeSelected() {
+  std::optional<Segment> segment = activeSegment();
+  if (!segment || selection_ == readingIndex_ || env_.userPhrasesPath.empty()) {
+    client_.beep();  // the Zhuyin itself is no word
+    return;
+  }
+  const std::string& word = candidates_[selection_];
+  std::string reading = composer_->readingOf(*segment, word, choosesFromEnd());
+  if (reading.empty()) {
+    client_.beep();
+    return;
+  }
+  std::string path = ExcludedPhrasesPath(env_);
+  std::error_code error;
+  std::filesystem::path file(std::u8string(path.begin(), path.end()));
+  std::filesystem::create_directories(file.parent_path(), error);
+  std::ofstream out(file, std::ios::binary | std::ios::app);
+  out << word << ' ' << reading << '\n';
+  if (!out.flush()) {
+    client_.beep();
+    return;
+  }
+  ReloadUserPhrases(env_);
+  composer_->reloadWords();
+  choosing_ = false;
+  startChoosingAt(activeStart_);
+  if (!choosing_) refresh();
 }
 
 void Controller::pickFromTypingRow(int index) {

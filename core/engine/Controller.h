@@ -151,6 +151,8 @@ inline std::string ModeLabel(const Environment& env) {
 
 // Forgets what the user chose and typed, in memory and in the saved file.
 void ClearChoices(Environment& env);
+// exclude-phrases.txt, beside Environment::userPhrasesPath.
+std::string ExcludedPhrasesPath(const Environment& env);
 // Loads Environment::userPhrasesPath into the lexicon when it was written since the last load,
 // or was removed.
 void ReloadUserPhrases(Environment& env);
@@ -234,6 +236,8 @@ class Controller {
   bool convertZhuyinKeys();
   bool convertEnglishRun();
   void switchMode(bool english);
+  // The selected candidate is never offered again: it goes in exclude-phrases.txt.
+  void excludeSelected();
   // Types the full-width form of a printable ASCII character, when full-width is on.
   bool typeFullWidth(char c);
 

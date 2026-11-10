@@ -777,6 +777,23 @@ int main(int argc, char** argv) {
   assert(client.marked == "我");
   EscapeAll(controller, client);
 
+  // Delete on the selected candidate excludes it: the composition changes at once, the word goes
+  // in exclude-phrases.txt with its reading, and it stays out of the next composition.
+  Type(controller, "ji3");
+  assert(client.marked == "我");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
+  assert(client.marked != "我");
+  std::ifstream excludedFile(excludedPath);
+  std::string excludedLine;
+  std::getline(excludedFile, excludedLine);
+  assert(excludedLine == "我 ㄨㄛˇ");
+  EscapeAll(controller, client);
+  Type(controller, "ji3");
+  assert(client.marked != "我");
+  EscapeAll(controller, client);
+  std::filesystem::remove(excludedPath);
+
   // A click picks what it lands on, in the row, in the unfolded grid and in the row shown while
   // typing. Last, as what it picks is remembered.
   Type(controller, "rup wu0 ");

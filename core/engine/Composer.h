@@ -143,6 +143,11 @@ class Composer {
   // the cursor: 打字, then 字 and the like for its ㄗˋ). Each reading's words come
   // first, then those of the same syllables in other tones (偽造 for ㄨㄟˇ-ㄗㄠˋ).
   std::vector<std::string> candidates(const Segment& segment, bool fromEnd = false);
+  // The reading `value`, one of candidates(segment, fromEnd), has; empty for none.
+  std::string readingOf(const Segment& segment, const std::string& value, bool fromEnd = false);
+  // Looks the words of the composition up again, after the lexicon changed (words excluded).
+  // The words chosen for it are not kept.
+  void reloadWords();
   // Puts `value`, one of candidates(segment, fromEnd), in the grid where it stands.
   bool choose(const Segment& segment, const std::string& value, bool fromEnd = false);
 

@@ -65,6 +65,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | | Page Up | 上一列，停在第一列；展開時往上捲 5 列 |
 | | Enter | 選定目前候選 |
 | | Tab、Shift+Tab | 跳到下一個／上一個可疑處 |
+| | Delete | 排除反白的候選（說明同 macOS 版） |
 | | Esc | 展開時收合，否則回到組字 |
 | | Backspace | 回到組字 |
 | 任何時候 | Caps Lock | 在設定開啟 Caps Lock 切換中英時（預設關），切換中／英；大寫鎖定亮著時字母仍打小寫，大寫用 Shift |

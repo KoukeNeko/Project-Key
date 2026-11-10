@@ -793,6 +793,24 @@ std::vector<std::string> Composer::candidates(const Segment& segment, bool fromE
   return values;
 }
 
+std::string Composer::readingOf(const Segment& segment, const std::string& value, bool fromEnd) {
+  for (const auto& [start, candidate] : choices(segment, fromEnd)) {
+    if (candidate.value == value) return candidate.reading;
+  }
+  return "";
+}
+
+void Composer::reloadWords() {
+  std::vector<std::string> readings = grid_.readings();
+  size_t cursor = grid_.cursor();
+  // A new dictionary, as the old one keeps the words it looked up.
+  dictionary_ = std::make_shared<TonelessModel>(std::static_pointer_cast<Lexicon>(lm_), abbreviated_);
+  grid_ = Formosa::Gramambular2::ReadingGrid(dictionary_);
+  for (const std::string& reading : readings) grid_.insertReading(reading);
+  grid_.setCursor(cursor);
+  walk();
+}
+
 bool Composer::choose(const Segment& segment, const std::string& value, bool fromEnd) {
   // Found before walk() rebuilds segments_, which `segment` may belong to.
   for (const auto& [start, candidate] : choices(segment, fromEnd)) {
