@@ -32,6 +32,7 @@ NSColor *const kText = Hex(Colors::kText);
 NSColor *const kMuted = Hex(Colors::kMuted);
 NSColor *const kAccent = Hex(Colors::kAccent);
 NSColor *const kAccentSoft = Hex(Colors::kAccentSoft);
+NSColor *const kDanger = Hex(Colors::kDanger);
 NSColor *const kDoubtMark = Hex(Colors::kAccentSoft, Colors::kDoubtMarkAlpha);
 NSColor *const kEdge = Hex(0x000000, 0.5);
 
@@ -444,7 +445,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   NSRect pill = NSOffsetRect(self.shownSelectionRect, 0, top);
   if (!NSIsEmptyRect(pill)) {
     BOOL chosen = self.content.selectedRow >= 0;
-    [(chosen ? kAccent : [self.textColor colorWithAlphaComponent:Colors::kGuessAlpha]) setFill];
+    [(chosen ? (self.content.excluding ? kDanger : kAccent) : [self.textColor colorWithAlphaComponent:Colors::kGuessAlpha]) setFill];
     [[NSBezierPath bezierPathWithRoundedRect:pill xRadius:kPillRadius yRadius:kPillRadius] fill];
   }
   for (NSUInteger r = 0; r < self.content.rows.count; r++) {

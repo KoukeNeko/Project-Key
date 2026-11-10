@@ -629,7 +629,7 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
   pill.top += top;
   pill.bottom += top;
   if (!IsEmpty(pill)) {
-    auto fill = Brush(target, content_->selectedRow >= 0 ? Color(kAccent) : Color(kText, kGuessAlpha));
+    auto fill = Brush(target, content_->selectedRow >= 0 ? Color(content_->excluding ? kDanger : kAccent) : Color(kText, kGuessAlpha));
     target->FillRoundedRectangle(D2D1::RoundedRect(pill, kPillRadius, kPillRadius), fill.Get());
   }
   auto text = Brush(target, Color(kText));

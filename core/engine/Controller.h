@@ -37,6 +37,7 @@ struct PanelContent {
   int selection = 0;            // index within the selected row; while typing, the guess in row 0 (-1 for none)
   std::string pageLabel;        // "1/3", empty for a single page
   bool expanded = false;        // several rows unfold; otherwise a page label means ↓ unfolds them
+  bool excluding = false;       // the selection is drawn in Colors::kDanger: Delete again excludes it
 };
 
 // The marked text in the document.
@@ -135,6 +136,7 @@ struct Environment {
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
   bool fullWidth = false;    // Shift+Space: letters, digits, symbols and spaces typed outside a composition are full-width
   std::string tabKeycap = "Tab";  // the key the conversion previews end with
+  std::string deleteKeycap = "Delete";  // the key that excludes the selected candidate, as the proof row shows it
   std::string shiftTabKeycap = "Shift+Tab";  // the proof row's, while Tab offers English
   // macOS lets the app type a key the input method returns; TSF does not
   // deliver a key once its test phase handed it on, so there the input method types it.
@@ -238,6 +240,7 @@ class Controller {
   void switchMode(bool english);
   // The selected candidate is never offered again: it goes in exclude-phrases.txt.
   void excludeSelected();
+  bool excludeConfirm_ = false;  // Delete was pressed once on the selected candidate
   // Types the full-width form of a printable ASCII character, when full-width is on.
   bool typeFullWidth(char c);
 

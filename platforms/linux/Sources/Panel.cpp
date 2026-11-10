@@ -691,7 +691,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
   pill.bottom += top;
   if (!pill.empty()) {
     if (content_->selectedRow >= 0) {
-      SetColor(cr, kAccent);
+      SetColor(cr, content_->excluding ? kDanger : kAccent);
     } else {
       SetColor(cr, kText, kGuessAlpha);
     }

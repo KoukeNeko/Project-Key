@@ -696,6 +696,8 @@ int Controller::indexInRow(int row, int column) const {
 }
 
 bool Controller::handleChoosing(const KeyEvent& event) {
+  bool confirming = excludeConfirm_ && event.key == Key::kForwardDelete;
+  if (!confirming) excludeConfirm_ = false;  // any other key takes the question back
   int count = static_cast<int>(candidates_.size());
   int row = rowOf(selection_), rows = static_cast<int>(rowStarts_.size());
   int column = columns_[selection_];
@@ -905,6 +907,7 @@ std::optional<Segment> Controller::activeSegment() const {
 }
 
 void Controller::startChoosingAt(size_t start) {
+  excludeConfirm_ = false;
   activeStart_ = start;
   activeEnd_ = SIZE_MAX;
   std::optional<Segment> whole = composer_->segmentFrom(start);
@@ -936,6 +939,12 @@ void Controller::excludeSelected() {
     client_.beep();  // the Zhuyin itself is no word
     return;
   }
+  if (!excludeConfirm_) {  // the first press asks, in the proof row
+    excludeConfirm_ = true;
+    refresh();
+    return;
+  }
+  excludeConfirm_ = false;
   const std::string& word = candidates_[selection_];
   std::string reading = composer_->readingOf(*segment, word, choosesFromEnd());
   if (reading.empty()) {
@@ -991,6 +1000,7 @@ void Controller::toggleGrid() {
 }
 
 void Controller::pick(int index, bool moveOn) {
+  excludeConfirm_ = false;
   zhuyinEdited_ = true;  // also when picked by a click, which passes no key
   std::optional<Segment> segment = activeSegment();
   if (segment && index == readingIndex_) {
@@ -1197,6 +1207,16 @@ void Controller::refresh() {
     content.selection = selection_ - rowStarts_[row];
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
     content.expanded = expanded_;
+    if (excludeConfirm_) {  // what Delete would do, in the proof row, as the Tab hint is
+      std::string question = "排除「" + candidates_[selection_] + "」";
+      content.segments = {question};
+      content.doubtful = {false};
+      content.activeSegment = -1;
+      content.caret = Utf16Length(question);
+      content.showsProof = true;
+      content.keyHint = env_.deleteKeycap;
+      content.excluding = true;
+    }
   } else {
     showRow(content);
   }

@@ -54,6 +54,7 @@ PKPanelContent *Content(const ProjectKey::PanelContent &panel) {
   content.selection = panel.selection;
   content.pageLabel = OptionalString(panel.pageLabel);
   content.expanded = panel.expanded;
+  content.excluding = panel.excluding;
   return content;
 }
 
@@ -122,6 +123,7 @@ ProjectKey::Environment &SharedEnvironment() {
       return static_cast<int>([PKCandidatePanel columnsSpannedBy:String(candidate)]);
     };
     env->tabKeycap = "⇥";
+    env->deleteKeycap = "⌦";
     env->shiftTabKeycap = "⇧⇥";
     env->appTypesUnhandledKeys = true;
     env->hintWindow = true;

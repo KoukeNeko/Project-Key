@@ -782,6 +782,15 @@ int main(int argc, char** argv) {
   Type(controller, "ji3");
   assert(client.marked == "我");
   assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  // The first Delete only asks, in the proof row, with the selection drawn as a warning; another key takes it back.
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
+  assert(controller.panel() && controller.panel()->excluding && controller.panel()->keyHint == env.deleteKeycap &&
+         controller.panel()->segments[0] == "排除「我」" && !std::filesystem::exists(excludedPath));
+  assert(controller.handleKey(Special(ProjectKey::Key::kRight)));
+  assert(!controller.panel()->excluding && !std::filesystem::exists(excludedPath));
+  assert(controller.handleKey(Special(ProjectKey::Key::kLeft)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
+  assert(controller.panel()->excluding);
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
   assert(client.marked != "我");
   std::ifstream excludedFile(excludedPath);

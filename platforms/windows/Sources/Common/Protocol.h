@@ -3,6 +3,7 @@
 // fields, length-prefixed UTF-8 strings.
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -257,6 +258,8 @@ inline std::string WriteReply(const Reply& reply) {
   }
   w.i32(reply.columns);
   w.boolean(reply.fullWidth);
+  // Not in each panel, so the panels' layout, which kVersion covers, stays as it was.
+  w.boolean(std::any_of(reply.operations.begin(), reply.operations.end(), [](const Operation& o) { return o.panel.excluding; }));
   return w.bytes();
 }
 
@@ -282,6 +285,8 @@ inline bool ReadReply(const std::string& bytes, Reply& reply) {
   }
   if (r.more()) reply.columns = r.i32();  // absent from a server from before 9 columns
   if (r.more()) reply.fullWidth = r.boolean();  // and from one from before full-width
+  bool excluding = r.more() && r.boolean();  // and the one before the question of excluding a word
+  for (Operation& o : reply.operations) o.panel.excluding = excluding;
   for (Operation& o : reply.operations) o.panel.columns = reply.columns;
   return r.ok();
 }

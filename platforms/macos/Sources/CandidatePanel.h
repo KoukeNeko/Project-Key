@@ -26,6 +26,7 @@ FOUNDATION_EXPORT BOOL PKGlassAvailable(void);  // C linkage, for SettingsForm.s
 @property(nonatomic) NSInteger selection;    // index within the selected row
 @property(nonatomic, copy, nullable) NSString *pageLabel;               // "1/3", nil for a single page
 @property(nonatomic) BOOL expanded;  // several rows unfold; otherwise a page label means ↓ unfolds them
+@property(nonatomic) BOOL excluding;  // the selection is drawn as a warning: Delete again excludes it
 @end
 
 extern const NSInteger PKMaxGridColumns;

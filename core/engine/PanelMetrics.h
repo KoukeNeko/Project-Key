@@ -69,6 +69,8 @@ inline PanelHit HitCandidates(const std::vector<std::vector<int>>& spans, bool h
 namespace Colors {
 constexpr uint32_t kBackground = 0x23282c, kLine = 0x343b40, kText = 0xe8ecee, kMuted = 0x8e9aa3;
 constexpr uint32_t kAccent = 0x14806f, kAccentSoft = 0x3fb9a3;
+// The selection while the Delete that excludes a word waits for a second press.
+constexpr uint32_t kDanger = 0xb3382c;
 constexpr float kDoubtMarkAlpha = 0.7f;
 // While typing, the guess sits on a highlight of kText at this alpha, not the accent of a choice.
 constexpr float kGuessAlpha = 0.12f;
