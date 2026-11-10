@@ -230,6 +230,7 @@ void Lexicon::loadEmoji(const std::string& path) {
   std::istringstream lines(ReadUserFile(path));
   std::string line;
   while (std::getline(lines, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();  // a file checked out or saved on Windows
     std::vector<std::string> fields = Split(line, '\t');
     if (fields.size() != 3) continue;
     if (fields[0] == "G") emojiGroups_.emplace_back(fields[1], Split(fields[2], ' '));
