@@ -825,10 +825,7 @@ int main(int argc, char** argv) {
   assert(client.marked != "我" && controller.panel()->segments[0] == "已排除「我」，按 " + env.backspaceKeycap + " 還原");
   assert(controller.panel()->selection == selectedBefore);  // the selection stays on the next candidate
   assert(controller.panel()->rows[controller.panel()->selectedRow][controller.panel()->selection] != "我");
-  std::ifstream excludedFile(excludedPath);
-  std::string excludedLine;
-  std::getline(excludedFile, excludedLine);
-  assert(excludedLine == "我 ㄨㄛˇ");
+  assert(ReadFileText(excludedPath) == "我 ㄨㄛˇ\n");
   EscapeAll(controller, client);
   Type(controller, "ji3");
   assert(client.marked != "我");
@@ -842,9 +839,7 @@ int main(int argc, char** argv) {
   assert(client.marked != "我" && controller.panel()->keyHint.empty());
   assert(controller.handleKey(Special(ProjectKey::Key::kBackspace)));
   assert(client.marked == "我" && controller.panel()->segments[0] == "已還原「我」");
-  std::ifstream undoneFile(excludedPath);
-  std::string undoneText((std::istreambuf_iterator<char>(undoneFile)), std::istreambuf_iterator<char>());
-  assert(undoneText.empty());
+  assert(ReadFileText(excludedPath).empty());
   EscapeAll(controller, client);
   std::filesystem::remove(excludedPath);
 
