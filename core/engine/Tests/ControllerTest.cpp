@@ -10,6 +10,11 @@
 #include <map>
 #include <set>
 
+#ifdef _WIN32
+#include <crtdbg.h>
+#include <stdlib.h>
+#endif
+
 #include "Controller.h"
 #include "Models.h"
 
@@ -134,6 +139,12 @@ int Span(const std::string& candidate) {
 }  // namespace
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+  // Without this a failed assert aborts silently, leaving CI nothing to show.
+  _set_error_mode(_OUT_TO_STDERR);
+  _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+  _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+#endif
   if (argc != 2) {
     std::fprintf(stderr, "usage: %s <data.txt>\n", argv[0]);
     return 2;
