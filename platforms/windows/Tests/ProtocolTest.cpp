@@ -41,13 +41,19 @@ int main() {
   assert(read.operations[2].panel.expanded && read.operations[2].panel.columns == 9);
   assert(read.operations[3].op == Protocol::Op::kShowHint && read.operations[3].panel.replacedText == "我ㄇ");
   assert(read.operations[4].op == Protocol::Op::kHideHint);
-  // Without the columns, as a server from before 9 columns replies, and otherwise cut short.
+  // As a server from before the columns (6 bytes less), before full-width (2 less) or before the
+  // question of excluding (1 less) replies, and otherwise cut short.
   Protocol::Reply withoutColumns;
-  assert(Protocol::ReadReply(bytes.substr(0, bytes.size() - 4), withoutColumns) && withoutColumns.columns == ProjectKey::kGridColumns &&
+  assert(Protocol::ReadReply(bytes.substr(0, bytes.size() - 6), withoutColumns) && withoutColumns.columns == ProjectKey::kGridColumns &&
          withoutColumns.operations[2].panel.columns == ProjectKey::kGridColumns);
+  Protocol::Reply withoutFullWidth;
+  assert(Protocol::ReadReply(bytes.substr(0, bytes.size() - 2), withoutFullWidth) && withoutFullWidth.columns == 9 && !withoutFullWidth.fullWidth);
+  Protocol::Reply withoutExcluding;
+  assert(Protocol::ReadReply(bytes.substr(0, bytes.size() - 1), withoutExcluding) && !withoutExcluding.operations[2].panel.excluding);
   for (size_t length = 0; length < bytes.size(); length++) {
     Protocol::Reply partial;
-    if (length != bytes.size() - 4) assert(!Protocol::ReadReply(bytes.substr(0, length), partial));
+    bool whole = length == bytes.size() - 6 || length == bytes.size() - 2 || length == bytes.size() - 1;
+    if (!whole) assert(!Protocol::ReadReply(bytes.substr(0, length), partial));
   }
   Protocol::Message message{Protocol::Request::kShift, {}, true, "abc"};
   bytes = Protocol::WriteMessage(message);
