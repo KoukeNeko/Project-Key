@@ -1208,7 +1208,7 @@ void Controller::refresh() {
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
     content.expanded = expanded_;
     if (excludeConfirm_) {  // what Delete would do, in the proof row, as the Tab hint is
-      std::string question = "排除「" + candidates_[selection_] + "」";
+      std::string question = "再按一次排除「" + candidates_[selection_] + "」，其他鍵取消";
       content.segments = {question};
       content.doubtful = {false};
       content.activeSegment = -1;
