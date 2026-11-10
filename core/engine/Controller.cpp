@@ -665,6 +665,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
     refresh();
     return true;
   }
+  if (key == '`' && !event.shift && !composer_->hasPendingReading() && openSymbolList("")) return true;
   // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on '.
   if (key == '\\' && !event.shift) key = '\'';
   if (composer_->insertPunctuation(key)) {
@@ -761,10 +762,12 @@ bool Controller::handleChoosing(const KeyEvent& event) {
         expanded_ = false;
       } else {
         choosing_ = false;
+        if (symbolList_) composer_->backspace();
       }
       break;
     case Key::kBackspace:
       choosing_ = false;
+      if (symbolList_) composer_->backspace();
       break;
     case Key::kForwardDelete:
       excludeSelected();
@@ -775,6 +778,11 @@ bool Controller::handleChoosing(const KeyEvent& event) {
         int index = rowStarts_[row] + (c - '1');  // the selection's row carries the labels
         if (index < rowEnd(row)) pick(index);
         return true;
+      }
+      if (symbolList_) {  // the list of the key, or none: it is taken out and the key goes on
+        composer_->backspace();
+        symbolList_ = false;
+        if (c && openSymbolList(std::string(1, c))) return true;
       }
       // Any other typing leaves the choice as it is and keeps composing.
       choosing_ = false;
@@ -914,6 +922,7 @@ std::optional<Segment> Controller::activeSegment() const {
 }
 
 void Controller::startChoosingAt(size_t start) {
+  symbolList_ = false;
   excludeConfirm_ = false;
   notice_.clear();
   undoLine_.clear();
@@ -940,6 +949,18 @@ void Controller::startChoosingAt(size_t start) {
 
 void Controller::choose(int index) {
   if (choosing_ && index >= 0 && index < static_cast<int>(candidates_.size())) pick(index);
+}
+
+bool Controller::openSymbolList(const std::string& key) {
+  if (!composer_->insertSymbols("_punctuation_list" + (key.empty() ? "" : "_" + key))) return false;
+  startChoosingAt(composer_->cursor() - 1);
+  if (!choosing_) {  // no candidates to choose from
+    composer_->backspace();
+    refresh();
+    return true;
+  }
+  symbolList_ = true;
+  return true;
 }
 
 void Controller::excludeSelected() {

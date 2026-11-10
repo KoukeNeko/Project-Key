@@ -819,6 +819,19 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   std::filesystem::remove(excludedPath);
 
+  // ` opens the list of symbols: a digit picks one, Escape takes the list out again, and a capital
+  // letter swaps it for that letter's list.
+  Type(controller, "`");
+  assert(controller.candidates().size() > 100 && controller.panel() && !controller.panel()->rows.empty());
+  assert(controller.handleKey(Press("2")) && client.marked == "，");
+  EscapeAll(controller, client);
+  Type(controller, "`");
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && client.marked.empty());
+  Type(controller, "`");
+  assert(controller.handleKey(Shifted("A")));
+  assert(std::find(controller.candidates().begin(), controller.candidates().end(), "Ａ") != controller.candidates().end());
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && client.marked.empty());
+
   // A click picks what it lands on, in the row, in the unfolded grid and in the row shown while
   // typing. Last, as what it picks is remembered.
   Type(controller, "rup wu0 ");

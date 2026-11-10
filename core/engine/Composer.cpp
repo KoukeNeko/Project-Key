@@ -344,16 +344,18 @@ void Composer::endOpenSyllable() {
 
 bool Composer::insertPunctuation(char key) {
   for (const std::string& prefix : {"_punctuation_Standard_", "_punctuation_"}) {
-    std::string reading = prefix + std::string(1, key);
-    if (lm_->hasUnigrams(reading)) {
-      if (!readingShown_) showReading(/*ending=*/true);  // the open syllable goes in as its word
-      endReading();
-      grid_.insertReading(reading);
-      walk();
-      return true;
-    }
+    if (insertSymbols(prefix + std::string(1, key))) return true;
   }
   return false;
+}
+
+bool Composer::insertSymbols(const std::string& reading) {
+  if (!lm_->hasUnigrams(reading)) return false;
+  if (!readingShown_) showReading(/*ending=*/true);  // the open syllable goes in as its word
+  endReading();
+  grid_.insertReading(reading);
+  walk();
+  return true;
 }
 
 bool Composer::isSyllableKeys(const std::string& keys) const {

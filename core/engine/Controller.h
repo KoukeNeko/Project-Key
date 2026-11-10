@@ -241,6 +241,10 @@ class Controller {
   void switchMode(bool english);
   // The selected candidate is never offered again: it goes in exclude-phrases.txt.
   void excludeSelected();
+  // ` puts the list of symbols in the composition and chooses from it; a capital letter or a
+  // symbol key then swaps it for that key's list (Ａ ａ Ⓐ for A), Escape and Backspace take it out again.
+  bool openSymbolList(const std::string& key);
+  bool symbolList_ = false;  // while choosing, it is such a list
   bool excludeConfirm_ = false;  // Delete was pressed once on the selected candidate
   std::string notice_;           // shown in the proof row until the next key, after a word was excluded
   std::string undoLine_;         // the line of exclude-phrases.txt that Backspace takes out again, while notice_ is shown

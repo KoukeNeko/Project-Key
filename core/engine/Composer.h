@@ -99,6 +99,8 @@ class Composer {
   KeyResult completeWithFirstTone();
   // Inserts a punctuation reading such as "<" for "，". False if unknown.
   bool insertPunctuation(char key);
+  // Inserts a reading of symbols, such as "_punctuation_list" for the list ` opens. False if unknown.
+  bool insertSymbols(const std::string& reading);
   // Removes the last reading key, or the syllable before the cursor.
   bool backspace();
   // Removes the syllable after the cursor.
