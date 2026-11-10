@@ -720,6 +720,14 @@ bool AppendLine(const std::string& path, const std::string& line) {
   out << line;
   return out.flush().good();
 }
+
+// After a write of ours the files are read again even if their times did not move, as a clock
+// that ticks coarsely (Windows') leaves them the same for a write that follows at once.
+void ReloadAfterEdit(Environment& env) {
+  env.userPhrasesTime.reset();
+  env.excludedPhrasesTime.reset();
+  ReloadUserPhrases(env);
+}
 }  // namespace
 
 bool Controller::addSelectedWord() {
@@ -735,7 +743,7 @@ bool Controller::addSelectedWord() {
     refresh();
     return true;
   }
-  ReloadUserPhrases(env_);
+  ReloadAfterEdit(env_);
   composer_->reloadWords();
   notice_ = "已加入自訂詞「" + word->first + "」";
   refresh();
@@ -1048,7 +1056,7 @@ void Controller::excludeSelected() {
     client_.beep();
     return;
   }
-  ReloadUserPhrases(env_);
+  ReloadAfterEdit(env_);
   composer_->reloadWords();
   // The selection stays where it was, now on the next candidate, and the grid as open as it was.
   int place = selection_;
@@ -1085,7 +1093,7 @@ void Controller::promoteSelected() {
     client_.beep();
     return;
   }
-  ReloadUserPhrases(env_);
+  ReloadAfterEdit(env_);
   composer_->reloadWords();
   bool wasExpanded = expanded_;
   choosing_ = false;
@@ -1116,7 +1124,7 @@ void Controller::undoLastLine(const std::string& path, const std::string& line) 
     client_.beep();
     return;
   }
-  ReloadUserPhrases(env_);
+  ReloadAfterEdit(env_);
   composer_->reloadWords();
   std::string word = line.substr(0, line.find(' '));
   choosing_ = false;
