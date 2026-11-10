@@ -55,14 +55,23 @@ struct SettingsForm: View {
           }
           .disabled(cleared)
         }
-        LabeledContent("自訂詞") {
+        LabeledContent {
           Button("編輯…") { PKEditUserPhrases() }
+        } label: {
+          Text("自訂詞")
+          Text("每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ")
         }
-        LabeledContent("排除詞") {
+        LabeledContent {
           Button("編輯…") { PKEditExcludedPhrases() }
+        } label: {
+          Text("排除詞")
+          Text("不再出現的詞，格式同自訂詞；選字時按 ⌦ 也會加入")
         }
-        LabeledContent("資料夾") {
+        LabeledContent {
           Button("顯示") { PKShowDataFolder() }
+        } label: {
+          Text("資料夾")
+          Text("自訂詞、排除詞與學到的字串，複製檔案即可備份")
         }
       }
       Section("外觀") {

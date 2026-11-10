@@ -213,9 +213,9 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "KeypadPicks", "數字鍵盤選字", "開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音"},
            {Row::kToggle, "RememberChoices", "記住選過的字"},
            {Row::kClearChoices, "", "選字紀錄"},
-           {Row::kEditPhrases, "phrases.txt", "自訂詞"},
-           {Row::kEditPhrases, "exclude-phrases.txt", "排除詞"},
-           {Row::kShowFolder, "", "資料夾"},
+           {Row::kEditPhrases, "phrases.txt", "自訂詞", "每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ"},
+           {Row::kEditPhrases, "exclude-phrases.txt", "排除詞", "不再出現的詞，格式同自訂詞；選字時按 Delete 也會加入"},
+           {Row::kShowFolder, "", "資料夾", "自訂詞、排除詞與學到的字串，複製檔案即可備份"},
        }},
       {"外觀",
        {

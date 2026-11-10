@@ -46,13 +46,13 @@
       <tk:SettingsCard Header="選字紀錄">
         <Button x:Name="ClearChoices" Click="OnClearChoices" Content="清除" />
       </tk:SettingsCard>
-      <tk:SettingsCard Header="自訂詞">
+      <tk:SettingsCard Header="自訂詞" Description="每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ">
         <Button x:Name="EditPhrases" Click="OnEditPhrases" Content="編輯…" />
       </tk:SettingsCard>
-      <tk:SettingsCard Header="排除詞">
+      <tk:SettingsCard Header="排除詞" Description="不再出現的詞，格式同自訂詞；選字時按 Delete 也會加入">
         <Button x:Name="EditExcluded" Click="OnEditExcluded" Content="編輯…" />
       </tk:SettingsCard>
-      <tk:SettingsCard Header="資料夾">
+      <tk:SettingsCard Header="資料夾" Description="自訂詞、排除詞與學到的字串，複製檔案即可備份">
         <Button x:Name="ShowFolder" Click="OnShowFolder" Content="顯示" />
       </tk:SettingsCard>
 
