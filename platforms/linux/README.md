@@ -36,7 +36,7 @@ COSMIC（Pop!_OS）上，支援 text-input-v3 的 App（例如 Firefox）經合�
 
 Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「單按 Shift 切換中英」開著時，Shift 由 Project Key 處理，切的是中／英而不是輸入法。關掉這項設定，Shift 就回到 Fcitx5。
 
-自訂詞在 `$XDG_DATA_HOME/projectkey/phrases.txt`（預設 `~/.local/share/projectkey/phrases.txt`），設定視窗的「編輯…」開啟；不要出現的詞放在同一個資料夾的 `exclude-phrases.txt`。格式與 macOS 相同，見 [自訂詞](../macos/README.md#自訂詞)。
+自訂詞在 `$XDG_DATA_HOME/projectkey/phrases.txt`（預設 `~/.local/share/projectkey/phrases.txt`），設定視窗的「自訂詞」「編輯…」開啟；不要出現的詞放在同一個資料夾的 `exclude-phrases.txt`，由「排除詞」開啟，「資料夾」顯示這個資料夾。格式與 macOS 相同，見 [自訂詞](../macos/README.md#自訂詞)。
 
 ## 建置與安裝
 

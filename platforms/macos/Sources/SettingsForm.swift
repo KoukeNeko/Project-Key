@@ -58,6 +58,12 @@ struct SettingsForm: View {
         LabeledContent("自訂詞") {
           Button("編輯…") { PKEditUserPhrases() }
         }
+        LabeledContent("排除詞") {
+          Button("編輯…") { PKEditExcludedPhrases() }
+        }
+        LabeledContent("資料夾") {
+          Button("顯示") { PKShowDataFolder() }
+        }
       }
       Section("外觀") {
         Picker("候選視窗", selection: $appearance) {

@@ -49,6 +49,12 @@
       <tk:SettingsCard Header="自訂詞">
         <Button x:Name="EditPhrases" Click="OnEditPhrases" Content="編輯…" />
       </tk:SettingsCard>
+      <tk:SettingsCard Header="排除詞">
+        <Button x:Name="EditExcluded" Click="OnEditExcluded" Content="編輯…" />
+      </tk:SettingsCard>
+      <tk:SettingsCard Header="資料夾">
+        <Button x:Name="ShowFolder" Click="OnShowFolder" Content="顯示" />
+      </tk:SettingsCard>
 
       <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="外觀" />
       <tk:SettingsCard Header="候選視窗">

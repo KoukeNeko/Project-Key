@@ -50,6 +50,10 @@ FOUNDATION_EXPORT void PKShowSettings(void);
 // Opens the user's words (Lexicon::loadUserPhrases) in their text editor, made first when missing;
 // as the input menu's 編輯自訂詞… does. Nothing without a place to keep them (outside the app bundle).
 FOUNDATION_EXPORT void PKEditUserPhrases(void);
+// The same for the words that are never offered (exclude-phrases.txt), as the input menu's 編輯排除詞… does.
+FOUNDATION_EXPORT void PKEditExcludedPhrases(void);
+// Shows the folder of the user's files (phrases.txt, exclude-phrases.txt, personal.txt) in Finder.
+FOUNDATION_EXPORT void PKShowDataFolder(void);
 
 @interface PKSettingsWindow : NSObject
 + (void)registerDefaults;

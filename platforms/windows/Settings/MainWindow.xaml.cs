@@ -272,15 +272,37 @@ public sealed partial class MainWindow : Window {
   // Opens the user's words (core/engine Lexicon::loadUserPhrases) in their text editor, made first
   // when missing, beside personal.txt; the engine reads them again on the next composition after a save.
   private void OnEditPhrases(object sender, RoutedEventArgs e) {
-    string file = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key", "phrases.txt");
+    OpenUserFile(EditPhrases, "phrases.txt", "# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");
+  }
+
+  // The same for the words that are never offered (exclude-phrases.txt).
+  private void OnEditExcluded(object sender, RoutedEventArgs e) {
+    OpenUserFile(EditExcluded, "exclude-phrases.txt", "# 每行一個不要出現的詞：詞、空白、注音，格式同自訂詞\n# 選字時按 Delete 也會加到這裡\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");
+  }
+
+  private static string UserDataFolder() =>
+      Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key");
+
+  private static void OpenUserFile(Button button, string name, string header) {
+    string file = Path.Combine(UserDataFolder(), name);
     try {
       if (!File.Exists(file)) {
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, "# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");  // UTF-8 without a BOM, as the engine reads it
+        Directory.CreateDirectory(UserDataFolder());
+        File.WriteAllText(file, header);  // UTF-8 without a BOM, as the engine reads it
       }
       Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
     } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) {
-      EditPhrases.Content = "無法開啟";
+      button.Content = "無法開啟";
+    }
+  }
+
+  // Shows the folder of the user's files (phrases.txt, exclude-phrases.txt, personal.txt) in Explorer.
+  private void OnShowFolder(object sender, RoutedEventArgs e) {
+    try {
+      Directory.CreateDirectory(UserDataFolder());
+      Process.Start(new ProcessStartInfo(UserDataFolder()) { UseShellExecute = true });
+    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) {
+      ShowFolder.Content = "無法開啟";
     }
   }
 

@@ -84,7 +84,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 自訂詞
 
-自訂詞在 `%LOCALAPPDATA%\Project Key\phrases.txt`，設定視窗的「編輯…」開啟；不要出現的詞放在同一個資料夾的 `exclude-phrases.txt`。格式與 macOS 相同，見 [自訂詞](../macos/README.md#自訂詞)。
+自訂詞在 `%LOCALAPPDATA%\Project Key\phrases.txt`，設定視窗的「自訂詞」「編輯…」開啟；不要出現的詞放在同一個資料夾的 `exclude-phrases.txt`，由「排除詞」開啟，「資料夾」顯示這個資料夾。格式與 macOS 相同，見 [自訂詞](../macos/README.md#自訂詞)。
 
 ## 測試
 

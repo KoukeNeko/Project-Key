@@ -36,18 +36,31 @@ inline std::filesystem::path DownloadedModels() {
   return data.empty() ? data : data / "models";
 }
 
-// The user's own words (core/engine Lexicon::loadUserPhrases), which the addon reads again on the
-// next composition after a save; made first when missing. Empty when it cannot be made.
-inline std::filesystem::path MadeUserPhrases() {
+// The user's own words, phrases.txt (core/engine Lexicon::loadUserPhrases), or the words never
+// offered, exclude-phrases.txt, which the addon reads again on the next composition after a
+// save; made first when missing. Empty when it cannot be made.
+inline std::filesystem::path MadeUserFile(const std::string& name) {
   std::filesystem::path data = UserData();
   if (data.empty()) return {};
-  std::filesystem::path file = data / "phrases.txt";
+  std::filesystem::path file = data / name;
   std::error_code error;
   if (std::filesystem::exists(file, error)) return file;
   std::filesystem::create_directories(data, error);
   std::ofstream out(file);
-  out << "# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n";
+  if (name == "phrases.txt") {
+    out << "# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n";
+  } else {
+    out << "# 每行一個不要出現的詞：詞、空白、注音，格式同自訂詞\n# 選字時按 Delete 也會加到這裡\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n";
+  }
   return out.good() ? file : std::filesystem::path();
+}
+
+// The folder of the user's files, made first when missing; empty when it cannot be made.
+inline std::filesystem::path MadeUserFolder() {
+  std::filesystem::path data = UserData();
+  std::error_code error;
+  if (!data.empty()) std::filesystem::create_directories(data, error);
+  return error ? std::filesystem::path() : data;
 }
 
 inline std::filesystem::path ModelsInUse() {
@@ -174,8 +187,8 @@ inline int WelcomeStep(bool added, bool inUse, bool tried) {
 }
 
 struct Row {
-  enum Kind { kToggle, kChoice, kClearChoices, kEditPhrases } kind;
-  const char* key;  // empty for kClearChoices and kEditPhrases
+  enum Kind { kToggle, kChoice, kClearChoices, kEditPhrases, kShowFolder } kind;
+  const char* key;  // empty for kClearChoices and kShowFolder; the file's name for kEditPhrases
   const char* title;
   const char* detail = nullptr;              // a line under the row
   std::vector<const char*> values = {};      // kChoice: the config's names for its options
@@ -200,7 +213,9 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "KeypadPicks", "數字鍵盤選字", "開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音"},
            {Row::kToggle, "RememberChoices", "記住選過的字"},
            {Row::kClearChoices, "", "選字紀錄"},
-           {Row::kEditPhrases, "", "自訂詞"},
+           {Row::kEditPhrases, "phrases.txt", "自訂詞"},
+           {Row::kEditPhrases, "exclude-phrases.txt", "排除詞"},
+           {Row::kShowFolder, "", "資料夾"},
        }},
       {"外觀",
        {

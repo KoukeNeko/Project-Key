@@ -520,13 +520,22 @@ int main(int argc, char** argv) {
         form->addRow(label(row.title), combo);
       } else if (row.kind == Row::kEditPhrases) {
         auto* edit = new QPushButton("編輯…");
-        QObject::connect(edit, &QPushButton::clicked, [edit] {
-          std::filesystem::path file = MadeUserPhrases();
+        QObject::connect(edit, &QPushButton::clicked, [edit, name = std::string(row.key)] {
+          std::filesystem::path file = MadeUserFile(name);
           if (file.empty() || !QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(file.string())))) {
             edit->setText("無法開啟");
           }
         });
         form->addRow(label(row.title), edit);
+      } else if (row.kind == Row::kShowFolder) {
+        auto* show = new QPushButton("顯示");
+        QObject::connect(show, &QPushButton::clicked, [show] {
+          std::filesystem::path folder = MadeUserFolder();
+          if (folder.empty() || !QDesktopServices::openUrl(QUrl::fromLocalFile(QString::fromStdString(folder.string())))) {
+            show->setText("無法開啟");
+          }
+        });
+        form->addRow(label(row.title), show);
       } else {
         auto* clear = new QPushButton("清除");
         clear->setEnabled(available);

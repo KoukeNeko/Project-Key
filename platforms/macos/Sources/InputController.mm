@@ -330,12 +330,17 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
   [menu addItemWithTitle:@"設定…" action:@selector(showSettings:) keyEquivalent:@""];
   if (!SharedEnvironment().userPhrasesPath.empty()) {
     [menu addItemWithTitle:@"編輯自訂詞…" action:@selector(editUserPhrases:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"編輯排除詞…" action:@selector(editExcludedPhrases:) keyEquivalent:@""];
   }
   return menu;
 }
 
 - (void)editUserPhrases:(id)sender {
   PKEditUserPhrases();
+}
+
+- (void)editExcludedPhrases:(id)sender {
+  PKEditExcludedPhrases();
 }
 
 - (void)showSettings:(id)sender {

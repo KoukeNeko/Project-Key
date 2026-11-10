@@ -405,8 +405,8 @@ void Activate(GtkApplication* app) {
         widget = adw_action_row_new();
         GtkWidget* edit = gtk_button_new_with_label("編輯…");
         gtk_widget_set_valign(edit, GTK_ALIGN_CENTER);
-        g_signal_connect(edit, "clicked", G_CALLBACK((+[](GtkButton* button, gpointer) {
-                           std::filesystem::path file = MadeUserPhrases();
+        g_signal_connect(edit, "clicked", G_CALLBACK((+[](GtkButton* button, gpointer data) {
+                           std::filesystem::path file = MadeUserFile(static_cast<const Row*>(data)->key);
                            GError* error = nullptr;
                            gchar* uri = file.empty() ? nullptr : g_filename_to_uri(file.c_str(), nullptr, &error);
                            if (uri && g_app_info_launch_default_for_uri(uri, nullptr, &error)) {
@@ -418,8 +418,27 @@ void Activate(GtkApplication* app) {
                            g_free(uri);
                            gtk_button_set_label(button, "無法開啟");
                          })),
-                         nullptr);
+                         const_cast<Row*>(&row));
         adw_action_row_add_suffix(ADW_ACTION_ROW(widget), edit);
+      } else if (row.kind == Row::kShowFolder) {
+        widget = adw_action_row_new();
+        GtkWidget* show = gtk_button_new_with_label("顯示");
+        gtk_widget_set_valign(show, GTK_ALIGN_CENTER);
+        g_signal_connect(show, "clicked", G_CALLBACK((+[](GtkButton* button, gpointer) {
+                           std::filesystem::path folder = MadeUserFolder();
+                           GError* error = nullptr;
+                           gchar* uri = folder.empty() ? nullptr : g_filename_to_uri(folder.c_str(), nullptr, &error);
+                           if (uri && g_app_info_launch_default_for_uri(uri, nullptr, &error)) {
+                             g_free(uri);
+                             return;
+                           }
+                           if (error) g_warning("Project Key: cannot open %s: %s", folder.c_str(), error->message);
+                           g_clear_error(&error);
+                           g_free(uri);
+                           gtk_button_set_label(button, "無法開啟");
+                         })),
+                         nullptr);
+        adw_action_row_add_suffix(ADW_ACTION_ROW(widget), show);
       } else {
         widget = adw_action_row_new();
         GtkWidget* clear = gtk_button_new_with_label("清除");

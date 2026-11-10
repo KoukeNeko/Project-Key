@@ -47,21 +47,36 @@ NSURL *PKSupportDirectory(void) {
   return [support URLByAppendingPathComponent:@"ProjectKey" isDirectory:YES];
 }
 
-// Opens the user's words in their text editor; the next composition after a save reads them.
-// The tests have no bundle and must not touch the user's file.
-void PKEditUserPhrases(void) {
+// Opens one of the user's word files in their text editor, made first with `header` when missing;
+// the next composition after a save reads it. The tests have no bundle and must not touch the user's files.
+static void EditUserFile(NSString *name, NSString *header) {
   if (!NSBundle.mainBundle.bundleIdentifier) return;
-  NSString *path = [PKSupportDirectory() URLByAppendingPathComponent:@"phrases.txt"].path;
+  NSString *path = [PKSupportDirectory() URLByAppendingPathComponent:name].path;
   NSFileManager *files = NSFileManager.defaultManager;
   if (![files fileExistsAtPath:path]) {
     [files createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
     NSError *error = nil;
-    if (![@"# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
+    if (![header writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
       NSLog(@"Project Key: cannot create %@: %@", path, error);
       return;
     }
   }
   [NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:path]];
+}
+
+void PKEditUserPhrases(void) {
+  EditUserFile(@"phrases.txt", @"# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");
+}
+
+void PKEditExcludedPhrases(void) {
+  EditUserFile(@"exclude-phrases.txt", @"# 每行一個不要出現的詞：詞、空白、注音，格式同自訂詞\n# 選字時按 ⌦ 也會加到這裡\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");
+}
+
+void PKShowDataFolder(void) {
+  if (!NSBundle.mainBundle.bundleIdentifier) return;
+  NSURL *folder = PKSupportDirectory();
+  [NSFileManager.defaultManager createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:nil];
+  [NSWorkspace.sharedWorkspace openURL:folder];
 }
 
 @implementation PKSettingsWindow
