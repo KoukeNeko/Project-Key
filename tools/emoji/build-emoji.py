@@ -17,7 +17,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 GROUPS = {  # emoji-test.txt's group names, as the table names them
-    "Smileys & Emotion": "表情",
+    "Smileys & Emotion": "Emoji",
     "People & Body": "人物",
     "Animals & Nature": "動物與自然",
     "Food & Drink": "飲食",

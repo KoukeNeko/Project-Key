@@ -761,7 +761,7 @@ bool Controller::handleChoosing(const KeyEvent& event) {
       return true;
     }
     case Key::kEscape:
-      if (expanded_) {
+      if (expanded_ && symbolReading_.empty()) {
         expanded_ = false;
       } else if (symbolReading_.rfind("_emoji_list_", 0) == 0) {  // back to the groups, on the one it was
         int group = std::atoi(symbolReading_.c_str() + std::strlen("_emoji_list_"));
@@ -972,6 +972,8 @@ bool Controller::openSymbolList(const std::string& reading) {
     return true;
   }
   symbolReading_ = reading;
+  expanded_ = true;  // the whole list, not a row of it
+  refresh();
   return true;
 }
 
