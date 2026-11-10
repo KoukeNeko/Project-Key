@@ -1,0 +1,19 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Project Key
+Source: https://github.com/KoukeNeko/Project-Key
+
+Files: *
+Copyright: KoukeNeko
+License: MIT
+
+Files: usr/share/fcitx5/projectkey/bigram.bin usr/share/fcitx5/projectkey/chars.bin usr/share/fcitx5/projectkey/sentence.bin
+Copyright: see MODELS-NOTICE.txt
+License: CC-BY-SA-4.0
+
+Files: usr/share/fcitx5/projectkey/data.txt
+Copyright: McBopomofo contributors
+License: LGPL-2.1+
+ See usr/share/fcitx5/projectkey/LICENSE-LGPL-2.1.txt.
+
+License: MIT
+ See the LICENSE file in the source repository.

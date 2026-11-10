@@ -1,0 +1,17 @@
+Source: fcitx5-projectkey
+Section: utils
+Priority: optional
+Maintainer: KoukeNeko <noreply@users.noreply.github.com>
+Standards-Version: 4.6.2
+Homepage: https://github.com/KoukeNeko/Project-Key
+Build-Depends: debhelper-compat (= 13), cmake, ninja-build, g++, python3, git, curl, ca-certificates, pkg-config,
+ libfcitx5core-dev, libfcitx5config-dev, libfcitx5utils-dev, fcitx5-modules-dev, libenchant-2-dev, libxcb1-dev,
+ libcairo2-dev, libpango1.0-dev, libwayland-dev, qt6-base-dev, libadwaita-1-dev, libsoup-3.0-dev, libjson-glib-dev
+
+Package: fcitx5-projectkey
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, fcitx5, hunspell-en-us
+Recommends: fonts-noto-cjk
+Description: Zhuyin input method for Fcitx5
+ Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
+ for Fcitx5 on GNOME, KDE and other desktops.

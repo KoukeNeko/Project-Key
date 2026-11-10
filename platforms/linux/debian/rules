@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+# Run through package-deb.sh, which puts this directory at the source root as debian/
+# and fetches McBopomofo and the models first.
+%:
+	dh $@ --buildsystem=cmake+ninja --sourcedirectory=platforms/linux
+
+override_dh_auto_configure:
+	dh_auto_configure -- -DMCBOPOMOFO=$(CURDIR)/platforms/linux/build/mcbopomofo -DREQUIRE_MODELS=ON
+
+override_dh_auto_test:
+	for t in ComposerTest ControllerTest; do obj-*/$$t platforms/linux/build/mcbopomofo/Source/Data/data.txt || exit 1; done
+
+override_dh_install:
+	dh_install
+	# The package manager's trigger refreshes it; a copy in the package conflicts with the system's.
+	rm -f debian/fcitx5-projectkey/usr/share/icons/hicolor/icon-theme.cache
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz -z3

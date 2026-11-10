@@ -1,0 +1,27 @@
+#!/bin/sh
+# Builds fcitx5-projectkey-<version>-1.<dist>.<arch>.rpm into platforms/linux/dist/ from this checkout.
+# Needs rpm-build and the BuildRequires in rpm/fcitx5-projectkey.spec (Fedora); downloads
+# McBopomofo and the trained models while building.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../.." && pwd)
+version=$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' "$here/CMakeLists.txt")
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+mkdir "$work/pk"
+tar -C "$root" --exclude=./.git --exclude=./platforms/linux/build --exclude=./platforms/linux/dist -cf - . | tar -C "$work/pk" -xf -
+cd "$work/pk"
+tools/bigram-trainer/fetch-models.sh
+mcb=platforms/linux/build/mcbopomofo
+git init -q "$mcb"
+git -C "$mcb" remote add origin https://github.com/openvanilla/McBopomofo
+git -C "$mcb" fetch -q --depth 1 origin "$(tr -d '[:space:]' < MCBOPOMOFO_COMMIT)"
+git -C "$mcb" checkout -q FETCH_HEAD
+make -C "$mcb/Source/Data" data.txt
+cd "$work"
+mkdir -p rpmbuild/SOURCES
+tar czf rpmbuild/SOURCES/pk.tar.gz pk
+rpmbuild -bb --define "_topdir $work/rpmbuild" --define "pk_version $version" "$here/rpm/fcitx5-projectkey.spec"
+mkdir -p "$here/dist"
+cp rpmbuild/RPMS/*/*.rpm "$here/dist/"
+ls "$here/dist"
