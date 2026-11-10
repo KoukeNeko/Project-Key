@@ -6,6 +6,8 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 version=$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' "$here/CMakeLists.txt")
+# The codename keeps the files of the distributions apart in one repository pool.
+codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
 work=$(mktemp -d "${TMPDIR:-/var/tmp}/pk.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 mkdir "$work/pk"
@@ -20,7 +22,7 @@ git -C "$mcb" checkout -q FETCH_HEAD
 make -C "$mcb/Source/Data" data.txt
 cp -r platforms/linux/debian debian
 chmod +x debian/rules
-printf 'fcitx5-projectkey (%s-1) unstable; urgency=medium\n\n  * Release %s.\n\n -- KoukeNeko <noreply@users.noreply.github.com>  %s\n' "$version" "$version" "$(date -R)" > debian/changelog
+printf 'fcitx5-projectkey (%s-1~%s) unstable; urgency=medium\n\n  * Release %s.\n\n -- KoukeNeko <noreply@users.noreply.github.com>  %s\n' "$version" "$codename" "$version" "$(date -R)" > debian/changelog
 dpkg-buildpackage -b -us -uc
 mkdir -p "$here/dist"
 cp "$work"/fcitx5-projectkey*.deb "$here/dist/"

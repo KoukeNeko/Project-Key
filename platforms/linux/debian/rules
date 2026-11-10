@@ -23,5 +23,8 @@ override_dh_gencontrol:
 	dh_gencontrol -pfcitx5-projectkey -- -Vdata:Version=$(DATA_VERSION)
 	dh_gencontrol -pfcitx5-projectkey-data -- -v$(DATA_VERSION)
 
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym
+
 override_dh_builddeb:
 	dh_builddeb -- -Zxz -z3
