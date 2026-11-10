@@ -742,6 +742,22 @@ int main(int argc, char** argv) {
   assert(client.marked != "鍵小");
   EscapeAll(controller, client);
 
+
+  // A word in exclude-phrases.txt, beside the user's words, is no longer offered; removing the
+  // file brings it back, though phrases.txt itself does not exist.
+  std::string excludedPath = (std::filesystem::path(env.userPhrasesPath).parent_path() / "exclude-phrases.txt").string();
+  Type(controller, "ji3");
+  assert(client.marked == "我");
+  EscapeAll(controller, client);
+  std::ofstream(excludedPath) << "# 詞 注音\n我 ㄨㄛˇ\n";
+  Type(controller, "ji3");
+  assert(client.marked != "我");
+  EscapeAll(controller, client);
+  std::filesystem::remove(excludedPath);
+  Type(controller, "ji3");
+  assert(client.marked == "我");
+  EscapeAll(controller, client);
+
   // A click picks what it lands on, in the row, in the unfolded grid and in the row shown while
   // typing. Last, as what it picks is remembered.
   Type(controller, "rup wu0 ");

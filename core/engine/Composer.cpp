@@ -182,13 +182,21 @@ void Lexicon::loadLanguageModel(const char* path) {
   }
 }
 
-void Lexicon::loadUserPhrases(const std::string& path) {
-  // Read, not mapped as McBopomofo maps it: on Windows a mapped file cannot be saved over, so the
-  // user could not edit it while Project Key runs. The path is UTF-8, which Windows' narrow file
-  // calls would read in the ANSI code page.
+namespace {
+// Read, not mapped as McBopomofo maps it: on Windows a mapped file cannot be saved over, so the
+// user could not edit it while Project Key runs. The path is UTF-8, which Windows' narrow file
+// calls would read in the ANSI code page.
+std::string ReadUserFile(const std::string& path) {
   std::ifstream file(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary);
-  userPhrasesText_.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+  return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+}
+}  // namespace
+
+void Lexicon::loadUserPhrases(const std::string& path, const std::string& excludedPath) {
+  userPhrasesText_ = ReadUserFile(path);
   McBopomofoLM::loadUserPhrases(userPhrasesText_.data(), userPhrasesText_.size());  // which keeps pointing into the text
+  excludedPhrasesText_ = ReadUserFile(excludedPath);
+  McBopomofoLM::loadExcludedPhrases(excludedPhrasesText_.data(), excludedPhrasesText_.size());
   userReadings_.clear();
   std::istringstream lines(userPhrasesText_);
   std::string line;

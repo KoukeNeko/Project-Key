@@ -38,8 +38,9 @@ class Lexicon : public McBopomofo::McBopomofoLM {
   // Hides McBopomofoLM's own, which loads only the exact lookups.
   void loadLanguageModel(const char* path);
   // The user's own words, one "word reading" line each (小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ), '#' starting a
-  // comment; they win over the dictionary's words of the same reading. A missing file has none.
-  void loadUserPhrases(const std::string& path);
+  // comment; they win over the dictionary's words of the same reading. The words of the excluded
+  // file, in the same form, are never offered. A missing file has none.
+  void loadUserPhrases(const std::string& path, const std::string& excludedPath);
   // The "reading word score" rows whose reading starts with `prefix`, then the user's
   // readings that do, each a row of the reading alone.
   std::vector<std::string_view> rowsStartingWith(const std::string& prefix) const;
@@ -48,6 +49,7 @@ class Lexicon : public McBopomofo::McBopomofoLM {
   McBopomofo::MemoryMappedFile file_;
   std::unique_ptr<McBopomofo::ParselessPhraseDB> rows_;
   std::string userPhrasesText_;            // the user phrases file, which McBopomofo's points into
+  std::string excludedPhrasesText_;        // the excluded phrases file, likewise
   std::vector<std::string> userReadings_;  // sorted, unique
 };
 

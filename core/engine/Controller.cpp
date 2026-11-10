@@ -207,18 +207,24 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   }
   return true;
 }
+  env.excludedPhrasesTime.reset();
 
 void ReloadUserPhrases(Environment& env) {
   if (env.userPhrasesPath.empty()) return;
-  std::error_code error;
-  // A UTF-8 path, which Windows' narrow file calls would read in the ANSI code page.
-  std::filesystem::path path(std::u8string(env.userPhrasesPath.begin(), env.userPhrasesPath.end()));
-  auto written = std::filesystem::last_write_time(path, error);
-  std::optional<std::filesystem::file_time_type> time;
-  if (!error) time = written;
-  if (time == env.userPhrasesTime) return;
+  // UTF-8 paths, which Windows' narrow file calls would read in the ANSI code page.
+  auto writtenAt = [](const std::string& utf8Path) {
+    std::error_code error;
+    auto written = std::filesystem::last_write_time(std::filesystem::path(std::u8string(utf8Path.begin(), utf8Path.end())), error);
+    return error ? std::nullopt : std::optional(written);
+  };
+  std::string excludedPath =
+      (std::filesystem::path(env.userPhrasesPath).parent_path() / "exclude-phrases.txt").string();
+  auto time = writtenAt(env.userPhrasesPath);
+  auto excludedTime = writtenAt(excludedPath);
+  if (time == env.userPhrasesTime && excludedTime == env.excludedPhrasesTime) return;
   env.userPhrasesTime = time;
-  env.lm->loadUserPhrases(env.userPhrasesPath);
+  env.excludedPhrasesTime = excludedTime;
+  env.lm->loadUserPhrases(env.userPhrasesPath, excludedPath);
   env.userPhrasesVersion++;
 }
 

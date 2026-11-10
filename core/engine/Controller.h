@@ -120,9 +120,11 @@ struct Environment {
   bool personalDirty = false;  // learned since the last save
   std::chrono::steady_clock::time_point personalSaved;
   // The user's own words (Lexicon::loadUserPhrases), edited by the user in any text editor and
-  // read again by the next composition after the file changes; empty for none.
+  // read again by the next composition after the file changes; empty for none. The words the
+  // user never wants offered are in exclude-phrases.txt beside it.
   std::string userPhrasesPath;
-  std::optional<std::filesystem::file_time_type> userPhrasesTime;  // when the loaded file was written
+  std::optional<std::filesystem::file_time_type> userPhrasesTime;  // when the loaded files were written,
+  std::optional<std::filesystem::file_time_type> excludedPhrasesTime;  // phrases.txt and exclude-phrases.txt
   uint64_t userPhrasesVersion = 0;  // changes with each load
   Settings* settings = nullptr;
   // Whether text (letters and spaces) is correctly spelled English.
