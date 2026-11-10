@@ -3,7 +3,7 @@
 # X11 or as a Wayland input method popup, and the settings windows (Settings/).
 # build.sh fetches McBopomofo (MIT) into build/mcbopomofo and points MCBOPOMOFO here.
 cmake_minimum_required(VERSION 3.16)
-project(fcitx5-projectkey VERSION 0.6.3 LANGUAGES C CXX)
+project(fcitx5-projectkey VERSION 0.6.4 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
