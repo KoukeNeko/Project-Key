@@ -823,6 +823,7 @@ int main(int argc, char** argv) {
   // letter swaps it for that letter's list.
   Type(controller, "`");
   assert(controller.candidates().size() > 100 && controller.panel() && controller.panel()->expanded);  // the whole list
+  assert(controller.panel()->segments[0] == "符號");
   assert(controller.handleKey(Press("2")) && client.marked == "，");
   EscapeAll(controller, client);
   Type(controller, "`");
@@ -842,7 +843,9 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   Type(controller, "~");
   assert((controller.candidates() == std::vector<std::string>{"Emoji", "動物"}));
+  assert(controller.panel()->segments[0] == "Emoji");
   assert(controller.handleKey(Press("2")));  // the group
+  assert(controller.panel()->segments[0] == "動物");
   assert((controller.candidates() == std::vector<std::string>{"🐶", "🐱"}));
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));  // back to the groups, on the second
   assert((controller.candidates() == std::vector<std::string>{"Emoji", "動物"}) && controller.panel()->selection == 1);

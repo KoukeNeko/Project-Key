@@ -1308,6 +1308,16 @@ void Controller::refresh() {
       content.caret = Utf16Length(text);
       content.showsProof = true;
       content.excluding = excludeConfirm_;
+    } else if (!symbolReading_.empty()) {  // what the list is, in the proof row, not the word the composition holds meanwhile
+      std::string title = symbolReading_ == "_emoji_groups" ? "Emoji"
+                          : symbolReading_.rfind("_emoji_list_", 0) == 0
+                              ? env_.lm->emojiGroupName(std::atoi(symbolReading_.c_str() + std::strlen("_emoji_list_")))
+                              : "符號";
+      content.segments = {title};
+      content.doubtful = {false};
+      content.activeSegment = -1;
+      content.caret = Utf16Length(title);
+      content.showsProof = true;
     }
   } else {
     showRow(content);

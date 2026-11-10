@@ -45,6 +45,7 @@ class Lexicon : public McBopomofo::McBopomofoLM {
   // after the dictionary's words, and the table's groups stand for the readings _emoji_groups (the
   // groups' names) and _emoji_list_<n> (the n-th group's emoji), which ~ opens.
   void loadEmoji(const std::string& path);
+  std::string emojiGroupName(size_t group) const { return group < emojiGroups_.size() ? emojiGroups_[group].first : ""; }
   std::vector<Formosa::Gramambular2::LanguageModel::Unigram> getUnigrams(const std::string& key) override;
   bool hasUnigrams(const std::string& key) override;
   // The "reading word score" rows whose reading starts with `prefix`, then the user's
