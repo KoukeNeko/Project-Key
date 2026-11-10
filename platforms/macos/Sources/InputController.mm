@@ -124,6 +124,7 @@ ProjectKey::Environment &SharedEnvironment() {
     };
     env->tabKeycap = "⇥";
     env->deleteKeycap = "⌦";
+    env->backspaceKeycap = "⌫";
     env->shiftTabKeycap = "⇧⇥";
     env->appTypesUnhandledKeys = true;
     env->hintWindow = true;

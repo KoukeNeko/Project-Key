@@ -136,6 +136,7 @@ struct Environment {
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
   bool fullWidth = false;    // Shift+Space: letters, digits, symbols and spaces typed outside a composition are full-width
   std::string tabKeycap = "Tab";  // the key the conversion previews end with
+  std::string backspaceKeycap = "Backspace";  // the key that takes back the exclusion the notice reports
   std::string deleteKeycap = "Delete";  // the key that excludes the selected candidate, as the proof row shows it
   std::string shiftTabKeycap = "Shift+Tab";  // the proof row's, while Tab offers English
   // macOS lets the app type a key the input method returns; TSF does not
@@ -242,6 +243,8 @@ class Controller {
   void excludeSelected();
   bool excludeConfirm_ = false;  // Delete was pressed once on the selected candidate
   std::string notice_;           // shown in the proof row until the next key, after a word was excluded
+  std::string undoLine_;         // the line of exclude-phrases.txt that Backspace takes out again, while notice_ is shown
+  void undoExclusion(const std::string& line);
   // Types the full-width form of a printable ASCII character, when full-width is on.
   bool typeFullWidth(char c);
 

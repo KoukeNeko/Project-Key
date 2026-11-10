@@ -698,7 +698,13 @@ int Controller::indexInRow(int row, int column) const {
 bool Controller::handleChoosing(const KeyEvent& event) {
   bool confirming = excludeConfirm_ && event.key == Key::kForwardDelete;
   if (!confirming) excludeConfirm_ = false;  // any other key takes the question back
+  std::string undoable = event.key == Key::kBackspace ? undoLine_ : "";
   notice_.clear();
+  undoLine_.clear();
+  if (!undoable.empty()) {
+    undoExclusion(undoable);
+    return true;
+  }
   int count = static_cast<int>(candidates_.size());
   int row = rowOf(selection_), rows = static_cast<int>(rowStarts_.size());
   int column = columns_[selection_];
@@ -910,6 +916,7 @@ std::optional<Segment> Controller::activeSegment() const {
 void Controller::startChoosingAt(size_t start) {
   excludeConfirm_ = false;
   notice_.clear();
+  undoLine_.clear();
   activeStart_ = start;
   activeEnd_ = SIZE_MAX;
   std::optional<Segment> whole = composer_->segmentFrom(start);
@@ -974,7 +981,41 @@ void Controller::excludeSelected() {
     selection_ = std::min(place, static_cast<int>(candidates_.size()) - 1);
     expanded_ = wasExpanded;
   }
-  notice_ = "已排除「" + word + "」";  // in the panel, which the badge under the caret would be pushed aside by
+  notice_ = "已排除「" + word + "」，還原";  // in the panel, which the badge under the caret would be pushed aside by
+  undoLine_ = word + ' ' + reading + '\n';
+  refresh();
+}
+
+void Controller::undoExclusion(const std::string& line) {
+  std::string path = ExcludedPhrasesPath(env_);
+  std::filesystem::path file(std::u8string(path.begin(), path.end()));
+  std::string text;
+  {
+    std::ifstream in(file, std::ios::binary);
+    text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  }
+  // Only the line this exclusion added, still the last: the file may have been edited since.
+  if (text.size() < line.size() || text.compare(text.size() - line.size(), line.size(), line) != 0) {
+    client_.beep();
+    return;
+  }
+  text.resize(text.size() - line.size());
+  std::ofstream out(file, std::ios::binary | std::ios::trunc);
+  out << text;
+  if (!out.flush()) {
+    client_.beep();
+    return;
+  }
+  ReloadUserPhrases(env_);
+  composer_->reloadWords();
+  std::string word = line.substr(0, line.find(' '));
+  choosing_ = false;
+  startChoosingAt(activeStart_);
+  if (choosing_) {
+    auto back = std::find(candidates_.begin(), candidates_.end(), word);
+    if (back != candidates_.end()) selection_ = static_cast<int>(back - candidates_.begin());
+  }
+  notice_ = "已還原「" + word + "」";
   refresh();
 }
 
@@ -1012,6 +1053,7 @@ void Controller::toggleGrid() {
 void Controller::pick(int index, bool moveOn) {
   excludeConfirm_ = false;
   notice_.clear();
+  undoLine_.clear();
   zhuyinEdited_ = true;  // also when picked by a click, which passes no key
   std::optional<Segment> segment = activeSegment();
   if (segment && index == readingIndex_) {
@@ -1226,6 +1268,7 @@ void Controller::refresh() {
       content.caret = Utf16Length(text);
       content.showsProof = true;
       if (excludeConfirm_) content.keyHint = env_.deleteKeycap;  // what Delete would do
+      if (!undoLine_.empty()) content.keyHint = env_.backspaceKeycap;  // and what takes the exclusion back
       content.excluding = excludeConfirm_;
     }
   } else {

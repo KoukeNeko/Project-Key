@@ -793,7 +793,7 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
   assert(controller.panel()->excluding);
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(client.marked != "我" && controller.panel()->segments[0] == "已排除「我」");
+  assert(client.marked != "我" && controller.panel()->segments[0] == "已排除「我」，還原");
   assert(controller.panel()->selection == selectedBefore);  // the selection stays on the next candidate
   assert(controller.panel()->rows[controller.panel()->selectedRow][controller.panel()->selection] != "我");
   std::ifstream excludedFile(excludedPath);
@@ -803,6 +803,19 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   Type(controller, "ji3");
   assert(client.marked != "我");
+  EscapeAll(controller, client);
+  std::filesystem::remove(excludedPath);
+  // Backspace right after takes the exclusion back: the word is offered again and the line is gone.
+  Type(controller, "ji3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
+  assert(client.marked != "我" && controller.panel()->keyHint == env.backspaceKeycap);
+  assert(controller.handleKey(Special(ProjectKey::Key::kBackspace)));
+  assert(client.marked == "我" && controller.panel()->segments[0] == "已還原「我」");
+  std::ifstream undoneFile(excludedPath);
+  std::string undoneText((std::istreambuf_iterator<char>(undoneFile)), std::istreambuf_iterator<char>());
+  assert(undoneText.empty());
   EscapeAll(controller, client);
   std::filesystem::remove(excludedPath);
 
