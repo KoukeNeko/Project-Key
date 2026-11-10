@@ -23,5 +23,5 @@ chmod +x debian/rules
 printf 'fcitx5-projectkey (%s-1) unstable; urgency=medium\n\n  * Release %s.\n\n -- KoukeNeko <noreply@users.noreply.github.com>  %s\n' "$version" "$version" "$(date -R)" > debian/changelog
 dpkg-buildpackage -b -us -uc
 mkdir -p "$here/dist"
-cp "$work"/fcitx5-projectkey_*.deb "$here/dist/"
+cp "$work"/fcitx5-projectkey*.deb "$here/dist/"
 ls "$here/dist"
