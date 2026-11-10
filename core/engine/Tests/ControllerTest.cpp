@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <exception>
 #include <set>
 
 #ifdef _WIN32
@@ -144,6 +145,16 @@ int main(int argc, char** argv) {
   _set_error_mode(_OUT_TO_STDERR);
   _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
   _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+  std::set_terminate([] {
+    try {
+      if (auto thrown = std::current_exception()) std::rethrow_exception(thrown);
+    } catch (const std::exception& error) {
+      std::fprintf(stderr, "uncaught exception: %s\n", error.what());
+    } catch (...) {
+      std::fprintf(stderr, "uncaught non-standard exception\n");
+    }
+    std::abort();
+  });
 #endif
   if (argc != 2) {
     std::fprintf(stderr, "usage: %s <data.txt>\n", argv[0]);
