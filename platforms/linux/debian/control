@@ -10,8 +10,16 @@ Build-Depends: debhelper-compat (= 13), cmake, ninja-build, g++, python3, git, c
 
 Package: fcitx5-projectkey
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, fcitx5, hunspell-en-us
+Depends: ${shlibs:Depends}, ${misc:Depends}, fcitx5, hunspell-en-us, fcitx5-projectkey-data (= ${data:Version})
 Recommends: fonts-noto-cjk
 Description: Zhuyin input method for Fcitx5
  Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
  for Fcitx5 on GNOME, KDE and other desktops.
+
+Package: fcitx5-projectkey-data
+Architecture: all
+Depends: ${misc:Depends}
+Description: Dictionary and context models for Project Key
+ The McBopomofo dictionary and the trained sentence models. They change far
+ less often than the program, so they are a package of their own, versioned
+ by the models' date.

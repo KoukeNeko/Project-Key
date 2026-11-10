@@ -1,6 +1,10 @@
 #!/usr/bin/make -f
 # Run through package-deb.sh, which puts this directory at the source root as debian/
 # and fetches McBopomofo and the models first.
+
+# The models' date and the McBopomofo commit: the data package changes only with them.
+DATA_VERSION := $(shell echo $$(tr - . < tools/bigram-trainer/.cache/models-version.txt)+mcb$$(cut -c1-7 MCBOPOMOFO_COMMIT)-1)
+
 %:
 	dh $@ --buildsystem=cmake+ninja --sourcedirectory=platforms/linux
 
@@ -11,9 +15,13 @@ override_dh_auto_test:
 	for t in ComposerTest ControllerTest; do obj-*/$$t platforms/linux/build/mcbopomofo/Source/Data/data.txt || exit 1; done
 
 override_dh_install:
-	dh_install
 	# The package manager's trigger refreshes it; a copy in the package conflicts with the system's.
-	rm -f debian/fcitx5-projectkey/usr/share/icons/hicolor/icon-theme.cache
+	rm -f debian/tmp/usr/share/icons/hicolor/icon-theme.cache
+	dh_install
+
+override_dh_gencontrol:
+	dh_gencontrol -pfcitx5-projectkey -- -Vdata:Version=$(DATA_VERSION)
+	dh_gencontrol -pfcitx5-projectkey-data -- -v$(DATA_VERSION)
 
 override_dh_builddeb:
 	dh_builddeb -- -Zxz -z3

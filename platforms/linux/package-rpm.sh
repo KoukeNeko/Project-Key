@@ -21,7 +21,8 @@ make -C "$mcb/Source/Data" data.txt
 cd "$work"
 mkdir -p rpmbuild/SOURCES
 tar czf rpmbuild/SOURCES/pk.tar.gz pk
-rpmbuild -bb --define "_topdir $work/rpmbuild" --define "pk_version $version" "$here/rpm/fcitx5-projectkey.spec"
+data_version="$(tr - . < "$work/pk/tools/bigram-trainer/.cache/models-version.txt")+mcb$(cut -c1-7 "$work/pk/MCBOPOMOFO_COMMIT")"
+rpmbuild -bb --define "_topdir $work/rpmbuild" --define "pk_version $version" --define "data_version $data_version" "$here/rpm/fcitx5-projectkey.spec"
 mkdir -p "$here/dist"
 cp rpmbuild/RPMS/*/*.rpm "$here/dist/"
 ls "$here/dist"
