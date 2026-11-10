@@ -785,8 +785,8 @@ int main(int argc, char** argv) {
   int selectedBefore = controller.panel()->selection;
   // The first Delete only asks, in the proof row, with the selection drawn as a warning; another key takes it back.
   assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)));
-  assert(controller.panel() && controller.panel()->excluding && controller.panel()->keyHint == env.deleteKeycap &&
-         controller.panel()->segments[0] == "排除「我」，之後不再出現" && !std::filesystem::exists(excludedPath));
+  assert(controller.panel() && controller.panel()->excluding && controller.panel()->keyHint.empty() &&
+         controller.panel()->segments[0] == "按 " + env.deleteKeycap + " 排除「我」，之後不再出現" && !std::filesystem::exists(excludedPath));
   assert(controller.handleKey(Special(ProjectKey::Key::kRight)));
   assert(!controller.panel()->excluding && !std::filesystem::exists(excludedPath));
   assert(controller.handleKey(Special(ProjectKey::Key::kLeft)));

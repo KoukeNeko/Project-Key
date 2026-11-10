@@ -1261,13 +1261,12 @@ void Controller::refresh() {
     if (rows > 1) content.pageLabel = std::to_string(row + 1) + "/" + std::to_string(rows);
     content.expanded = expanded_;
     if (excludeConfirm_ || !notice_.empty()) {  // in the proof row, as the Tab hint is
-      std::string text = excludeConfirm_ ? "排除「" + candidates_[selection_] + "」，之後不再出現" : notice_;
+      std::string text = excludeConfirm_ ? "按 " + env_.deleteKeycap + " 排除「" + candidates_[selection_] + "」，之後不再出現" : notice_;
       content.segments = {text};
       content.doubtful = {false};
       content.activeSegment = -1;
       content.caret = Utf16Length(text);
       content.showsProof = true;
-      if (excludeConfirm_) content.keyHint = env_.deleteKeycap;  // what Delete would do
       content.excluding = excludeConfirm_;
     }
   } else {
