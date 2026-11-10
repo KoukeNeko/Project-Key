@@ -763,6 +763,14 @@ bool Controller::handleChoosing(const KeyEvent& event) {
     case Key::kEscape:
       if (expanded_) {
         expanded_ = false;
+      } else if (symbolReading_.rfind("_emoji_list_", 0) == 0) {  // back to the groups, on the one it was
+        int group = std::atoi(symbolReading_.c_str() + std::strlen("_emoji_list_"));
+        composer_->backspace();
+        if (openSymbolList("_emoji_groups") && choosing_ && group < static_cast<int>(candidates_.size())) {
+          selection_ = group;
+          refresh();
+        }
+        return true;
       } else {
         choosing_ = false;
         if (!symbolReading_.empty()) composer_->backspace();

@@ -844,6 +844,9 @@ int main(int argc, char** argv) {
   assert((controller.candidates() == std::vector<std::string>{"表情", "動物"}));
   assert(controller.handleKey(Press("2")));  // the group
   assert((controller.candidates() == std::vector<std::string>{"🐶", "🐱"}));
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));  // back to the groups, on the second
+  assert((controller.candidates() == std::vector<std::string>{"表情", "動物"}) && controller.panel()->selection == 1);
+  assert(controller.handleKey(Press("2")));
   assert(controller.handleKey(Press("2")) && client.marked == "🐱");
   EscapeAll(controller, client);
   Type(controller, "~");
