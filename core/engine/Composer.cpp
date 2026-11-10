@@ -855,6 +855,29 @@ std::vector<std::string> Composer::candidates(const Segment& segment, bool fromE
   return values;
 }
 
+std::optional<std::pair<std::string, std::string>> Composer::wordIn(size_t from, size_t to) const {
+  const std::vector<std::string>& readings = grid_.readings();
+  if (from >= to || to > readings.size()) return std::nullopt;
+  std::string word, reading;
+  for (size_t i = from; i < to; i++) {
+    if (readings[i].find(kAnyTone) != std::string::npos) return std::nullopt;
+    reading += (i > from ? grid_.readingSeparator() : "") + readings[i];
+  }
+  for (const Segment& segment : segments_) {
+    if (segment.start + segment.length <= from || segment.start >= to) continue;
+    std::vector<size_t> starts;  // where each character begins
+    for (size_t at = 0; at < segment.text.size();) {
+      starts.push_back(at);
+      NextCodePoint(segment.text, at);
+    }
+    starts.push_back(segment.text.size());
+    if (starts.size() - 1 != segment.length) return std::nullopt;
+    size_t first = std::max(from, segment.start) - segment.start, last = std::min(to, segment.start + segment.length) - segment.start;
+    word += segment.text.substr(starts[first], starts[last] - starts[first]);
+  }
+  return std::make_pair(word, reading);
+}
+
 std::string Composer::readingOf(const Segment& segment, const std::string& value, bool fromEnd) {
   for (const auto& [start, candidate] : choices(segment, fromEnd)) {
     if (candidate.value == value) return candidate.reading;

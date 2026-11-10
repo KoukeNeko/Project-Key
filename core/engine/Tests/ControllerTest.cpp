@@ -30,12 +30,18 @@ class MemorySettings : public Settings {
   std::map<Setting, int> values_;
 };
 
+std::string ReadFileText(const std::string& path) {
+  std::ifstream in(path);
+  return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
 class FakeClient : public Client {
  public:
   std::string committed, marked;
   bool panelVisible = false;
   PanelContent panel;
   std::string indicator;
+  uint32_t activeLength = 0;  // of the marked part of the composition
 
   void insertText(const std::string& text) override {
     committed += text;
@@ -45,6 +51,7 @@ class FakeClient : public Client {
     // The marked text takes the place of what it replaces (ASCII in these tests).
     if (composition.replaceBefore) committed.erase(committed.size() - composition.replaceBefore);
     marked = composition.text;
+    activeLength = composition.activeLength;
   }
   void showPanel(const PanelContent& content) override {
     panel = content;
@@ -835,6 +842,25 @@ int main(int argc, char** argv) {
   assert(std::string((std::istreambuf_iterator<char>(undonePromotion)), std::istreambuf_iterator<char>()).empty());
   EscapeAll(controller, client);
   std::filesystem::remove(env.userPhrasesPath);
+
+  // Shift+Left and Shift+Right select syllables, marked as a chosen word is, and Enter adds them as a word
+  // of the user's own instead of committing; a single syllable, or a syllable without a tone, is refused.
+  std::filesystem::remove(env.userPhrasesPath);
+  Type(controller, "vul3ru04");  // 小鍵: the dictionary has 小 and 鍵 apart or together
+  KeyEvent shiftLeft = Special(ProjectKey::Key::kLeft);
+  shiftLeft.shift = true;
+  assert(controller.handleKey(shiftLeft) && controller.handleKey(shiftLeft));
+  assert(client.activeLength == 2);
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && client.committed.find("小鍵") == std::string::npos);
+  std::string typedWord = ReadFileText(env.userPhrasesPath);
+  assert(typedWord == client.marked + " ㄒㄧㄠˇ-ㄐㄧㄢˋ\n");
+  assert(controller.panel() && controller.panel()->segments[0] == "已加入自訂詞「" + client.marked + "」");
+  EscapeAll(controller, client);
+  std::filesystem::remove(env.userPhrasesPath);
+  Type(controller, "vul3ru04");
+  assert(controller.handleKey(shiftLeft) && controller.handleKey(Special(ProjectKey::Key::kReturn)));  // one syllable
+  assert(!std::filesystem::exists(env.userPhrasesPath));
+  EscapeAll(controller, client);
 
   // ` opens the list of symbols: a digit picks one, Escape takes the list out again, and a capital
   // letter swaps it for that letter's list.

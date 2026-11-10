@@ -144,6 +144,10 @@ class Composer {
   std::string shownReading() const { return readingShown_ ? reading_.composedString() : ""; }
   std::string text() const;
 
+  // The word the syllables from..to hold and their reading ("小鍵", "ㄒㄧㄠˇ-ㄐㄧㄢˋ"), to add to the user's
+  // words; none when a syllable was typed without a tone, or the characters do not stand one to a syllable.
+  std::optional<std::pair<std::string, std::string>> wordIn(size_t from, size_t to) const;
+
   // The segment starting at `start`, or, inside a segment, its part from
   // `start` on (with empty text), so a later syllable of a phrase can be chosen.
   std::optional<Segment> segmentFrom(size_t start) const;

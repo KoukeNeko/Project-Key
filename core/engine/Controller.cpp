@@ -351,6 +351,7 @@ bool Controller::handleKey(const KeyEvent& original) {
   KeyEvent event = original;
   shiftAlone_ = false;
   typed_ = false;
+  if (!choosing_) notice_.clear();
   if (composer_->isEmpty()) {
     makeComposer();
     // With both switches turned off there is no way back to 中.
@@ -571,6 +572,8 @@ bool Controller::convertEnglishRun() {
 
 bool Controller::handleComposing(const KeyEvent& event) {
   bool empty = composer_->isEmpty();
+  bool extending = event.shift && (event.key == Key::kLeft || event.key == Key::kRight);
+  if (!extending && event.key != Key::kReturn) selectAnchor_.reset();
   switch (event.key) {
     case Key::kSpace:
       if (composer_->hasPendingReading()) {
@@ -600,6 +603,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
     }
     case Key::kReturn:
       if (empty) return false;
+      if (selectAnchor_) return addSelectedWord();
       // The text as shown, except that a syllable still open without a tone goes as its
       // Zhuyin, which is a candidate of its own; Zhuyin that is no word yet goes as it is.
       composer_->showSymbols();
@@ -628,6 +632,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
       // The cursor moves between whole syllables, so finish typing one first.
       if (composer_->pendingReading().empty()) {
         size_t cursor = composer_->cursor();
+        if (extending && !selectAnchor_) selectAnchor_ = cursor;
         switch (event.key) {
           case Key::kLeft: cursor = cursor > 0 ? cursor - 1 : 0; break;
           case Key::kRight: cursor++; break;
@@ -697,6 +702,44 @@ int Controller::indexInRow(int row, int column) const {
   int index = rowStarts_[row];
   while (index + 1 < rowEnd(row) && columns_[index + 1] <= column) index++;
   return index;
+}
+
+namespace {
+std::filesystem::path Utf8Path(const std::string& utf8) { return std::filesystem::path(std::u8string(utf8.begin(), utf8.end())); }
+
+std::string ReadWholeFile(const std::string& path) {
+  std::ifstream in(Utf8Path(path), std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// Adds `line` at the end of the file, which is made, with its folder, when missing.
+bool AppendLine(const std::string& path, const std::string& line) {
+  std::error_code error;
+  std::filesystem::create_directories(Utf8Path(path).parent_path(), error);
+  std::ofstream out(Utf8Path(path), std::ios::binary | std::ios::app);
+  out << line;
+  return out.flush().good();
+}
+}  // namespace
+
+bool Controller::addSelectedWord() {
+  size_t from = std::min(*selectAnchor_, composer_->cursor()), to = std::max(*selectAnchor_, composer_->cursor());
+  selectAnchor_.reset();
+  std::optional<std::pair<std::string, std::string>> word = composer_->wordIn(from, to);
+  std::string text = word ? ReadWholeFile(env_.userPhrasesPath) : "";
+  std::string line = word ? word->first + ' ' + word->second + '\n' : "";
+  bool already = text.rfind(line, 0) == 0 || text.find('\n' + line) != std::string::npos;
+  // At least two syllables: one is a word of the dictionary already.
+  if (!word || to - from < 2 || env_.userPhrasesPath.empty() || already || !AppendLine(env_.userPhrasesPath, line)) {
+    client_.beep();
+    refresh();
+    return true;
+  }
+  ReloadUserPhrases(env_);
+  composer_->reloadWords();
+  notice_ = "已加入自訂詞「" + word->first + "」";
+  refresh();
+  return true;
 }
 
 bool Controller::handleChoosing(const KeyEvent& event) {
@@ -982,24 +1025,6 @@ bool Controller::openSymbolList(const std::string& reading) {
   return true;
 }
 
-namespace {
-std::filesystem::path Utf8Path(const std::string& utf8) { return std::filesystem::path(std::u8string(utf8.begin(), utf8.end())); }
-
-std::string ReadWholeFile(const std::string& path) {
-  std::ifstream in(Utf8Path(path), std::ios::binary);
-  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
-
-// Adds `line` at the end of the file, which is made, with its folder, when missing.
-bool AppendLine(const std::string& path, const std::string& line) {
-  std::error_code error;
-  std::filesystem::create_directories(Utf8Path(path).parent_path(), error);
-  std::ofstream out(Utf8Path(path), std::ios::binary | std::ios::app);
-  out << line;
-  return out.flush().good();
-}
-}  // namespace
-
 void Controller::excludeSelected() {
   std::optional<Segment> segment = activeSegment();
   if (!segment || selection_ == readingIndex_ || env_.userPhrasesPath.empty()) {
@@ -1270,6 +1295,24 @@ void Controller::refresh() {
   if (hasActive && activeStart >= caret - reading.size()) activeStart += static_cast<uint32_t>(reading.size());
   std::string markedText = ToUtf8(marked);
   shown_ = markedText;
+  if (selectAnchor_ && !choosing_) {  // the selected syllables, as a chosen word is marked
+    size_t from = std::min(*selectAnchor_, composer_->cursor()), to = std::max(*selectAnchor_, composer_->cursor());
+    uint32_t start = 0, end = 0;
+    bool whole = true;  // every character one to a syllable, so a syllable is a character
+    for (const Segment& segment : composer_->segments()) {
+      uint32_t units = Utf16Length(segment.text);
+      if (units != segment.length) whole = false;
+      for (size_t i = 0; i < segment.length && units == segment.length; i++) {
+        if (segment.start + i < from) start++;
+        if (segment.start + i < to) end++;
+      }
+    }
+    if (whole && from < to) {
+      hasActive = true;
+      activeStart = start;
+      activeLength = end - start;
+    }
+  }
   client_.setComposition(Composition{markedText, caret, activeStart, hasActive ? activeLength : 0, replacing_});
   replacing_ = 0;
 
@@ -1324,7 +1367,7 @@ void Controller::refresh() {
   // While typing, the row of guesses stands alone, as the grid does once chosen from; the
   // proof row joins it as the setting says (by default when something is doubtful).
   bool showsProof = proofVisible();
-  if (!choosing_ && !showsProof && guesses.empty()) {
+  if (!choosing_ && !showsProof && guesses.empty() && notice_.empty()) {
     hidePanel();
     return;
   }
@@ -1371,6 +1414,13 @@ void Controller::refresh() {
     }
   } else {
     showRow(content);
+    if (!notice_.empty()) {  // what was just done with the composition, in the proof row
+      content.segments = {notice_};
+      content.doubtful = {false};
+      content.activeSegment = -1;
+      content.caret = Utf16Length(notice_);
+      content.showsProof = true;
+    }
   }
   showPanel(content);
   if (hintApart) client_.showHint(*hint);  // placed by the panel just shown

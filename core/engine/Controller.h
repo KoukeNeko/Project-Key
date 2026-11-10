@@ -253,6 +253,10 @@ class Controller {
   void undoLastLine(const std::string& path, const std::string& line);
   // The selected candidate becomes one of the user's own words (phrases.txt), which win over the dictionary's.
   void promoteSelected();
+  // Shift+Left and Shift+Right select syllables of the composition, and Enter then adds them as a word
+  // of the user's own (phrases.txt) instead of committing.
+  std::optional<size_t> selectAnchor_;
+  bool addSelectedWord();
   // Types the full-width form of a printable ASCII character, when full-width is on.
   bool typeFullWidth(char c);
 
