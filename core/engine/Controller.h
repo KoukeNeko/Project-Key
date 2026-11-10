@@ -248,8 +248,11 @@ class Controller {
   std::string symbolReading_;  // while choosing from such a list, its reading
   bool excludeConfirm_ = false;  // Delete was pressed once on the selected candidate
   std::string notice_;           // shown in the proof row until the next key, after a word was excluded
-  std::string undoLine_;         // the line of exclude-phrases.txt that Backspace takes out again, while notice_ is shown
-  void undoExclusion(const std::string& line);
+  std::string undoLine_;         // the line that Backspace takes out again, while notice_ is shown,
+  std::string undoPath_;         // of this file: exclude-phrases.txt or phrases.txt
+  void undoLastLine(const std::string& path, const std::string& line);
+  // The selected candidate becomes one of the user's own words (phrases.txt), which win over the dictionary's.
+  void promoteSelected();
   // Types the full-width form of a printable ASCII character, when full-width is on.
   bool typeFullWidth(char c);
 

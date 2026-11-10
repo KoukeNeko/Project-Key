@@ -703,10 +703,11 @@ bool Controller::handleChoosing(const KeyEvent& event) {
   bool confirming = excludeConfirm_ && event.key == Key::kForwardDelete;
   if (!confirming) excludeConfirm_ = false;  // any other key takes the question back
   std::string undoable = event.key == Key::kBackspace ? undoLine_ : "";
+  std::string undoPath = undoPath_;
   notice_.clear();
   undoLine_.clear();
   if (!undoable.empty()) {
-    undoExclusion(undoable);
+    undoLastLine(undoPath, undoable);
     return true;
   }
   int count = static_cast<int>(candidates_.size());
@@ -785,6 +786,10 @@ bool Controller::handleChoosing(const KeyEvent& event) {
       return true;
     default: {
       char c = SingleCharacter(event);
+      if (c == '+' && symbolReading_.empty()) {
+        promoteSelected();
+        return true;
+      }
       if (c >= '1' && c < '1' + columns()) {
         int index = rowStarts_[row] + (c - '1');  // the selection's row carries the labels
         if (index < rowEnd(row)) pick(index);
@@ -977,6 +982,24 @@ bool Controller::openSymbolList(const std::string& reading) {
   return true;
 }
 
+namespace {
+std::filesystem::path Utf8Path(const std::string& utf8) { return std::filesystem::path(std::u8string(utf8.begin(), utf8.end())); }
+
+std::string ReadWholeFile(const std::string& path) {
+  std::ifstream in(Utf8Path(path), std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// Adds `line` at the end of the file, which is made, with its folder, when missing.
+bool AppendLine(const std::string& path, const std::string& line) {
+  std::error_code error;
+  std::filesystem::create_directories(Utf8Path(path).parent_path(), error);
+  std::ofstream out(Utf8Path(path), std::ios::binary | std::ios::app);
+  out << line;
+  return out.flush().good();
+}
+}  // namespace
+
 void Controller::excludeSelected() {
   std::optional<Segment> segment = activeSegment();
   if (!segment || selection_ == readingIndex_ || env_.userPhrasesPath.empty()) {
@@ -996,12 +1019,7 @@ void Controller::excludeSelected() {
     return;
   }
   std::string path = ExcludedPhrasesPath(env_);
-  std::error_code error;
-  std::filesystem::path file(std::u8string(path.begin(), path.end()));
-  std::filesystem::create_directories(file.parent_path(), error);
-  std::ofstream out(file, std::ios::binary | std::ios::app);
-  out << word << ' ' << reading << '\n';
-  if (!out.flush()) {
+  if (!AppendLine(path, word + ' ' + reading + '\n')) {
     client_.beep();
     return;
   }
@@ -1018,18 +1036,50 @@ void Controller::excludeSelected() {
   }
   notice_ = "已排除「" + word + "」，按 " + env_.backspaceKeycap + " 還原";  // in the panel, which the badge under the caret would be pushed aside by
   undoLine_ = word + ' ' + reading + '\n';
+  undoPath_ = path;
   refresh();
 }
 
-void Controller::undoExclusion(const std::string& line) {
-  std::string path = ExcludedPhrasesPath(env_);
-  std::filesystem::path file(std::u8string(path.begin(), path.end()));
-  std::string text;
-  {
-    std::ifstream in(file, std::ios::binary);
-    text.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+void Controller::promoteSelected() {
+  std::optional<Segment> segment = activeSegment();
+  if (!segment || selection_ == readingIndex_ || env_.userPhrasesPath.empty()) {
+    client_.beep();  // the Zhuyin itself is no word
+    return;
   }
-  // Only the line this exclusion added, still the last: the file may have been edited since.
+  std::string word = candidates_[selection_];
+  std::string reading = composer_->readingOf(*segment, word, choosesFromEnd());
+  // A reading typed without a tone stands for several; the file's lines have the whole one.
+  if (reading.empty() || reading.find(Composer::kAnyTone) != std::string::npos) {
+    client_.beep();
+    return;
+  }
+  std::string line = word + ' ' + reading + '\n';
+  std::string text = ReadWholeFile(env_.userPhrasesPath);
+  bool already = text.rfind(line, 0) == 0 || text.find('\n' + line) != std::string::npos;
+  if (already || !AppendLine(env_.userPhrasesPath, line)) {
+    client_.beep();
+    return;
+  }
+  ReloadUserPhrases(env_);
+  composer_->reloadWords();
+  bool wasExpanded = expanded_;
+  choosing_ = false;
+  startChoosingAt(activeStart_);
+  if (choosing_) {  // the selection follows the word, which now comes first
+    auto first = std::find(candidates_.begin(), candidates_.end(), word);
+    if (first != candidates_.end()) selection_ = static_cast<int>(first - candidates_.begin());
+    expanded_ = wasExpanded;
+  }
+  notice_ = "已加入自訂詞「" + word + "」，按 " + env_.backspaceKeycap + " 還原";
+  undoLine_ = line;
+  undoPath_ = env_.userPhrasesPath;
+  refresh();
+}
+
+void Controller::undoLastLine(const std::string& path, const std::string& line) {
+  std::filesystem::path file = Utf8Path(path);
+  std::string text = ReadWholeFile(path);
+  // Only the line that was added, still the last: the file may have been edited since.
   if (text.size() < line.size() || text.compare(text.size() - line.size(), line.size(), line) != 0) {
     client_.beep();
     return;

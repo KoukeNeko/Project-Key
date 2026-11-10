@@ -819,6 +819,23 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   std::filesystem::remove(excludedPath);
 
+  // + makes the selected candidate one of the user's own words, which come first; Backspace takes it back.
+  std::filesystem::remove(env.userPhrasesPath);
+  Type(controller, "ji3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kRight)));
+  std::string promoted = controller.candidates()[1];
+  assert(controller.handleKey(Press("+")));
+  std::ifstream promotedFile(env.userPhrasesPath);
+  std::string promotedText((std::istreambuf_iterator<char>(promotedFile)), std::istreambuf_iterator<char>());
+  assert(promotedText == promoted + " ㄨㄛˇ\n");
+  assert(controller.candidates()[0] == promoted && controller.panel()->segments[0] == "已加入自訂詞「" + promoted + "」，按 " + env.backspaceKeycap + " 還原");
+  assert(controller.handleKey(Special(ProjectKey::Key::kBackspace)));
+  std::ifstream undonePromotion(env.userPhrasesPath);
+  assert(std::string((std::istreambuf_iterator<char>(undonePromotion)), std::istreambuf_iterator<char>()).empty());
+  EscapeAll(controller, client);
+  std::filesystem::remove(env.userPhrasesPath);
+
   // ` opens the list of symbols: a digit picks one, Escape takes the list out again, and a capital
   // letter swaps it for that letter's list.
   Type(controller, "`");
