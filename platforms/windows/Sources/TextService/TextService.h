@@ -119,6 +119,7 @@ class TextService : public ITfTextInputProcessorEx,
   CandidateWindow hint_{badge_};  // the Tab hint, beside the candidates (Op::kShowHint)
   LangBarButton* langBar_ = nullptr;
   bool englishMode_ = false;
+  bool fullWidth_ = false;
   int appearance_ = 0;
   // OnTestKeyDown already sent this key; OnKeyDown applies the reply.
   std::optional<Protocol::Reply> pending_;

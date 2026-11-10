@@ -132,6 +132,7 @@ struct Environment {
   // Grid columns a candidate takes, 1 to kMaxGridColumns.
   std::function<int(const std::string&)> columnsSpannedBy;
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
+  bool fullWidth = false;    // Shift+Space: letters, digits, symbols and spaces typed outside a composition are full-width
   std::string tabKeycap = "Tab";  // the key the conversion previews end with
   std::string shiftTabKeycap = "Shift+Tab";  // the proof row's, while Tab offers English
   // macOS lets the app type a key the input method returns; TSF does not
@@ -141,6 +142,11 @@ struct Environment {
   // the guess in its proof row.
   bool hintWindow = false;
 };
+
+// The badge's text: the language and the width, ㄅ半 or Ａ全. Ａ is full-width so both letters are as wide.
+inline std::string ModeLabel(const Environment& env) {
+  return std::string(env.englishMode ? "Ａ" : "ㄅ") + (env.fullWidth ? "全" : "半");
+}
 
 // Forgets what the user chose and typed, in memory and in the saved file.
 void ClearChoices(Environment& env);
@@ -187,7 +193,7 @@ class Controller {
   // Focus left the document: commit what is composed.
   void deactivate();
   // A field took focus: the badge shows the current mode without switching it.
-  void showMode() { client_.showIndicator(env_.englishMode ? "A" : "ㄅ"); }
+  void showMode() { client_.showIndicator(ModeLabel(env_)); }
   // The app ended the composition itself: forget it without committing.
   void reset();
 
@@ -227,6 +233,8 @@ class Controller {
   bool convertZhuyinKeys();
   bool convertEnglishRun();
   void switchMode(bool english);
+  // Types the full-width form of a printable ASCII character, when full-width is on.
+  bool typeFullWidth(char c);
 
   bool handleComposing(const KeyEvent& event);
   bool handleChoosing(const KeyEvent& event);

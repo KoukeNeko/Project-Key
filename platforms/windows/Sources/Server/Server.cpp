@@ -194,6 +194,7 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kState: break;
       }
       recorder.reply.englishMode = gEnvironment.englishMode;
+      recorder.reply.fullWidth = gEnvironment.fullWidth;
       recorder.reply.appearance = gSettings.get(Setting::kAppearance);
       reply = Protocol::WriteReply(recorder.reply);
     }

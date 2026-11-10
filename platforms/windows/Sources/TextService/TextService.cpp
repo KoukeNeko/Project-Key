@@ -171,6 +171,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
   // Starts the server if needed and learns the mode for the language bar.
   if (std::optional<Protocol::Reply> reply = engine_.send({Protocol::Request::kState})) {
     englishMode_ = reply->englishMode;
+    fullWidth_ = reply->fullWidth;
     appearance_ = reply->appearance;
   }
   updateLangBar();
@@ -419,6 +420,7 @@ void TextService::toggleMode() {
                                                  : engine_.send({Protocol::Request::kToggleMode});
   if (!context && reply) {
     englishMode_ = reply->englishMode;
+    fullWidth_ = reply->fullWidth;
     updateLangBar();
   }
   SafeRelease(context);
@@ -444,8 +446,9 @@ HRESULT TextService::editSession(ITfContext* context, DWORD flags, std::function
 }
 
 void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
-  if (reply.englishMode != englishMode_) {
+  if (reply.englishMode != englishMode_ || reply.fullWidth != fullWidth_) {
     englishMode_ = reply.englishMode;
+    fullWidth_ = reply.fullWidth;
     updateLangBar();
   }
   appearance_ = reply.appearance;
@@ -775,7 +778,7 @@ void TextService::showSettings() {
 }
 
 void TextService::updateLangBar() {
-  if (langBar_) langBar_->update(englishMode_);
+  if (langBar_) langBar_->update(englishMode_, fullWidth_);
 }
 
 }  // namespace ProjectKey

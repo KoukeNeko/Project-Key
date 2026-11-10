@@ -670,7 +670,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
     return environment_.englishMode ? "英" : "中";
   }
   std::string subModeLabelImpl(const fcitx::InputMethodEntry&, fcitx::InputContext&) override {
-    return environment_.englishMode ? "A" : "ㄅ";
+    return ProjectKey::ModeLabel(environment_);
   }
 
   const fcitx::Configuration* getConfig() const override { return &config_; }

@@ -432,14 +432,14 @@ int main(int argc, char** argv) {
   // Tapping Shift switches to English: keys pass through; tapping again switches back.
   client.indicator.clear();
   controller.showMode();  // focus only reports the mode
-  assert(client.indicator == "ㄅ" && !controller.englishMode());
+  assert(client.indicator == "ㄅ半" && !controller.englishMode());
   TapShift(controller);
-  assert(controller.englishMode() && client.indicator == "A");
+  assert(controller.englishMode() && client.indicator == "Ａ半");
   controller.showMode();
-  assert(client.indicator == "A" && controller.englishMode());
+  assert(client.indicator == "Ａ半" && controller.englishMode());
   assert(!controller.handleKey(Press("r")));
   TapShift(controller);
-  assert(!controller.englishMode() && client.indicator == "ㄅ");
+  assert(!controller.englishMode() && client.indicator == "ㄅ半");
   assert(controller.handleKey(Press("r")));
   EscapeAll(controller, client);
 
@@ -742,6 +742,22 @@ int main(int argc, char** argv) {
   assert(client.marked != "鍵小");
   EscapeAll(controller, client);
 
+  // Shift+Space switches full-width: letters, symbols and spaces outside a composition, in 中 and
+  // in 英, are typed full-width until it is pressed again.
+  KeyEvent shiftSpace = Special(ProjectKey::Key::kSpace);
+  shiftSpace.shift = true;
+  assert(controller.handleKey(shiftSpace) && client.indicator == "ㄅ全");
+  client.committed.clear();
+  assert(controller.handleKey(Shifted("A")) && client.committed == "Ａ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)) && client.committed == "Ａ　");
+  Type(controller, "ji3");  // zhuyin keys still compose
+  assert(client.marked == "我");
+  EscapeAll(controller, client);
+  TapShift(controller);
+  assert(controller.handleKey(Press("a")) && Contains(client.committed, "ａ"));
+  TapShift(controller);
+  assert(controller.handleKey(shiftSpace) && client.indicator == "ㄅ半");
+  assert(!controller.handleKey(Special(ProjectKey::Key::kSpace)));
 
   // A word in exclude-phrases.txt, beside the user's words, is no longer offered; removing the
   // file brings it back, though phrases.txt itself does not exist.

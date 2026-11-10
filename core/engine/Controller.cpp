@@ -63,6 +63,13 @@ char SingleCharacter(const KeyEvent& event) {
   return event.characters.size() == 1 && static_cast<unsigned char>(event.characters[0]) < 128 ? event.characters[0] : 0;
 }
 
+// The full-width form of a printable ASCII character: U+FF01 to U+FF5E, and U+3000 for the space.
+std::string FullWidth(char c) {
+  if (c == ' ') return "\xe3\x80\x80";
+  char32_t cp = 0xff01 + (c - '!');
+  return {static_cast<char>(0xe0 | cp >> 12), static_cast<char>(0x80 | (cp >> 6 & 0x3f)), static_cast<char>(0x80 | (cp & 0x3f))};
+}
+
 }  // namespace
 
 uint32_t Utf16Length(const std::string& utf8) {
@@ -200,6 +207,7 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
                       : nullptr;
   ++env.models;
   env.userPhrasesTime.reset();  // the new lexicon has none yet
+  env.excludedPhrasesTime.reset();
   std::error_code error;
   for (const auto& entry : std::filesystem::directory_iterator(Path(downloaded), error)) {
     // Best effort: Windows keeps a release open while a composer still maps it; the next start removes it.
@@ -207,7 +215,6 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   }
   return true;
 }
-  env.excludedPhrasesTime.reset();
 
 void ReloadUserPhrases(Environment& env) {
   if (env.userPhrasesPath.empty()) return;
@@ -290,7 +297,13 @@ bool Controller::proofVisible() const {
 
 void Controller::switchMode(bool english) {
   env_.englishMode = english;
-  client_.showIndicator(english ? "A" : "ㄅ");
+  client_.showIndicator(ModeLabel(env_));
+}
+
+bool Controller::typeFullWidth(char c) {
+  if (!env_.fullWidth || c < ' ' || c > '~') return false;
+  client_.insertText(FullWidth(c));
+  return true;
 }
 
 void Controller::handleCapsLock() {
@@ -358,8 +371,16 @@ bool Controller::handleKey(const KeyEvent& original) {
     commit();  // let the shortcut act on committed text
     return false;
   }
+  if (event.key == Key::kSpace && event.shift) {
+    commit();
+    forgetEnglishRun();
+    env_.fullWidth = !env_.fullWidth;
+    client_.showIndicator(ModeLabel(env_));
+    return true;
+  }
   bool plainTab = event.key == Key::kTab && !event.shift;
   if (env_.englishMode) {
+    if (typeFullWidth(SingleCharacter(event))) return true;
     if (plainTab && convertEnglishRun()) return true;
     trackEnglish(event);
     // Passed through, the app would capitalize it; insert the lowercase letter instead.
@@ -537,7 +558,7 @@ bool Controller::convertEnglishRun() {
   zhuyinEdited_ = true;
   env_.englishMode = false;
   refresh();
-  client_.showIndicator("ㄅ");
+  client_.showIndicator(ModeLabel(env_));
   return true;
 }
 
@@ -551,7 +572,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
         refresh();
         return true;
       }
-      if (empty) return false;
+      if (empty) return typeFullWidth(' ');
       startChoosingAt(defaultSegment());
       return true;
     case Key::kDown:
@@ -644,9 +665,10 @@ bool Controller::handleComposing(const KeyEvent& event) {
     refresh();
     return true;
   }
-  if (empty) return false;
+  if (empty) return typeFullWidth(key);
   // Commit, then type the character after it.
   commit();
+  if (typeFullWidth(key)) return true;
   if (env_.appTypesUnhandledKeys) return false;
   client_.insertText(event.characters);
   return true;

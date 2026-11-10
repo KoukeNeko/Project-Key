@@ -232,7 +232,8 @@ struct Reply {
   bool handled = false;
   bool englishMode = false;
   int appearance = 0;  // Setting::kAppearance
-  int columns = kGridColumns;  // PanelContent::columns of every panel here; sent last, so a text service without it still reads the reply
+  int columns = kGridColumns;  // PanelContent::columns of every panel here; sent after the operations, so a text service without it still reads the reply
+  bool fullWidth = false;      // sent last, likewise
   std::vector<Operation> operations;
 };
 
@@ -255,6 +256,7 @@ inline std::string WriteReply(const Reply& reply) {
     }
   }
   w.i32(reply.columns);
+  w.boolean(reply.fullWidth);
   return w.bytes();
 }
 
@@ -279,6 +281,7 @@ inline bool ReadReply(const std::string& bytes, Reply& reply) {
     reply.operations.push_back(std::move(o));
   }
   if (r.more()) reply.columns = r.i32();  // absent from a server from before 9 columns
+  if (r.more()) reply.fullWidth = r.boolean();  // and from one from before full-width
   for (Operation& o : reply.operations) o.panel.columns = reply.columns;
   return r.ok();
 }

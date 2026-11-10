@@ -35,7 +35,7 @@ class LangBarButton : public ITfLangBarItemButton, public ITfSource {
   STDMETHODIMP AdviseSink(REFIID riid, IUnknown* sink, DWORD* cookie) override;
   STDMETHODIMP UnadviseSink(DWORD cookie) override;
 
-  void update(bool englishMode);
+  void update(bool englishMode, bool fullWidth);
   void detach() { service_ = nullptr; }
 
  private:
@@ -44,6 +44,7 @@ class LangBarButton : public ITfLangBarItemButton, public ITfSource {
   TextService* service_;
   ITfLangBarItemSink* sink_ = nullptr;
   bool englishMode_ = false;
+  bool fullWidth_ = false;
 };
 
 }  // namespace ProjectKey

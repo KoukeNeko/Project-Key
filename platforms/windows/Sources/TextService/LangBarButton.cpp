@@ -2,6 +2,7 @@
 
 #include <d2d1.h>
 #include <olectl.h>
+#include <string>
 #include <dwrite.h>
 #include <wrl/client.h>
 
@@ -48,7 +49,7 @@ HICON MakeIcon(const wchar_t* label) {
       SUCCEEDED(factory->CreateDCRenderTarget(&properties, &target)) && SUCCEEDED(target->BindDC(dc, &bounds)) &&
       SUCCEEDED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(dwrite.GetAddressOf()))) &&
       SUCCEEDED(dwrite->CreateTextFormat(Layout::kTextFont, nullptr, DWRITE_FONT_WEIGHT_BOLD, DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL, side * 0.8f, L"zh-TW", &format))) {
+                                         DWRITE_FONT_STRETCH_NORMAL, side * (wcslen(label) > 1 ? 0.5f : 0.8f), L"zh-TW", &format))) {
     format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     ComPtr<ID2D1SolidColorBrush> brush;
@@ -121,7 +122,7 @@ STDMETHODIMP LangBarButton::GetStatus(DWORD* status) {
 }
 
 STDMETHODIMP LangBarButton::GetTooltipString(BSTR* tooltip) {
-  *tooltip = SysAllocString(englishMode_ ? L"英文（按 Shift 切換）" : L"中文（按 Shift 切換）");
+  *tooltip = SysAllocString((std::wstring(englishMode_ ? L"英文" : L"中文") + (fullWidth_ ? L"，全形" : L"，半形") + L"（按 Shift 切換）").c_str());
   return *tooltip ? S_OK : E_OUTOFMEMORY;
 }
 
@@ -150,7 +151,7 @@ STDMETHODIMP LangBarButton::OnMenuSelect(UINT id) {
 }
 
 STDMETHODIMP LangBarButton::GetIcon(HICON* icon) {
-  *icon = MakeIcon(englishMode_ ? L"A" : L"ㄅ");
+  *icon = MakeIcon((std::wstring(englishMode_ ? L"Ａ" : L"ㄅ") + (fullWidth_ ? L"全" : L"半")).c_str());
   return *icon ? S_OK : E_FAIL;
 }
 
@@ -177,8 +178,9 @@ STDMETHODIMP LangBarButton::UnadviseSink(DWORD cookie) {
   return S_OK;
 }
 
-void LangBarButton::update(bool englishMode) {
+void LangBarButton::update(bool englishMode, bool fullWidth) {
   englishMode_ = englishMode;
+  fullWidth_ = fullWidth;
   if (sink_) sink_->OnUpdate(TF_LBI_ICON | TF_LBI_TEXT | TF_LBI_TOOLTIP);
 }
 
