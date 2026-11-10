@@ -12,9 +12,9 @@
 
 namespace ProjectKey::Protocol {
 
-// 2: kShowHint, kHideHint. 3: PanelContent::expanded, KeyEvent::numpad. 4: PanelContent::columns. A text service and server of different versions refuse
+// 2: kShowHint, kHideHint. 3: PanelContent::expanded, KeyEvent::numpad. A text service and server of different versions refuse
 // each other's messages rather than misread them.
-constexpr uint32_t kVersion = 4;
+constexpr uint32_t kVersion = 3;
 
 enum class Request : uint8_t {
   kKeyDown = 1,       // KeyEvent
@@ -158,7 +158,6 @@ inline void WritePanel(Writer& w, const PanelContent& p) {
   w.str(p.replacedText);
   w.u32(static_cast<uint32_t>(p.rows.size()));
   for (const auto& row : p.rows) w.strings(row);
-  w.i32(p.columns);
   w.i32(p.selectedRow);
   w.i32(p.selection);
   w.str(p.pageLabel);
@@ -179,7 +178,6 @@ inline PanelContent ReadPanel(Reader& r) {
   p.replacedText = r.str();
   uint32_t rows = r.u32();
   for (uint32_t i = 0; i < rows && r.ok(); i++) p.rows.push_back(r.strings());
-  p.columns = r.i32();
   p.selectedRow = r.i32();
   p.selection = r.i32();
   p.pageLabel = r.str();
@@ -234,6 +232,7 @@ struct Reply {
   bool handled = false;
   bool englishMode = false;
   int appearance = 0;  // Setting::kAppearance
+  int columns = kGridColumns;  // PanelContent::columns of every panel here; sent last, so a text service without it still reads the reply
   std::vector<Operation> operations;
 };
 
@@ -255,6 +254,7 @@ inline std::string WriteReply(const Reply& reply) {
       default: break;
     }
   }
+  w.i32(reply.columns);
   return w.bytes();
 }
 
@@ -278,6 +278,8 @@ inline bool ReadReply(const std::string& bytes, Reply& reply) {
     }
     reply.operations.push_back(std::move(o));
   }
+  if (r.more()) reply.columns = r.i32();  // absent from a server from before 9 columns
+  for (Operation& o : reply.operations) o.panel.columns = reply.columns;
   return r.ok();
 }
 

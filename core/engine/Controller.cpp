@@ -127,6 +127,18 @@ Controller::Controller(Environment& environment, Client& client, bool personal)
 }
 
 // Settings take effect on the next composition.
+// The whole file (at most PersonalModel::kMaxTriples lines) is written, so not after every commit.
+// A server killed within kPersonalSaveSeconds of the last commit loses what it learned since.
+static void SavePersonal(Environment& env, bool force) {
+  constexpr std::chrono::seconds kPersonalSaveSeconds{5};
+  if (!env.personalDirty || env.personalPath.empty()) return;
+  auto now = std::chrono::steady_clock::now();
+  if (!force && now - env.personalSaved < kPersonalSaveSeconds) return;
+  env.personal->save(env.personalPath);
+  env.personalDirty = false;
+  env.personalSaved = now;
+}
+
 void Controller::makeComposer() {
   if (!composer_) replacing_ = 0;
   bool abbreviated = env_.settings->flag(Setting::kAbbreviated);
@@ -153,7 +165,8 @@ void ClearChoices(Environment& env) {
   *env.userModel = *NewUserModel();
   if (!env.personal) return;
   env.personal->clear();
-  if (!env.personalPath.empty()) env.personal->save(env.personalPath);
+  env.personalDirty = true;
+  SavePersonal(env, /*force=*/true);
 }
 
 namespace {
@@ -212,12 +225,12 @@ void ReloadUserPhrases(Environment& env) {
 void Controller::learn(const std::string& committed) {
   if (!rememberChoices_ || !personal_ || !env_.personal) return;
   env_.personal->learn(committed);
-  // shortcut: rewrites the whole file (at most PersonalModel::kMaxTriples lines) on every commit;
-  // batch the writes if that ever shows up in typing latency.
-  if (!env_.personalPath.empty()) env_.personal->save(env_.personalPath);
+  env_.personalDirty = true;
+  SavePersonal(env_, /*force=*/false);
 }
 
 void Controller::deactivate() {
+  SavePersonal(env_, /*force=*/true);
   forgetEnglishRun();
   commit();
 }
@@ -770,13 +783,17 @@ int Controller::columns() const {
   return kGridColumns + std::clamp(env_.settings->get(Setting::kGridColumns), 0, kMaxGridColumns - kGridColumns);
 }
 
-int Controller::span(const std::string& candidate) const {
-  return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, columns());
+int Controller::span(const std::string& candidate, int limit) const {
+  return std::clamp(env_.columnsSpannedBy ? env_.columnsSpannedBy(candidate) : 1, 1, limit);
 }
 
 size_t Controller::firstRowSize(const std::vector<std::string>& words) const {
   size_t count = 0;
-  for (int used = 0; count < words.size() && used + span(words[count]) <= columns(); count++) used += span(words[count]);
+  int limit = columns();
+  for (int used = 0; count < words.size(); count++) {
+    used += span(words[count], limit);
+    if (used > limit) break;
+  }
   return count;
 }
 
@@ -816,7 +833,8 @@ std::vector<std::string> Controller::choicesFor(const Segment& segment, int* rea
   }
   if (std::find(candidates.begin(), candidates.end(), zhuyin) == candidates.end()) {
     int firstRow = static_cast<int>(firstRowSize(candidates));
-    *readingIndex = firstRow < columns() || span(zhuyin) > 1 ? firstRow : columns() - 1;
+    int limit = columns();
+    *readingIndex = firstRow < limit || span(zhuyin, limit) > 1 ? firstRow : limit - 1;
     candidates.insert(candidates.begin() + *readingIndex, zhuyin);
   }
   return candidates;
@@ -827,12 +845,13 @@ void Controller::pack(const std::vector<std::string>& words, std::vector<int>* r
   columns->clear();
   int limit = this->columns(), column = limit;  // the parameter columns shadows the method
   for (int i = 0; i < static_cast<int>(words.size()); i++) {
-    if (column + span(words[i]) > limit) {
+    int width = span(words[i], limit);
+    if (column + width > limit) {
       rowStarts->push_back(i);
       column = 0;
     }
     columns->push_back(column);
-    column += span(words[i]);
+    column += width;
   }
 }
 

@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <chrono>
 #include <optional>
 #include <string>
 #include <vector>
@@ -112,9 +113,12 @@ struct Environment {
   unsigned models = 0;  // counts UseNewestModels loads; controllers make a new composer when it changes
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel;  // replaced by value to clear it
   // What the user typed, learned while choices are remembered (Setting::kRememberChoices) and
-  // saved to personalPath after each commit; with an empty path it lives in memory only.
+  // saved to personalPath after a commit, at most every kPersonalSaveSeconds and when a controller
+  // deactivates; with an empty path it lives in memory only.
   std::shared_ptr<PersonalModel> personal;
   std::string personalPath;
+  bool personalDirty = false;  // learned since the last save
+  std::chrono::steady_clock::time_point personalSaved;
   // The user's own words (Lexicon::loadUserPhrases), edited by the user in any text editor and
   // read again by the next composition after the file changes; empty for none.
   std::string userPhrasesPath;
@@ -233,7 +237,8 @@ class Controller {
   std::optional<size_t> segmentBeforeCursor() const;
   // Grid columns per row, as Setting::kGridColumns says.
   int columns() const;
-  int span(const std::string& candidate) const;
+  // Grid columns a candidate takes in a grid of `limit` columns.
+  int span(const std::string& candidate, int limit) const;
   // How many of words, from the first, fit one grid row.
   size_t firstRowSize(const std::vector<std::string>& words) const;
   std::optional<size_t> doubtfulAfter(size_t start, bool backwards) const;

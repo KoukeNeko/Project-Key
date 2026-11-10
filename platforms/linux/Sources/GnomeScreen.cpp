@@ -119,8 +119,7 @@ class GnomeWindow final : public Window {
  public:
   explicit GnomeWindow(GnomeScreen& screen) : screen_(screen), id_("w" + std::to_string(screen.nextId())) {
     frame.width = frame.height = 1;
-    const char* runtime = std::getenv("XDG_RUNTIME_DIR");
-    std::string base = std::string(runtime ? runtime : "/tmp") + "/project-key-" + std::to_string(getpid()) + "-" + id_;
+    std::string base = std::string(std::getenv("XDG_RUNTIME_DIR")) + "/project-key-" + std::to_string(getpid()) + "-" + id_;
     files_[0] = base + "-a.raw";
     files_[1] = base + "-b.raw";
     screen_.shown.push_back(this);
@@ -223,6 +222,8 @@ std::unique_ptr<Window> GnomeScreen::createWindow(std::function<void()>, std::fu
 std::unique_ptr<Screen> OpenGnomeScreen(fcitx::Instance* instance) {
   fcitx::AddonInstance* dbus = instance->addonManager().addon("dbus");
   fcitx::dbus::Bus* bus = dbus ? dbus->call<fcitx::IDBusModule::bus>() : nullptr;
+  // The images go to private files there; /tmp would let another user plant a link under their name.
+  if (!std::getenv("XDG_RUNTIME_DIR")) return nullptr;
   return bus ? std::make_unique<GnomeScreen>(bus) : nullptr;
 }
 

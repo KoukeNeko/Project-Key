@@ -168,7 +168,17 @@ bool SentenceModel::load(const std::string& path) {
   std::vector<uint32_t> codePoints(vocab);
   if (!in.read(reinterpret_cast<char*>(codePoints.data()), vocab * sizeof(uint32_t))) return false;
   bool ok = true;
+  // The header can promise gigabytes: ask for no more than the file still holds.
+  std::streamoff here = in.tellg();
+  in.seekg(0, std::ios::end);
+  size_t remaining = static_cast<size_t>(in.tellg() - here);
+  in.seekg(here);
   auto take = [&](size_t count) {
+    if (!ok || count > remaining / sizeof(uint16_t)) {
+      ok = false;
+      return std::vector<float>();
+    }
+    remaining -= count * sizeof(uint16_t);
     std::vector<uint16_t> half(count);
     ok = ok && in.read(reinterpret_cast<char*>(half.data()), count * sizeof(uint16_t));
     std::vector<float> values(count);

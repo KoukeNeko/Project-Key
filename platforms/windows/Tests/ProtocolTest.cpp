@@ -21,7 +21,7 @@ int main() {
   show.panel.rows = {{"好", "號"}, {"耗"}};
   show.panel.pageLabel = "1/2";
   show.panel.expanded = true;
-  show.panel.columns = 9;
+  reply.columns = 9;
   Protocol::Operation compose;
   compose.op = Protocol::Op::kSetComposition;
   compose.composition.text = "我們好";
@@ -41,9 +41,13 @@ int main() {
   assert(read.operations[2].panel.expanded && read.operations[2].panel.columns == 9);
   assert(read.operations[3].op == Protocol::Op::kShowHint && read.operations[3].panel.replacedText == "我ㄇ");
   assert(read.operations[4].op == Protocol::Op::kHideHint);
+  // Without the columns, as a server from before 9 columns replies, and otherwise cut short.
+  Protocol::Reply withoutColumns;
+  assert(Protocol::ReadReply(bytes.substr(0, bytes.size() - 4), withoutColumns) && withoutColumns.columns == ProjectKey::kGridColumns &&
+         withoutColumns.operations[2].panel.columns == ProjectKey::kGridColumns);
   for (size_t length = 0; length < bytes.size(); length++) {
     Protocol::Reply partial;
-    assert(!Protocol::ReadReply(bytes.substr(0, length), partial));
+    if (length != bytes.size() - 4) assert(!Protocol::ReadReply(bytes.substr(0, length), partial));
   }
   Protocol::Message message{Protocol::Request::kShift, {}, true, "abc"};
   bytes = Protocol::WriteMessage(message);

@@ -53,6 +53,7 @@ class Recorder : public Client {
     add(std::move(o));
   }
   void showPanel(const PanelContent& content) override {
+    reply.columns = content.columns;
     Protocol::Operation o;
     o.op = Protocol::Op::kShowPanel;
     o.panel = content;
