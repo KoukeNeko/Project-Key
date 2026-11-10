@@ -38,6 +38,28 @@ Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「
 
 ## 建置與安裝
 
+用套件庫安裝（Debian 13、Ubuntu 24.04、Fedora 43，x86_64）。
+```sh
+# Debian / Ubuntu（suite：Debian 13 用 trixie，Ubuntu 24.04 用 noble）
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://koukeneko.github.io/Project-Key/apt/key.asc | sudo tee /etc/apt/keyrings/projectkey.asc >/dev/null
+echo "deb [signed-by=/etc/apt/keyrings/projectkey.asc] https://koukeneko.github.io/Project-Key/apt trixie main" | sudo tee /etc/apt/sources.list.d/projectkey.list
+sudo apt update && sudo apt install fcitx5-projectkey
+
+# Fedora
+sudo tee /etc/yum.repos.d/projectkey.repo <<'EOF'
+[projectkey]
+name=Project Key
+baseurl=https://koukeneko.github.io/Project-Key/rpm
+enabled=1
+gpgcheck=0
+repo_gpgcheck=1
+gpgkey=https://koukeneko.github.io/Project-Key/rpm/key.asc
+EOF
+sudo dnf install fcitx5-projectkey
+```
+字典與選字模型是獨立的 `fcitx5-projectkey-data` 套件（約 100 MB，只在模型更新時換版），程式套件只有幾百 KB。套件庫由 `release.yml` 在每次發行時更新：`package-deb.sh`、`package-rpm.sh` 在各發行版的容器裡建置，`publish-repos.sh` 簽章後推到 gh-pages 的 `apt/` 與 `rpm/`；簽章金鑰是 secret `REPO_GPG_PRIVATE_KEY`（無密碼的 ASCII 私鑰）。Arch 用 `platforms/linux/arch/PKGBUILD`（`makepkg -si`）。
+
 用 Homebrew（Linux）安裝發行版：先裝下面 `apt install` 那一行的套件，再
 
 ```sh

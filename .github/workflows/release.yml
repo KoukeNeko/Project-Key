@@ -88,6 +88,80 @@ jobs:
         with:
           name: arch
           path: platforms/linux/arch/*.pkg.tar.zst
+  linux-deb:
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - {suite: trixie, image: 'debian:trixie'}
+          - {suite: noble, image: 'ubuntu:24.04'}
+    container: ${{ matrix.image }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git curl make dpkg-dev debhelper fakeroot cmake ninja-build g++ python3 pkg-config \
+            libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev \
+            libwayland-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev
+      - uses: actions/checkout@v4
+      - run: sh platforms/linux/package-deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.suite }}
+          path: platforms/linux/dist/*.deb
+
+  linux-rpm:
+    needs: version
+    runs-on: ubuntu-latest
+    container: fedora:43
+    steps:
+      - run: dnf install -y rpm-build make tar gzip findutils git curl cmake ninja-build gcc-c++ python3 pkgconf-pkg-config fcitx5-devel enchant2-devel libxcb-devel cairo-devel pango-devel wayland-devel qt6-qtbase-devel libadwaita-devel libsoup3-devel json-glib-devel
+      - uses: actions/checkout@v4
+      - run: sh platforms/linux/package-rpm.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: platforms/linux/dist/*.rpm
+
+  # Signed apt and dnf repositories on the gh-pages branch (platforms/linux/publish-repos.sh).
+  # REPO_GPG_PRIVATE_KEY: the armored private key, without a passphrase.
+  linux-repos:
+    needs: [version, release, linux-deb, linux-rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: platforms/linux/publish-repos.sh
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: site
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: deb-*
+          path: in
+      - uses: actions/download-artifact@v4
+        with:
+          name: rpm
+          path: in/rpm
+      - env:
+          KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y reprepro createrepo-c
+          printf '%s\n' "$KEY" | gpg --batch --import
+          export GPG_KEY="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')"
+          sh platforms/linux/publish-repos.sh in site
+          cd site
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apt rpm
+          git commit -m "Linux repositories for ${{ needs.version.outputs.version }}"
+          git push
   release:
     needs: [version, macos, windows, arch]
     runs-on: ubuntu-latest
