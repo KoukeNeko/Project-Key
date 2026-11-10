@@ -850,13 +850,10 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kRight)));
   std::string promoted = controller.candidates()[1];
   assert(controller.handleKey(Press("+")));
-  std::ifstream promotedFile(env.userPhrasesPath);
-  std::string promotedText((std::istreambuf_iterator<char>(promotedFile)), std::istreambuf_iterator<char>());
-  assert(promotedText == promoted + " ㄨㄛˇ\n");
+  assert(ReadFileText(env.userPhrasesPath) == promoted + " ㄨㄛˇ\n");
   assert(controller.candidates()[0] == promoted && controller.panel()->segments[0] == "已加入自訂詞「" + promoted + "」，按 " + env.backspaceKeycap + " 還原");
   assert(controller.handleKey(Special(ProjectKey::Key::kBackspace)));
-  std::ifstream undonePromotion(env.userPhrasesPath);
-  assert(std::string((std::istreambuf_iterator<char>(undonePromotion)), std::istreambuf_iterator<char>()).empty());
+  assert(ReadFileText(env.userPhrasesPath).empty());
   EscapeAll(controller, client);
   std::filesystem::remove(env.userPhrasesPath);
 
