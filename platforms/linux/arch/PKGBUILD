@@ -1,0 +1,46 @@
+# Maintainer: KoukeNeko
+# Builds Project Key from this checkout (platforms/linux/arch/ inside the repository):
+#   cd platforms/linux/arch && makepkg -si
+# McBopomofo (pinned by MCBOPOMOFO_COMMIT) and the trained models (fetch-models.sh, checked
+# against models.sha256) are downloaded while building, so the build needs network access.
+_root=$(cd "$startdir/../../.." && pwd)
+pkgname=fcitx5-projectkey
+pkgver=$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' "$_root/platforms/linux/CMakeLists.txt")
+pkgrel=1
+pkgdesc='Zhuyin input method for Fcitx5'
+arch=(x86_64 aarch64)
+url='https://github.com/KoukeNeko/Project-Key'
+license=(MIT CC-BY-SA-4.0 LGPL-2.1-or-later)  # the program; bigram.bin, chars.bin and sentence.bin; data.txt
+depends=(fcitx5 enchant hunspell-en_us libxcb cairo pango wayland qt6-base libadwaita libsoup3 json-glib)
+makedepends=(cmake ninja python git curl)
+optdepends=('noto-fonts-cjk: Chinese candidate text')
+
+prepare() {
+  rm -rf pk && mkdir pk
+  tar -C "$_root" --exclude=./.git --exclude=./platforms/linux/arch/src --exclude=./platforms/linux/arch/pkg -cf - . | tar -C pk -xf -
+  pk/tools/bigram-trainer/fetch-models.sh
+  mcb=pk/platforms/linux/build/mcbopomofo
+  git init -q "$mcb"
+  git -C "$mcb" remote add origin https://github.com/openvanilla/McBopomofo
+  git -C "$mcb" fetch -q --depth 1 origin "$(tr -d '[:space:]' < pk/MCBOPOMOFO_COMMIT)"
+  git -C "$mcb" checkout -q FETCH_HEAD
+  make -C "$mcb/Source/Data" data.txt
+}
+
+build() {
+  cmake -S pk/platforms/linux -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+    -DMCBOPOMOFO="$srcdir/pk/platforms/linux/build/mcbopomofo" -DREQUIRE_MODELS=ON
+  cmake --build build
+}
+
+check() {
+  for test in ComposerTest ControllerTest; do
+    build/$test "$srcdir/pk/platforms/linux/build/mcbopomofo/Source/Data/data.txt"
+  done
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+  # pacman's own hook refreshes it; a copy in the package conflicts with the one on disk.
+  rm -f "$pkgdir/usr/share/icons/hicolor/icon-theme.cache"
+}

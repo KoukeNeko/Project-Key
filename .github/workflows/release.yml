@@ -72,8 +72,24 @@ jobs:
           name: windows
           path: ProjectKey-*-windows-x64.zip
 
+  arch:
+    needs: version
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel git cmake ninja python curl fcitx5 enchant hunspell-en_us libxcb cairo pango wayland qt6-base libadwaita libsoup3 json-glib
+      - uses: actions/checkout@v4
+      # makepkg refuses to run as root.
+      - run: |
+          useradd -m builder
+          chown -R builder .
+          su builder -c 'cd platforms/linux/arch && makepkg --noconfirm -f OPTIONS=-debug'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: platforms/linux/arch/*.pkg.tar.zst
   release:
-    needs: [version, macos, windows]
+    needs: [version, macos, windows, arch]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -84,7 +100,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
-      - run: sha256sum ProjectKey-*.zip > SHA256SUMS
+      - run: sha256sum ProjectKey-*.zip *.pkg.tar.zst > SHA256SUMS
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -92,11 +108,11 @@ jobs:
           notes="distribution/release-notes/$GITHUB_REF_NAME.md"
           if [ -f "$notes" ]; then from=(--notes-file "$notes"); else from=(--generate-notes); fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip SHA256SUMS --clobber
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip *.pkg.tar.zst SHA256SUMS --clobber
             if [ -f "$notes" ]; then gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"; fi
           else
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Project Key ${{ needs.version.outputs.version }}" \
-              "${from[@]}" ProjectKey-*.zip SHA256SUMS
+              "${from[@]}" ProjectKey-*.zip *.pkg.tar.zst SHA256SUMS
           fi
       - uses: actions/upload-artifact@v4
         with:
