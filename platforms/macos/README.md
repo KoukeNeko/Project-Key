@@ -10,6 +10,8 @@ InputMethodKit 注音輸入法（大千鍵盤），候選視窗採用 [A 整句�
 brew install --cask koukeneko/tap/project-key
 ```
 
+也可以從 GitHub 發行版下載 `ProjectKey-<版本>-macos.pkg`，為目前使用者安裝到 `~/Library/Input Methods` 與 `~/Applications`，不需要管理員密碼。安裝檔沒有簽章，從瀏覽器下載後要到「系統設定 > 隱私權與安全性」按「強制打開」。`platforms/macos/package.sh` 在 `build.sh` 之後產生這個安裝檔。
+
 自行建置需要 Xcode（或 Command Line Tools）與 CMake，macOS 13 以上。
 
 ```bash

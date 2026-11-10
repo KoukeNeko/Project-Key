@@ -42,10 +42,13 @@ jobs:
       - run: tools/bigram-trainer/fetch-models.sh
       - run: platforms/macos/build.sh --require-models
       - run: ditto -c -k --keepParent platforms/macos/build/ProjectKey.app "ProjectKey-${{ needs.version.outputs.version }}-macos.zip"
+      - run: platforms/macos/package.sh && mv platforms/macos/build/ProjectKey-*-macos.pkg .
       - uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: ProjectKey-*-macos.zip
+          path: |
+            ProjectKey-*-macos.zip
+            ProjectKey-*-macos.pkg
 
   windows:
     needs: version
@@ -174,7 +177,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
-      - run: sha256sum ProjectKey-*.zip *.pkg.tar.zst > SHA256SUMS
+      - run: sha256sum ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst > SHA256SUMS
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -182,11 +185,11 @@ jobs:
           notes="distribution/release-notes/$GITHUB_REF_NAME.md"
           if [ -f "$notes" ]; then from=(--notes-file "$notes"); else from=(--generate-notes); fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip *.pkg.tar.zst SHA256SUMS --clobber
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS --clobber
             if [ -f "$notes" ]; then gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"; fi
           else
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Project Key ${{ needs.version.outputs.version }}" \
-              "${from[@]}" ProjectKey-*.zip *.pkg.tar.zst SHA256SUMS
+              "${from[@]}" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS
           fi
       - uses: actions/upload-artifact@v4
         with:

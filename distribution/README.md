@@ -10,6 +10,8 @@ macOS, the `fcitx5-projectkey` formula for Linux) and in the Scoop bucket (`Kouk
 store "What's New" to keep; the cask, the formula and the manifest are written by `.github/workflows/release.yml`.
 
 To release: set the version in `platforms/macos/Resources/Info.plist`,
-`platforms/windows/Sources/TextService/ProjectKey.rc` and `platforms/linux/CMakeLists.txt`, add `release-notes/vX.Y.Z.md`, commit, then push the tag `vX.Y.Z`. The builds bundle the
+`platforms/windows/Sources/TextService/ProjectKey.rc` and `platforms/linux/CMakeLists.txt`, add `release-notes/vX.Y.Z.md`, commit, then push the tag `vX.Y.Z`, or, with the commit pushed, create the release with
+`gh release create vX.Y.Z --notes-file distribution/release-notes/vX.Y.Z.md`: it creates the tag, and the workflow then
+uploads the zips, the macOS pkg and `SHA256SUMS` to that release. The builds bundle the
 dictionary and context models that `tools/bigram-trainer/fetch-models.sh` pins; to ship newly trained ones, publish
 them first as `tools/bigram-trainer/fetch-models.sh` describes.
