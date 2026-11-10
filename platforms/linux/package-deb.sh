@@ -6,7 +6,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 version=$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' "$here/CMakeLists.txt")
-work=$(mktemp -d)
+work=$(mktemp -d "${TMPDIR:-/var/tmp}/pk.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 mkdir "$work/pk"
 tar -C "$root" --exclude=./.git --exclude=./platforms/linux/build --exclude=./platforms/linux/dist -cf - . | tar -C "$work/pk" -xf -
