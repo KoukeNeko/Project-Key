@@ -116,6 +116,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kOmitTones: return "OmitTones";
     case Setting::kRememberChoices: return "RememberChoices";
     case Setting::kShiftToggle: return "ShiftToggle";
+    case Setting::kFullWidthToggle: return "FullWidthToggle";
     case Setting::kCapsLockToggle: return "CapsLockToggle";
     case Setting::kEnglishToZhuyin: return "EnglishToZhuyin";
     case Setting::kZhuyinToEnglish: return "ZhuyinToEnglish";
@@ -151,6 +152,7 @@ void Controller::makeComposer() {
   bool abbreviated = env_.settings->flag(Setting::kAbbreviated);
   bool omitTones = env_.settings->flag(Setting::kOmitTones);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
+  if (!env_.settings->flag(Setting::kFullWidthToggle)) env_.fullWidth = false;  // turned off while it was on
   ReloadUserPhrases(env_);
   // The composer keeps the words it looked up, so new user phrases need a new one.
   if (composer_ && abbreviated == abbreviated_ && omitTones == omitTones_ && rememberChoices == rememberChoices_ && env_.models == models_ &&
@@ -371,7 +373,7 @@ bool Controller::handleKey(const KeyEvent& original) {
     commit();  // let the shortcut act on committed text
     return false;
   }
-  if (event.key == Key::kSpace && event.shift) {
+  if (event.key == Key::kSpace && event.shift && env_.settings->flag(Setting::kFullWidthToggle)) {
     commit();
     forgetEnglishRun();
     env_.fullWidth = !env_.fullWidth;

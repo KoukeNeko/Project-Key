@@ -77,6 +77,7 @@ enum class Setting {
   kOmitTones,           // without 簡拼, a Zhuyin key in the place a whole syllable ends in starts the next, instead of replacing it
   kRememberChoices,     // the user override model
   kShiftToggle,         // a lone Shift switches 中/英
+  kFullWidthToggle,     // Shift+Space switches full-width
   kCapsLockToggle,      // Caps Lock switches 中/英 and letters stay lowercase
   kEnglishToZhuyin,     // that Tab turns Zhuyin typed in 英 into a composition
   kZhuyinToEnglish,     // and English typed in 中 back into English

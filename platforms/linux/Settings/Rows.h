@@ -212,6 +212,7 @@ inline const std::vector<Group>& Groups() {
        {
            {Row::kToggle, "CapsLockToggle", "Caps Lock 切換中英", "開啟時大寫用 Shift；關閉時 Caps Lock 鎖定大寫"},
            {Row::kToggle, "ShiftToggle", "單按 Shift 切換中英"},
+           {Row::kToggle, "FullWidthToggle", "Shift+Space 切換全形"},
            {Row::kToggle, "EnglishToZhuyin", "Tab 英文轉注音"},
            {Row::kToggle, "ZhuyinToEnglish", "Tab 注音轉英文"},
        }},

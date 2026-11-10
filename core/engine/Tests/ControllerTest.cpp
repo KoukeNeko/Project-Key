@@ -758,6 +758,9 @@ int main(int argc, char** argv) {
   TapShift(controller);
   assert(controller.handleKey(shiftSpace) && client.indicator == "ㄅ半");
   assert(!controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  settings.set(Setting::kFullWidthToggle, 0);  // turned off, it is the plain space again
+  assert(!controller.handleKey(shiftSpace) && client.indicator == "ㄅ半");
+  settings.remove(Setting::kFullWidthToggle);
 
   // A word in exclude-phrases.txt, beside the user's words, is no longer offered; removing the
   // file brings it back, though phrases.txt itself does not exist.

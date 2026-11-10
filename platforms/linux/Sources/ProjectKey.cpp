@@ -98,6 +98,7 @@ FCITX_CONFIGURATION(
         this, "ChoosingProof", "選字時的整句預覽", static_cast<ProofMode>(Settings::DefaultValue(Setting::kChoosingProof))};
     fcitx::Option<bool> capsLockToggle{this, "CapsLockToggle", "Caps Lock 切換中英", DefaultFlag(Setting::kCapsLockToggle)};
     fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "單按 Shift 切換中英", DefaultFlag(Setting::kShiftToggle)};
+    fcitx::Option<bool> fullWidthToggle{this, "FullWidthToggle", "Shift+Space 切換全形", DefaultFlag(Setting::kFullWidthToggle)};
     fcitx::Option<bool> englishToZhuyin{this, "EnglishToZhuyin", "Tab 英文轉注音", DefaultFlag(Setting::kEnglishToZhuyin)};
     fcitx::Option<bool> zhuyinToEnglish{this, "ZhuyinToEnglish", "Tab 注音轉英文", DefaultFlag(Setting::kZhuyinToEnglish)};
     // The proof mode Ctrl+Shift+P turns back on; -1 until it is first toggled.
@@ -119,6 +120,7 @@ class ConfigSettings : public Settings {
       case Setting::kKeypadPicks: return *config_.keypadPicks;
       case Setting::kRememberChoices: return *config_.rememberChoices;
       case Setting::kShiftToggle: return *config_.shiftToggle;
+      case Setting::kFullWidthToggle: return *config_.fullWidthToggle;
       case Setting::kCapsLockToggle: return *config_.capsLockToggle;
       case Setting::kEnglishToZhuyin: return *config_.englishToZhuyin;
       case Setting::kZhuyinToEnglish: return *config_.zhuyinToEnglish;

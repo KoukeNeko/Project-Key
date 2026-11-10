@@ -8,6 +8,7 @@ NSString *const PKAbbreviatedKey = @"Abbreviated";
 NSString *const PKOmitTonesKey = @"OmitTones";
 NSString *const PKRememberChoicesKey = @"RememberChoices";
 NSString *const PKShiftToggleKey = @"ShiftToggle";
+NSString *const PKFullWidthToggleKey = @"FullWidthToggle";
 NSString *const PKCapsLockToggleKey = @"CapsLockToggle";
 NSString *const PKEnglishToZhuyinKey = @"EnglishToZhuyin";
 NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
@@ -71,6 +72,7 @@ void PKEditUserPhrases(void) {
     PKOmitTonesKey : @NO,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,
+    PKFullWidthToggleKey : @YES,
     PKCapsLockToggleKey : @NO,
     PKEnglishToZhuyinKey : @YES,
     PKZhuyinToEnglishKey : @YES,

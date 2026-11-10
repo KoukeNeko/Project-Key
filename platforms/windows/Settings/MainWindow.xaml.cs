@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window {
     Bind(RememberChoices, "RememberChoices");
     Bind(CapsLockToggle, "CapsLockToggle", false);
     Bind(ShiftToggle, "ShiftToggle");
+    Bind(FullWidthToggle, "FullWidthToggle");
     Bind(EnglishToZhuyin, "EnglishToZhuyin");
     Bind(ZhuyinToEnglish, "ZhuyinToEnglish");
     Bind(Appearance, "Appearance", 1);

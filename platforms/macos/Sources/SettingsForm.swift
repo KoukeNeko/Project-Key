@@ -9,6 +9,7 @@ struct SettingsForm: View {
   @AppStorage(PKKeypadPicksKey) private var keypadPicks = false
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
+  @AppStorage(PKFullWidthToggleKey) private var fullWidthToggle = true
   @AppStorage(PKCapsLockToggleKey) private var capsLockToggle = false
   @AppStorage(PKEnglishToZhuyinKey) private var englishToZhuyin = true
   @AppStorage(PKZhuyinToEnglishKey) private var zhuyinToEnglish = true
@@ -81,6 +82,7 @@ struct SettingsForm: View {
           Text("開啟時大寫用 ⇧；關閉時 ⇪ 鎖定大寫")
         }
         Toggle("單按 ⇧ 切換中英", isOn: $shiftToggle)
+        Toggle("⇧ Space 切換全形", isOn: $fullWidthToggle)
         Toggle("⇥ 英文轉注音", isOn: $englishToZhuyin)
         Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
       }

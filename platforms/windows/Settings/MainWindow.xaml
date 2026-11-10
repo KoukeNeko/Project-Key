@@ -81,6 +81,9 @@
       <tk:SettingsCard Header="單按 Shift 切換中英">
         <ToggleSwitch x:Name="ShiftToggle" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
+      <tk:SettingsCard Header="Shift+Space 切換全形">
+        <ToggleSwitch x:Name="FullWidthToggle" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
       <tk:SettingsCard Header="Tab 英文轉注音">
         <ToggleSwitch x:Name="EnglishToZhuyin" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
