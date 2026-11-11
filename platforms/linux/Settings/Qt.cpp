@@ -5,6 +5,7 @@
 // the GTK one (Gtk.cpp) and Fcitx5's own configuration page edit the same settings.
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QCryptographicHash>
 #include <QDesktopServices>
@@ -121,8 +122,8 @@ void StartUpdate(QLabel* label) {
   update->start("/bin/sh", {"-c", QString::fromStdString(UpdateCommand(prefix))});
 }
 
-// The newest GitHub release, which the other platforms' package managers install from. Installed
-// with Homebrew, a newer one is offered as an update; built from source, as its page.
+// The newest GitHub release, which the other platforms' package managers install from, offered
+// as an update when newer: with Homebrew run here, otherwise kInstallCommand copied for a terminal.
 void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
   QNetworkRequest request{QUrl(kReleases)};
   request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");  // GitHub rejects requests without one
@@ -134,12 +135,17 @@ void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
     if (latest.startsWith('v')) latest.remove(0, 1);
     if (reply->error() != QNetworkReply::NoError || latest.isEmpty()) {
       label->setText("無法檢查");
-    } else if (QVersionNumber::fromString(latest) > QVersionNumber::fromString(PROJECTKEY_VERSION) && !HomebrewPrefix().empty()) {
+    } else if (QVersionNumber::fromString(latest) > QVersionNumber::fromString(PROJECTKEY_VERSION)) {
       label->setOpenExternalLinks(false);
       label->setText(QString("<a href=\"#\">更新到 %1</a>").arg(latest));
-      QObject::connect(label, &QLabel::linkActivated, label, [label] { StartUpdate(label); });
-    } else if (QVersionNumber::fromString(latest) > QVersionNumber::fromString(PROJECTKEY_VERSION)) {
-      label->setText(QString("<a href=\"%1\">下載 %2</a>").arg(release.value("html_url").toString(), latest));
+      if (HomebrewPrefix().empty()) {
+        QObject::connect(label, &QLabel::linkActivated, label, [label] {
+          QGuiApplication::clipboard()->setText(kInstallCommand);
+          label->setText("已複製更新指令，請貼到終端機執行");
+        });
+      } else {
+        QObject::connect(label, &QLabel::linkActivated, label, [label] { StartUpdate(label); });
+      }
     } else {
       label->setText("已是最新版本");
     }

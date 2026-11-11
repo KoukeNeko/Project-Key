@@ -21,6 +21,10 @@ constexpr char kConfig[] = "fcitx://config/addon/projectkey";
 constexpr char kReleases[] = "https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest";
 constexpr char kAllReleases[] = "https://api.github.com/repos/KoukeNeko/Project-Key/releases?per_page=30";
 constexpr char kEngineUrl[] = "https://github.com/openvanilla/McBopomofo";
+// install.sh, which also updates whatever it or a package installed. It asks for the sudo
+// password, so the settings window copies it for a terminal rather than running it.
+constexpr char kInstallCommand[] =
+    "curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/install.sh | sh";
 
 // UserData() in Sources/ProjectKey.cpp; empty without a home.
 inline std::filesystem::path UserData() {
@@ -142,8 +146,7 @@ inline void AbandonModels(const std::string& date) {
 }
 
 // Homebrew's prefix when this program runs from its fcitx5-projectkey keg, which updates with
-// `brew upgrade`; empty when Project Key was built and installed from source, which offers the
-// release page instead.
+// `brew upgrade`; empty when Project Key was installed otherwise, which offers kInstallCommand.
 inline std::filesystem::path HomebrewPrefix() {
   std::error_code error;
   std::string self = std::filesystem::read_symlink("/proc/self/exe", error).string();

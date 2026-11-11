@@ -155,8 +155,14 @@ void StartUpdate(GtkLabel* label) {
       label);
 }
 
-// The newest GitHub release, which the other platforms' package managers install from. Installed
-// with Homebrew, a newer one is offered as an update; built from source, as its page.
+// Installed other than with Homebrew: the update is kInstallCommand, for the user to paste into a terminal.
+void CopyUpdateCommand(GtkLabel* label) {
+  gdk_clipboard_set_text(gtk_widget_get_clipboard(GTK_WIDGET(label)), kInstallCommand);
+  gtk_label_set_text(label, "已複製更新指令，請貼到終端機執行");
+}
+
+// The newest GitHub release, which the other platforms' package managers install from, offered
+// as an update when newer.
 void CheckForUpdate(GtkLabel* label) {
   SoupSession* session = soup_session_new_with_options("user-agent", "ProjectKey", nullptr);  // GitHub rejects requests without one
   SoupMessage* message = soup_message_new("GET", kReleases);
@@ -168,7 +174,7 @@ void CheckForUpdate(GtkLabel* label) {
         SoupSession* session = SOUP_SESSION(source);
         GBytes* body = soup_session_send_and_read_finish(session, result, nullptr);
         SoupMessage* message = soup_session_get_async_result_message(session, result);
-        std::string latest, page;
+        std::string latest;
         if (body && message && soup_message_get_status(message) == SOUP_STATUS_OK) {
           JsonParser* parser = json_parser_new();
           gsize size = 0;
@@ -177,22 +183,18 @@ void CheckForUpdate(GtkLabel* label) {
           if (root && JSON_NODE_HOLDS_OBJECT(root)) {
             JsonObject* release = json_node_get_object(root);
             if (json_object_has_member(release, "tag_name")) latest = json_object_get_string_member(release, "tag_name");
-            if (json_object_has_member(release, "html_url")) page = json_object_get_string_member(release, "html_url");
           }
           g_object_unref(parser);
         }
         if (!latest.empty() && latest[0] == 'v') latest.erase(0, 1);
         if (latest.empty()) {
           gtk_label_set_text(label, "無法檢查");
-        } else if (VersionParts(latest) > VersionParts(PROJECTKEY_VERSION) && !HomebrewPrefix().empty()) {
+        } else if (VersionParts(latest) > VersionParts(PROJECTKEY_VERSION)) {
           char* markup = g_markup_printf_escaped("<a href=\"#\">更新到 %s</a>", latest.c_str());
           gtk_label_set_markup(label, markup);
           g_free(markup);
-          g_signal_connect(label, "activate-link", G_CALLBACK(Later<StartUpdate>), nullptr);
-        } else if (VersionParts(latest) > VersionParts(PROJECTKEY_VERSION)) {
-          char* markup = g_markup_printf_escaped("<a href=\"%s\">下載 %s</a>", page.c_str(), latest.c_str());
-          gtk_label_set_markup(label, markup);
-          g_free(markup);
+          g_signal_connect(label, "activate-link",
+                           HomebrewPrefix().empty() ? G_CALLBACK(Later<CopyUpdateCommand>) : G_CALLBACK(Later<StartUpdate>), nullptr);
         } else {
           gtk_label_set_text(label, "已是最新版本");
         }
