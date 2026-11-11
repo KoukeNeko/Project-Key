@@ -27,10 +27,12 @@ GDBusConnection* Bus() {
 }
 
 // The addon's settings as text; empty when Fcitx5 is not running or has no Project Key.
+// Fcitx5 not running yet, D-Bus starts it for this call, and it answers once Project Key
+// has loaded its models: seconds after a login. So the wait is Qt's default, not 3 seconds.
 std::map<std::string, std::string> ReadConfig() {
   std::map<std::string, std::string> config;
   GVariant* reply = g_dbus_connection_call_sync(Bus(), kFcitx, "/controller", "org.fcitx.Fcitx.Controller1", "GetConfig",
-                                                g_variant_new("(s)", kConfig), nullptr, G_DBUS_CALL_FLAGS_NONE, 3000, nullptr,
+                                                g_variant_new("(s)", kConfig), nullptr, G_DBUS_CALL_FLAGS_NONE, 25000, nullptr,
                                                 nullptr);
   if (!reply) return config;
   GVariant* boxed = g_variant_get_child_value(reply, 0);
