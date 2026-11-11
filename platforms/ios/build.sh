@@ -8,21 +8,10 @@ set -eu
 cd "$(dirname "$0")"
 BUILD=build
 MCB=$BUILD/mcbopomofo
-MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)
 TRAINED=../../tools/bigram-trainer/.cache  # data.txt: McBopomofo's dictionary with the words it lacks added
 
 command -v xcodegen >/dev/null || brew install xcodegen
-if [ ! -d "$MCB/.git" ]; then
-  git init -q "$MCB"
-  git -C "$MCB" remote add origin https://github.com/openvanilla/McBopomofo
-fi
-# Again whenever MCBOPOMOFO_COMMIT moves, with the dictionary built from it.
-if [ "$(git -C "$MCB" rev-parse -q --verify HEAD)" != "$MCB_COMMIT" ]; then
-  git -C "$MCB" fetch -q --depth 1 origin "$MCB_COMMIT"
-  git -C "$MCB" checkout -q FETCH_HEAD
-  rm -f "$MCB/Source/Data/data.txt"
-fi
-[ -f "$MCB/Source/Data/data.txt" ] || make -C "$MCB/Source/Data" data.txt
+../../tools/fetch-mcbopomofo.sh "$MCB"
 if [ -f "$TRAINED/data.txt" ]; then cp "$TRAINED/data.txt" $BUILD/data.txt; else cp "$MCB/Source/Data/data.txt" $BUILD/data.txt; fi
 # XcodeGen lists what is in build/models when it generates the project.
 rm -rf $BUILD/models

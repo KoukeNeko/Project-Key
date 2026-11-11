@@ -12,7 +12,6 @@ if [ "${1:-}" = --require-models ]; then
   done
 fi
 BUILD=build
-MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)
 CORE=../../core/engine  # the engine shared with Windows
 ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/SentenceModel.cpp $CORE/PersonalModel.cpp $CORE/Controller.cpp"
 MCB=$BUILD/mcbopomofo
@@ -20,17 +19,7 @@ APP=$BUILD/ProjectKey.app
 CXXFLAGS="-std=c++20 -O2 -Wall -mmacosx-version-min=13.0 -I$MCB/Source/Engine -I$CORE -I$BUILD"
 LIBS="$MCB/build/libMcBopomofoLMLib.a $MCB/build/Mandarin/libMandarinLib.a $MCB/build/gramambular2/libgramambular2_lib.a"
 
-if [ ! -d "$MCB/.git" ]; then
-  git init -q "$MCB"
-  git -C "$MCB" remote add origin https://github.com/openvanilla/McBopomofo
-fi
-# Again whenever MCBOPOMOFO_COMMIT moves, with the dictionary built from it.
-if [ "$(git -C "$MCB" rev-parse -q --verify HEAD)" != "$MCB_COMMIT" ]; then
-  git -C "$MCB" fetch -q --depth 1 origin "$MCB_COMMIT"
-  git -C "$MCB" checkout -q FETCH_HEAD
-  rm -f "$MCB/Source/Data/data.txt"
-fi
-[ -f "$MCB/Source/Data/data.txt" ] || make -C "$MCB/Source/Data" data.txt
+../../tools/fetch-mcbopomofo.sh "$MCB"
 cmake -S "$MCB/Source/Engine" -B "$MCB/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 >/dev/null
 cmake --build "$MCB/build" --target McBopomofoLMLib MandarinLib gramambular2_lib >/dev/null
 

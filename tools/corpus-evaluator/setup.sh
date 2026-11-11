@@ -22,19 +22,8 @@ if [ ! -f "$RIME/user/build/bopomofo_tw.prism.bin" ]; then
   printf 'patch:\n  schema_list:\n    - schema: bopomofo_tw\n' > "$RIME/shared/default.custom.yaml"
   "$BREW/opt/librime/bin/rime_deployer" --build "$RIME/user" "$RIME/shared" "$RIME/user/build"
 fi
-MCB_COMMIT=$(cat ../../MCBOPOMOFO_COMMIT)  # also the commit annotate.py reads readings from
 MCB=.cache/mcbopomofo
-if [ ! -d "$MCB/.git" ]; then
-  git init -q "$MCB"
-  git -C "$MCB" remote add origin https://github.com/openvanilla/McBopomofo
-fi
-# Again whenever MCBOPOMOFO_COMMIT moves, with the dictionary built from it.
-if [ "$(git -C "$MCB" rev-parse -q --verify HEAD)" != "$MCB_COMMIT" ]; then
-  git -C "$MCB" fetch -q --depth 1 origin "$MCB_COMMIT"
-  git -C "$MCB" checkout -q FETCH_HEAD
-  rm -f "$MCB/Source/Data/data.txt"
-fi
-[ -f "$MCB/Source/Data/data.txt" ] || make -C "$MCB/Source/Data" data.txt
+../../tools/fetch-mcbopomofo.sh "$MCB"
 cmake -S "$MCB/Source/Engine" -B "$MCB/build" -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "$MCB/build" --target McBopomofoLMLib MandarinLib gramambular2_lib >/dev/null
 c++ -std=c++20 -O2 adapters/mcbopomofo.cpp -I"$MCB/Source/Engine" \

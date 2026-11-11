@@ -8,7 +8,6 @@ set -eu
 cd "$(dirname "$0")"
 BUILD=build
 MCB=$BUILD/mcbopomofo
-MCB_COMMIT=$(tr -d '[:space:]' < ../../MCBOPOMOFO_COMMIT)
 
 cxxlib() {
   case $(readelf -d "$1" 2>/dev/null | grep NEEDED) in
@@ -26,17 +25,7 @@ if [ "$FCITX_CXXLIB" = libc++ ]; then
   export CXX CXXFLAGS="-stdlib=libc++ ${CXXFLAGS:-}" LDFLAGS="-stdlib=libc++ ${LDFLAGS:-}"
 fi
 
-if [ ! -d "$MCB/.git" ]; then
-  git init -q "$MCB"
-  git -C "$MCB" remote add origin https://github.com/openvanilla/McBopomofo
-fi
-# Again whenever MCBOPOMOFO_COMMIT moves, with the dictionary built from it.
-if [ "$(git -C "$MCB" rev-parse -q --verify HEAD)" != "$MCB_COMMIT" ]; then
-  git -C "$MCB" fetch -q --depth 1 origin "$MCB_COMMIT"
-  git -C "$MCB" checkout -q FETCH_HEAD
-  rm -f "$MCB/Source/Data/data.txt"
-fi
-[ -f "$MCB/Source/Data/data.txt" ] || make -C "$MCB/Source/Data" data.txt
+../../tools/fetch-mcbopomofo.sh "$MCB"
 
 cmake -S . -B $BUILD -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DMCBOPOMOFO="$PWD/$MCB" >/dev/null
 cmake --build $BUILD

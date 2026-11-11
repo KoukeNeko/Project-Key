@@ -13,11 +13,7 @@ tar -C "$root" --exclude=./.git --exclude=./platforms/linux/build --exclude=./pl
 cd "$work/pk"
 tools/bigram-trainer/fetch-models.sh
 mcb=platforms/linux/build/mcbopomofo
-git init -q "$mcb"
-git -C "$mcb" remote add origin https://github.com/openvanilla/McBopomofo
-git -C "$mcb" fetch -q --depth 1 origin "$(tr -d '[:space:]' < MCBOPOMOFO_COMMIT)"
-git -C "$mcb" checkout -q FETCH_HEAD
-make -C "$mcb/Source/Data" data.txt
+tools/fetch-mcbopomofo.sh "$mcb"
 cd "$work"
 mkdir -p rpmbuild/SOURCES
 tar czf rpmbuild/SOURCES/pk.tar.gz pk

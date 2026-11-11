@@ -21,11 +21,7 @@ prepare() {
   tar -C "$_root" --exclude=./.git --exclude=./platforms/linux/arch/src --exclude=./platforms/linux/arch/pkg -cf - . | tar -C pk -xf -
   pk/tools/bigram-trainer/fetch-models.sh
   mcb=pk/platforms/linux/build/mcbopomofo
-  git init -q "$mcb"
-  git -C "$mcb" remote add origin https://github.com/openvanilla/McBopomofo
-  git -C "$mcb" fetch -q --depth 1 origin "$(tr -d '[:space:]' < pk/MCBOPOMOFO_COMMIT)"
-  git -C "$mcb" checkout -q FETCH_HEAD
-  make -C "$mcb/Source/Data" data.txt
+  pk/tools/fetch-mcbopomofo.sh "$mcb"
 }
 
 build() {
