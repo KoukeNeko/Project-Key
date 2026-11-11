@@ -22,6 +22,8 @@ struct SettingsForm: View {
   @AppStorage(PKGridColumnsKey) private var gridColumns = 0
   @AppStorage(PKKeyboardLayoutKey) private var keyboardLayout = 0
   @State private var cleared = false
+  @State private var restoring = false
+  @State private var removeFailed = false
   @State private var update = UpdateState.checking
   @ObservedObject var models: ModelsUpdater
   let clearChoices: () -> Void
@@ -113,6 +115,27 @@ struct SettingsForm: View {
         Toggle("⇧ Space 切換全形", isOn: $fullWidthToggle)
         Toggle("⇥ 英文轉注音", isOn: $englishToZhuyin)
         Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
+      }
+      Section("重設") {
+        LabeledContent("恢復原廠設定") {
+          if removeFailed {
+            Text("無法刪除資料")
+          } else {
+            Button("恢復…") { restoring = true }
+          }
+        }
+        .alert("恢復原廠設定？", isPresented: $restoring) {
+          Button("恢復設定") { PKRestoreSettings() }
+          Button("一併刪除資料", role: .destructive) {
+            PKRestoreSettings()
+            removeFailed = !PKRemoveUserWords()
+            clearChoices()  // personal.txt, and the choices the input method holds in memory
+            cleared = true
+          }
+          Button("取消", role: .cancel) {}
+        } message: {
+          Text("設定將改回預設值。「一併刪除資料」另刪除自訂詞、排除詞與選字紀錄，無法復原；下載的選字模型保留。")
+        }
       }
       Section("關於") {
         LabeledContent("版本", value: currentVersion)

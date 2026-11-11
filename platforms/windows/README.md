@@ -90,6 +90,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 開關：選完跳到下一個可疑處、簡拼、近似音（預設關閉）、數字鍵盤選字（預設關閉）、記住選過的字（可清除紀錄；開啟時亦自送出的文字學習）、Caps Lock（預設關閉）、單按 Shift 切換中英與 Shift+Space 切換全形（預設開啟），以及 Tab 的英文轉注音與注音轉英文。
 - 候選視窗外觀：深色、Acrylic（預設）、Mica、Mica Alt。
 - 輸入時與選字時的整句預覽：永遠／有可疑字時／關閉，預設為有可疑字時。
+- 恢復原廠設定：「恢復設定」將所有設定改回預設值，保留自訂詞、排除詞與選字紀錄；「一併刪除資料」另刪除這些資料（`phrases.txt`、`exclude-phrases.txt`、`personal.txt`）並清除引擎伺服器記憶體中的選字紀錄。兩者皆保留下載的選字模型。
 - 「關於」：版本取自 `ProjectKey.dll`，並查詢 GitHub 最新發行版有無新版。有新版時按「更新到」，即下載發行版的 zip、核對 GitHub 列出的 SHA-256，再執行其中的 `install.ps1 -Update`，經一次系統管理員確認後安裝並重新開啟設定；已開啟的 App 須重新開啟才會改用新版的文字服務。「選字模型」顯示模型日期，有新模型時可直接下載，存放於 `%LOCALAPPDATA%\Project Key`，核對 SHA-256 後無須重新安裝即生效。
 
 變更立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱與 macOS 的 NSUserDefaults 鍵相同），於下一次組字時生效。設計文件記載的是 `ApplicationData.LocalSettings`，但該 API 僅限封裝（MSIX）的 App 使用。

@@ -56,6 +56,11 @@ FOUNDATION_EXPORT void PKEditUserPhrases(void);
 FOUNDATION_EXPORT void PKEditExcludedPhrases(void);
 // Shows the folder of the user's files (phrases.txt, exclude-phrases.txt, personal.txt) in Finder.
 FOUNDATION_EXPORT void PKShowDataFolder(void);
+// 恢復原廠設定: every setting back to its default, the obsolete ones gone too; the input method
+// reads them at its next composition. The words, the choices and the downloaded models stay.
+FOUNDATION_EXPORT void PKRestoreSettings(void);
+// And with 一併刪除資料: removes phrases.txt and exclude-phrases.txt; NO when one could not be removed.
+FOUNDATION_EXPORT BOOL PKRemoveUserWords(void);
 
 @interface PKSettingsWindow : NSObject
 + (void)registerDefaults;

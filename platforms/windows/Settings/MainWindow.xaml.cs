@@ -188,14 +188,56 @@ public sealed partial class MainWindow : Window {
     }
   }
 
-  private static void Bind(ToggleSwitch toggle, string name, bool fallback = true) {
+  // Puts each bound control back to its default once the settings are gone, without writing it.
+  private readonly List<Action> showDefaults = [];
+  private bool restoring;
+
+  private void Bind(ToggleSwitch toggle, string name, bool fallback = true) {
     toggle.IsOn = Read(name, fallback ? 1 : 0) != 0;
-    toggle.Toggled += (_, _) => Write(name, toggle.IsOn ? 1 : 0);
+    toggle.Toggled += (_, _) => {
+      if (!restoring) Write(name, toggle.IsOn ? 1 : 0);
+    };
+    showDefaults.Add(() => toggle.IsOn = fallback);
   }
 
-  private static void Bind(ComboBox box, string name, int fallback) {
+  private void Bind(ComboBox box, string name, int fallback) {
     box.SelectedIndex = Math.Clamp(Read(name, fallback), 0, box.Items.Count - 1);
-    box.SelectionChanged += (_, _) => Write(name, box.SelectedIndex);
+    box.SelectionChanged += (_, _) => {
+      if (!restoring) Write(name, box.SelectedIndex);
+    };
+    showDefaults.Add(() => box.SelectedIndex = fallback);
+  }
+
+  // 恢復原廠設定: the settings go, so the engine server reads its defaults at the next composition;
+  // 一併刪除資料 also removes the user's files and the choices the server holds. The downloaded
+  // models stay.
+  private async void OnRestore(object sender, RoutedEventArgs e) {
+    var dialog = new ContentDialog {
+      XamlRoot = Content.XamlRoot,
+      Title = "恢復原廠設定？",
+      Content = "設定將改回預設值。「一併刪除資料」另刪除自訂詞、排除詞與選字紀錄，無法復原；下載的選字模型保留。",
+      PrimaryButtonText = "恢復設定",
+      SecondaryButtonText = "一併刪除資料",
+      CloseButtonText = "取消",
+      DefaultButton = ContentDialogButton.Close,
+    };
+    ContentDialogResult result = await dialog.ShowAsync();
+    if (result == ContentDialogResult.None) return;
+    Registry.CurrentUser.DeleteSubKeyTree(Key, throwOnMissingSubKey: false);
+    restoring = true;
+    foreach (Action showDefault in showDefaults) showDefault();
+    restoring = false;
+    if (result != ContentDialogResult.Secondary) return;
+    try {
+      foreach (string name in new[] { "phrases.txt", "exclude-phrases.txt", "personal.txt" }) {
+        // File.Delete does nothing for a file that is not there, but throws for a folder that is not.
+        if (Directory.Exists(UserDataFolder())) File.Delete(Path.Combine(UserDataFolder(), name));
+      }
+    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+      Restore.Content = "無法刪除資料";
+    }
+    SendToServer(7);  // Protocol.h: Request::kClearChoices
+    ClearChoices.IsEnabled = false;
   }
 
   // The newest GitHub release, which brew and scoop install from. A newer one is offered as an

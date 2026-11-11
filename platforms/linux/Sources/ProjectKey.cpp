@@ -491,18 +491,26 @@ class Session : public fcitx::InputContextProperty, public Client {
 
 // What the settings windows (Settings/Qt.cpp, Settings/Gtk.cpp) ask of the engine over D-Bus,
 // at /projectkey on Fcitx5's own bus name: forgetting the choices, which live
-// only in this process, and switching to models they downloaded.
+// only in this process, switching to models they downloaded, and every setting's default.
 class SettingsObject : public fcitx::dbus::ObjectVTable<SettingsObject> {
  public:
-  explicit SettingsObject(Environment& environment) : environment_(environment) {}
+  SettingsObject(Environment& environment, Config& config) : environment_(environment), config_(config) {}
   void clearChoices() { ClearChoices(environment_); }
+  void resetSettings() {
+    fcitx::RawConfig defaults;
+    Config().save(defaults);
+    config_.load(defaults);
+    fcitx::safeSaveAsIni(config_, kConfigPath);
+  }
   void reloadModels() {
     if (!UseNewestModels(environment_)) FCITX_ERROR() << "Project Key: cannot load the downloaded models";
   }
 
  private:
   Environment& environment_;
+  Config& config_;
   FCITX_OBJECT_VTABLE_METHOD(clearChoices, "ClearChoices", "", "");
+  FCITX_OBJECT_VTABLE_METHOD(resetSettings, "ResetSettings", "", "");
   FCITX_OBJECT_VTABLE_METHOD(reloadModels, "ReloadModels", "", "");
 };
 
@@ -731,7 +739,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
   fcitx::FactoryFor<Session> factory_;
   std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> shiftWatcher_, caretWatcher_;
   fcitx::SimpleAction settingsAction_, checkAction_;
-  SettingsObject settingsObject_{environment_};
+  SettingsObject settingsObject_{environment_, config_};
 };
 
 class Factory : public fcitx::AddonFactory {

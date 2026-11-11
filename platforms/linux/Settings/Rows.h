@@ -186,9 +186,28 @@ inline int WelcomeStep(bool added, bool inUse, bool tried) {
   return !added ? 0 : !tried && !inUse ? 1 : !tried ? 2 : 3;
 }
 
+// 恢復原廠設定's question, as on macOS (SettingsForm.swift) and Windows (MainWindow.xaml.cs). 恢復設定
+// asks the addon for its defaults (ResetSettings on /projectkey); 一併刪除資料 also removes the user's
+// files and has the addon forget the choices it holds (ClearChoices). The downloaded models stay.
+constexpr char kRestoreTitle[] = "恢復原廠設定？";
+constexpr char kRestoreBody[] = "設定將改回預設值。「一併刪除資料」另刪除自訂詞、排除詞與選字紀錄，無法復原；下載的選字模型保留。";
+
+// 一併刪除資料's files: phrases.txt, exclude-phrases.txt and personal.txt. False when one could not be removed.
+inline bool RemoveUserData() {
+  std::filesystem::path data = UserData();
+  if (data.empty()) return true;
+  bool removed = true;
+  for (const char* name : {"phrases.txt", "exclude-phrases.txt", "personal.txt"}) {
+    std::error_code error;
+    std::filesystem::remove(data / name, error);  // false, without an error, when it is not there
+    if (error) removed = false;
+  }
+  return removed;
+}
+
 struct Row {
-  enum Kind { kToggle, kChoice, kClearChoices, kEditPhrases, kShowFolder } kind;
-  const char* key;  // empty for kClearChoices and kShowFolder; the file's name for kEditPhrases
+  enum Kind { kToggle, kChoice, kClearChoices, kEditPhrases, kShowFolder, kRestore } kind;
+  const char* key;  // empty for kClearChoices, kShowFolder and kRestore; the file's name for kEditPhrases
   const char* title;
   const char* detail = nullptr;              // a line under the row
   std::vector<const char*> values = {};      // kChoice: the config's names for its options
@@ -233,6 +252,7 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "EnglishToZhuyin", "Tab 英文轉注音"},
            {Row::kToggle, "ZhuyinToEnglish", "Tab 注音轉英文"},
        }},
+      {"重設", {{Row::kRestore, "", "恢復原廠設定"}}},
   };
   return groups;
 }

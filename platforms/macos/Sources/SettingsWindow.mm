@@ -81,6 +81,25 @@ void PKShowDataFolder(void) {
   [NSWorkspace.sharedWorkspace openURL:folder];
 }
 
+void PKRestoreSettings(void) {
+  NSUserDefaults *defaults = PKDefaults();
+  for (NSString *key in [defaults persistentDomainForName:PKInputMethodBundleID]) [defaults removeObjectForKey:key];
+}
+
+BOOL PKRemoveUserWords(void) {
+  if (!NSBundle.mainBundle.bundleIdentifier) return YES;  // the tests must not touch the user's files
+  BOOL removed = YES;
+  for (NSString *name in @[ @"phrases.txt", @"exclude-phrases.txt" ]) {
+    NSURL *file = [PKSupportDirectory() URLByAppendingPathComponent:name];
+    NSError *error = nil;
+    if (![NSFileManager.defaultManager removeItemAtURL:file error:&error] && !(error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError)) {
+      NSLog(@"Project Key: cannot remove %@: %@", file.path, error);
+      removed = NO;
+    }
+  }
+  return removed;
+}
+
 @implementation PKSettingsWindow
 
 + (void)registerDefaults {

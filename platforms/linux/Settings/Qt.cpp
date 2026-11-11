@@ -40,6 +40,7 @@
 #include <QVersionNumber>
 
 #include <algorithm>
+#include <functional>
 
 #include "Rows.h"
 
@@ -482,6 +483,9 @@ int main(int argc, char** argv) {
     label->setForegroundRole(QPalette::PlaceholderText);
     return label;
   };
+  // Each setting's control shows the config again, after 恢復原廠設定.
+  std::vector<std::function<void(const QVariantMap&)>> showConfig;
+  QPushButton* clearChoices = nullptr;
   for (const Group& section : Groups()) {
     group(section.title);
     for (const Row& row : section.rows) {
@@ -496,6 +500,10 @@ int main(int argc, char** argv) {
           box->setChecked(!on);
           Unsaved(box);
         });
+        showConfig.push_back([box, key](const QVariantMap& config) {
+          QSignalBlocker quiet(box);
+          box->setChecked(Text(config.value(key)) == "True");
+        });
         form->addRow(QString(), box);
       } else if (row.kind == Row::kChoice) {
         QStringList values, shown;
@@ -503,18 +511,25 @@ int main(int argc, char** argv) {
         for (const char* text : row.shown.empty() ? row.values : row.shown) shown << text;
         auto* combo = new QComboBox;
         combo->addItems(shown);
-        combo->setCurrentIndex(std::max(0, static_cast<int>(values.indexOf(Text(config.value(key))))));
+        // The index last saved, which a refused change goes back to.
+        auto show = [combo, key, values](const QVariantMap& config) {
+          int index = std::max(0, static_cast<int>(values.indexOf(Text(config.value(key)))));
+          QSignalBlocker quiet(combo);
+          combo->setCurrentIndex(index);
+          combo->setProperty("saved", index);
+        };
+        show(config);
+        showConfig.push_back(show);
         combo->setEnabled(available);
         // qOverload: Qt 5 also has a QString overload of the signal.
-        QObject::connect(combo, qOverload<int>(&QComboBox::currentIndexChanged),
-                         [&controller, key, values, combo, saved = combo->currentIndex()](int index) mutable {
+        QObject::connect(combo, qOverload<int>(&QComboBox::currentIndexChanged), [&controller, key, values, combo](int index) {
           if (index < 0) return;
           if (WriteConfig(controller, key, values[index])) {
-            saved = index;
+            combo->setProperty("saved", index);
             return;
           }
           QSignalBlocker quiet(combo);
-          combo->setCurrentIndex(saved);
+          combo->setCurrentIndex(combo->property("saved").toInt());
           Unsaved(combo);
         });
         form->addRow(label(row.title), combo);
@@ -536,8 +551,30 @@ int main(int argc, char** argv) {
           }
         });
         form->addRow(label(row.title), show);
+      } else if (row.kind == Row::kRestore) {
+        auto* restore = new QPushButton("恢復…");
+        restore->setEnabled(available);
+        QObject::connect(restore, &QPushButton::clicked, [&controller, &showConfig, &clearChoices, restore] {
+          QMessageBox question(QMessageBox::Question, "Project Key 設定", kRestoreTitle, QMessageBox::NoButton, restore->window());
+          question.setInformativeText(kRestoreBody);
+          QPushButton* settings = question.addButton("恢復設定", QMessageBox::AcceptRole);
+          QPushButton* data = question.addButton("一併刪除資料", QMessageBox::DestructiveRole);
+          question.setDefaultButton(question.addButton("取消", QMessageBox::RejectRole));
+          question.exec();
+          if (question.clickedButton() != settings && question.clickedButton() != data) return;
+          QDBusInterface engine(kFcitx, "/projectkey", "org.projectkey.Engine");
+          if (engine.call("ResetSettings").type() != QDBusMessage::ReplyMessage) return Unsaved(restore);
+          QVariantMap config = ReadConfig(controller);
+          for (const auto& show : showConfig) show(config);
+          if (question.clickedButton() != data) return;
+          if (!RemoveUserData()) restore->setText("無法刪除資料");
+          engine.call("ClearChoices");
+          if (clearChoices) clearChoices->setEnabled(false);
+        });
+        form->addRow(label(row.title), restore);
       } else {
         auto* clear = new QPushButton("清除");
+        clearChoices = clear;
         clear->setEnabled(available);
         QObject::connect(clear, &QPushButton::clicked, [clear] {
           // The choices live only in the addon; when it is not loaded there are none to clear.

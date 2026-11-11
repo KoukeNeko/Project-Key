@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <optional>
 #include <string>
@@ -365,6 +366,42 @@ GtkWidget* InfoRow(const char* title, GtkWidget** value, const char* text) {
   return row;
 }
 
+void Activate(GtkApplication* app);
+
+// 恢復原廠設定's answer: the addon's defaults, and with 一併刪除資料 the user's files and choices
+// too; then the window again, showing the defaults.
+void Restore(AdwAlertDialog*, const char* response, gpointer data) {
+  if (std::strcmp(response, "cancel") == 0) return;
+  GtkWidget* button = GTK_WIDGET(data);
+  GVariant* reply = g_dbus_connection_call_sync(Bus(), kFcitx, "/projectkey", "org.projectkey.Engine", "ResetSettings", nullptr,
+                                                nullptr, G_DBUS_CALL_FLAGS_NONE, 3000, nullptr, nullptr);
+  if (!reply) return Unsaved(button);
+  g_variant_unref(reply);
+  bool removed = true;
+  if (std::strcmp(response, "data") == 0) {
+    removed = RemoveUserData();
+    g_dbus_connection_call(Bus(), kFcitx, "/projectkey", "org.projectkey.Engine", "ClearChoices", nullptr, nullptr,
+                           G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+  }
+  // Once the dialog, which the old window holds, is gone.
+  GtkWindow* old = GTK_WINDOW(g_object_ref(gtk_widget_get_root(button)));
+  g_object_set_data(G_OBJECT(old), "removed", GINT_TO_POINTER(removed));
+  g_idle_add(+[](gpointer data) -> gboolean {
+    GtkWindow* old = GTK_WINDOW(data);
+    GtkApplication* app = gtk_window_get_application(old);
+    bool removed = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(old), "removed"));
+    Activate(app);
+    gtk_window_destroy(old);
+    g_object_unref(old);
+    if (!removed) {
+      AdwDialog* dialog = adw_alert_dialog_new("無法刪除資料", "設定已恢復，自訂詞、排除詞或選字紀錄仍在資料夾中。");
+      adw_alert_dialog_add_response(ADW_ALERT_DIALOG(dialog), "close", "好");
+      adw_dialog_present(dialog, GTK_WIDGET(gtk_application_get_active_window(app)));
+    }
+    return G_SOURCE_REMOVE;
+  }, old);
+}
+
 void Activate(GtkApplication* app) {
   const std::map<std::string, std::string> config = ReadConfig();
   const bool available = !config.empty();
@@ -439,6 +476,22 @@ void Activate(GtkApplication* app) {
                          })),
                          nullptr);
         adw_action_row_add_suffix(ADW_ACTION_ROW(widget), show);
+      } else if (row.kind == Row::kRestore) {
+        widget = adw_action_row_new();
+        GtkWidget* restore = gtk_button_new_with_label("恢復…");
+        gtk_widget_set_valign(restore, GTK_ALIGN_CENTER);
+        g_signal_connect(restore, "clicked", G_CALLBACK((+[](GtkButton* button, gpointer) {
+                           AdwDialog* dialog = adw_alert_dialog_new(kRestoreTitle, kRestoreBody);
+                           adw_alert_dialog_add_responses(ADW_ALERT_DIALOG(dialog), "cancel", "取消", "settings", "恢復設定", "data",
+                                                          "一併刪除資料", nullptr);
+                           adw_alert_dialog_set_response_appearance(ADW_ALERT_DIALOG(dialog), "data", ADW_RESPONSE_DESTRUCTIVE);
+                           adw_alert_dialog_set_default_response(ADW_ALERT_DIALOG(dialog), "cancel");
+                           adw_alert_dialog_set_close_response(ADW_ALERT_DIALOG(dialog), "cancel");
+                           g_signal_connect(dialog, "response", G_CALLBACK(Restore), button);
+                           adw_dialog_present(dialog, GTK_WIDGET(button));
+                         })),
+                         nullptr);
+        adw_action_row_add_suffix(ADW_ACTION_ROW(widget), restore);
       } else {
         widget = adw_action_row_new();
         GtkWidget* clear = gtk_button_new_with_label("清除");
