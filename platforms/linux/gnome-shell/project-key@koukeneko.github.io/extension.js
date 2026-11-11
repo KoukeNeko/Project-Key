@@ -86,6 +86,8 @@ export default class ProjectKeyExtension extends Extension {
         if (!actor) {
             actor = new St.Widget({reactive: this._reactive.has(id), can_focus: false, track_hover: false, opacity: this._opacity.get(id) ?? 255});
             actor.connect('button-release-event', (_, event) => this._clicked(id, actor, event));
+            actor.connect('motion-event', (_, event) => this._moved(id, actor, event));
+            actor.connect('leave-event', () => this._send('Moved', id, -1, -1));
             actor._blur = new St.Widget();
             actor._image = new St.Widget();
             actor.add_child(actor._blur);
@@ -178,12 +180,26 @@ export default class ProjectKeyExtension extends Extension {
     _clicked(id, actor, event) {
         if (event.get_button() !== Clutter.BUTTON_PRIMARY)
             return Clutter.EVENT_PROPAGATE;
+        this._send('Clicked', id, ...this._pixels(actor, event));
+        return Clutter.EVENT_STOP;
+    }
+
+    // The pointer over the window, so Project Key draws the candidate under it highlighted.
+    _moved(id, actor, event) {
+        this._send('Moved', id, ...this._pixels(actor, event));
+        return Clutter.EVENT_PROPAGATE;
+    }
+
+    // An event's place in pixels from the window's corner.
+    _pixels(actor, event) {
         const [, x, y] = actor.transform_stage_point(...event.get_coords());
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost1', 'Clicked',
-            new GLib.Variant('(sii)', [id, Math.round(x * scale), Math.round(y * scale)]),
-            null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
-        return Clutter.EVENT_STOP;
+        return [Math.round(x * scale), Math.round(y * scale)];
+    }
+
+    _send(method, id, x, y) {
+        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost1', method,
+            new GLib.Variant('(sii)', [id, x, y]), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
     }
 
     // Project Key loaded after the geometry last went out (Fcitx5 loads it when first used).

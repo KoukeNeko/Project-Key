@@ -36,6 +36,7 @@ class CandidateWindow {
  private:
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
   Metrics::PanelHit hitAt(POINT client) const;
+  void hoverAt(POINT client);  // the candidate under the pointer, drawn on a faint highlight
   bool ensureWindow();
   void applyAppearance(int appearance);  // Setting::kAppearance
   void prepareToAppear();                // before the first paint of a showing
@@ -87,6 +88,7 @@ class CandidateWindow {
   float fadeFrom_ = 0, fadeTo_ = 1;
   ULONGLONG fadeStart_ = 0;
   Metrics::PanelHit pressed_;  // what the left button went down on
+  Metrics::PanelHit hover_;
 };
 
 class ModeBadge {

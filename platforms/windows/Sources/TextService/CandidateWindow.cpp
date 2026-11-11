@@ -170,6 +170,16 @@ LRESULT CALLBACK CandidateWindow::WindowProc(HWND hwnd, UINT message, WPARAM wPa
       ScreenToClient(hwnd, &at);
       return self->hitAt(at).kind != PanelHit::kNone ? HTCLIENT : HTTRANSPARENT;
     }
+    case WM_MOUSEMOVE:
+      if (self) {
+        TRACKMOUSEEVENT leave{sizeof(leave), TME_LEAVE, hwnd, 0};
+        TrackMouseEvent(&leave);
+        self->hoverAt({static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))});
+      }
+      return 0;
+    case WM_MOUSELEAVE:
+      if (self) self->hoverAt({-1, -1});
+      return 0;
     case WM_LBUTTONDOWN:
       if (self) self->pressed_ = self->hitAt({static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))});
       return 0;
@@ -187,6 +197,14 @@ LRESULT CALLBACK CandidateWindow::WindowProc(HWND hwnd, UINT message, WPARAM wPa
       return MA_NOACTIVATE;
   }
   return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+void CandidateWindow::hoverAt(POINT client) {
+  PanelHit hit = hitAt(client);
+  if (hit.kind != PanelHit::kCandidate) hit = {};
+  if (hit.kind == hover_.kind && hit.row == hover_.row && hit.index == hover_.index) return;
+  hover_ = hit;
+  InvalidateRect(hwnd_, nullptr, FALSE);
 }
 
 PanelHit CandidateWindow::hitAt(POINT client) const {
@@ -362,6 +380,13 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   }
   if (!wasVisible) prepareToAppear();
   NotifyWinEvent(wasVisible ? EVENT_OBJECT_IME_CHANGE : EVENT_OBJECT_IME_SHOW, hwnd_, OBJID_CLIENT, CHILDID_SELF);
+  // New rows move other candidates under a pointer that has not moved.
+  POINT pointer;
+  hover_ = {};
+  if (GetCursorPos(&pointer) && ScreenToClient(hwnd_, &pointer)) {
+    PanelHit hit = hitAt(pointer);
+    if (hit.kind == PanelHit::kCandidate) hover_ = hit;
+  }
   InvalidateRect(hwnd_, nullptr, FALSE);
   UpdateWindow(hwnd_);
   if (!wasVisible) appear();
@@ -648,6 +673,11 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
       float x = kRowLeft + column * (fonts_.columnWidth() + kCellGap);
       column += span;
       bool on = labeled && content_->selectedRow >= 0 && static_cast<int>(i) == content_->selection;  // on the accent
+      if (!on && hover_.kind == PanelHit::kCandidate && hover_.row == static_cast<int>(r) && hover_.index == static_cast<int>(i)) {
+        auto hover = Brush(target, Color(kText, kHoverAlpha));
+        D2D1_RECT_F cell = D2D1::RectF(x, cellTop, x + span * fonts_.columnWidth() + (span - 1) * kCellGap, cellTop + cellHeight);
+        target->FillRoundedRectangle(D2D1::RoundedRect(cell, kPillRadius, kPillRadius), hover.Get());
+      }
       Line word = Measure(fonts_, candidate, fonts_.candidate());
       float wordTop = cellTop + kCellTop + (kCellLine - word.height) / 2;
       if (labeled) {

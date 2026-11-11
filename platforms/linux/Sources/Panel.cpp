@@ -305,6 +305,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
                                      if (owner_ && content_ && panel_->mapped) show(*owner_, PanelContent(*content_), anchor_);
                                    });
     panel_->clicked = [this](int x, int y) { clickPanel(x, y); };
+    panel_->moved = [this](int x, int y) { hoverPanel(x, y); };
   }
   bool wasVisible = panel_->mapped && !panelFade_.hiding();
   // One window changing shape: it moves and resizes to the new content, across the text when it
@@ -319,6 +320,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   owner_ = &ic;
   anchor_ = anchor;
   content_ = content;
+  hover_ = {};  // the rows may have moved under a pointer that has not
   if (!wasVisible) {
     rounded_ = screen_->composited();
     panel_->setBlur(blurs());
@@ -377,15 +379,27 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   screen_->sync();
 }
 
-void Panel::clickPanel(int x, int y) {
-  if (!clicked || !owner_ || !content_ || panelFade_.hiding()) return;
+PanelHit Panel::hitPanel(int x, int y) const {
+  if (!clicked || !owner_ || !content_ || panelFade_.hiding() || x < 0) return {};
   std::vector<std::vector<int>> spans;
   for (const auto& row : content_->rows) {
     spans.emplace_back();
     for (const std::string& word : row) spans.back().push_back(span(word));
   }
-  PanelHit hit = HitCandidates(spans, !content_->pageLabel.empty(), x / scale_, y / scale_ - shownRowTop(), columnWidth_, content_->columns);
+  return HitCandidates(spans, !content_->pageLabel.empty(), x / scale_, y / scale_ - shownRowTop(), columnWidth_, content_->columns);
+}
+
+void Panel::clickPanel(int x, int y) {
+  PanelHit hit = hitPanel(x, y);
   if (hit.kind != PanelHit::kNone) clicked(*owner_, hit);
+}
+
+void Panel::hoverPanel(int x, int y) {
+  PanelHit hit = hitPanel(x, y);
+  if (hit.kind != PanelHit::kCandidate) hit = {};
+  if (hit.kind == hover_.kind && hit.row == hover_.row && hit.index == hover_.index) return;
+  hover_ = hit;
+  paintPanel();
 }
 
 // From where the window is now, so one fading out turns back. False without a
@@ -709,6 +723,11 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
       int cells = span(row[i]);
       column += cells;
       bool on = labeled && content_->selectedRow >= 0 && static_cast<int>(i) == content_->selection;  // on the accent
+      if (!on && hover_.kind == PanelHit::kCandidate && hover_.row == static_cast<int>(r) && hover_.index == static_cast<int>(i)) {
+        SetColor(cr, kText, kHoverAlpha);
+        RoundedRect(cr, x, cellTop, x + cells * columnWidth_ + (cells - 1) * kCellGap, cellTop + cellHeight, kPillRadius);
+        cairo_fill(cr);
+      }
       Line word(layout(row[i], candidateFont_));
       float wordTop = cellTop + kCellTop + (kCellLine - word.height) / 2;
       if (labeled) {

@@ -139,6 +139,8 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   PKPanelContent *_oldContent;  // what morphFrom: started from
   BOOL _oldProofBelow;
   CGFloat _oldRowTop;
+  PanelHit _hover;  // the candidate under the pointer
+  NSTrackingArea *_tracking;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -150,6 +152,41 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     _progress = 1;
   }
   return self;
+}
+
+// The panel is never key, so only a tracking area that is always active hears the pointer move.
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (_tracking) [self removeTrackingArea:_tracking];
+  _tracking = [[NSTrackingArea alloc]
+      initWithRect:NSZeroRect
+           options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways | NSTrackingInVisibleRect
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:_tracking];
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+  [self hoverAt:event.locationInWindow];
+}
+
+- (void)mouseExited:(NSEvent *)event {
+  [self hoverAt:NSMakePoint(-1, -1)];
+}
+
+- (void)hoverAt:(NSPoint)location {
+  PanelHit hit = self.content ? [self hitAt:location] : PanelHit{};
+  if (hit.kind != PanelHit::kCandidate) hit = PanelHit{};
+  if (hit.kind == _hover.kind && hit.row == _hover.row && hit.index == _hover.index) return;
+  _hover = hit;
+  self.needsDisplay = YES;
+}
+
+// New rows move other candidates under a pointer that has not moved, and the window has not
+// taken its new place yet: the highlight waits for the pointer to move.
+- (void)setContent:(PKPanelContent *)content {
+  _content = content;
+  _hover = PanelHit{};
 }
 
 - (void)morphFrom:(PKPanelContent *)old proofBelow:(BOOL)oldProofBelow rowTop:(CGFloat)rowTop {
@@ -460,6 +497,11 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
       CGFloat x = kRowLeft + column * (ColumnWidth() + kCellGap);
       column += span;
       BOOL on = labeled && self.content.selectedRow >= 0 && (NSInteger)i == self.content.selection;  // on the accent
+      if (!on && _hover.kind == PanelHit::kCandidate && _hover.row == (int)r && _hover.index == (int)i) {
+        [[self.textColor colorWithAlphaComponent:Colors::kHoverAlpha] setFill];
+        NSRect cell = NSMakeRect(x, cellTop, span * ColumnWidth() + (span - 1) * kCellGap, cellHeight);
+        [[NSBezierPath bezierPathWithRoundedRect:cell xRadius:kPillRadius yRadius:kPillRadius] fill];
+      }
       NSString *label = [NSString stringWithFormat:@"%lu", i + 1];
       if (labeled) {
         [label drawAtPoint:NSMakePoint(x + kCellSide, labelTop)

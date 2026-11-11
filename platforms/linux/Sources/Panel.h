@@ -82,6 +82,8 @@ class Panel {
   void paintPanel();
   bool tickPanel();
   void clickPanel(int x, int y);
+  void hoverPanel(int x, int y);
+  Metrics::PanelHit hitPanel(int x, int y) const;
   float proofHeight() const;
   float rowHeight() const;
   float rowTop() const;
@@ -134,6 +136,7 @@ class Panel {
   // progress_ runs from 0 to 1: the rows move from oldRowTop_ and a proof row that comes, goes
   // or changes sides fades from its place in oldContent_ to its new one.
   bool sliding_ = false, resizing_ = false;
+  Metrics::PanelHit hover_;  // the candidate under the pointer
   std::optional<PanelContent> oldContent_;
   bool oldProofBelow_ = false;
   float oldRowTop_ = 0, progress_ = 1;

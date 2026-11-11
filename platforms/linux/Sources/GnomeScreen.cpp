@@ -46,11 +46,13 @@ class PanelHost : public fcitx::dbus::ObjectVTable<PanelHost> {
   void geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
                 int32_t scale);
   void clicked(const std::string& id, int32_t x, int32_t y);  // in pixels from the window's corner
+  void moved(const std::string& id, int32_t x, int32_t y);    // likewise; (-1, -1) as the pointer leaves
 
  private:
   GnomeScreen& screen_;
   FCITX_OBJECT_VTABLE_METHOD(geometry, "Geometry", "iiiiiii", "");
   FCITX_OBJECT_VTABLE_METHOD(clicked, "Clicked", "sii", "");
+  FCITX_OBJECT_VTABLE_METHOD(moved, "Moved", "sii", "");
 };
 
 class GnomeWindow;
@@ -219,6 +221,12 @@ class GnomeWindow final : public Window {
 void PanelHost::clicked(const std::string& id, int32_t x, int32_t y) {
   for (GnomeWindow* window : screen_.shown) {
     if (window->id() == id && window->mapped && window->clicked) window->clicked(x, y);
+  }
+}
+
+void PanelHost::moved(const std::string& id, int32_t x, int32_t y) {
+  for (GnomeWindow* window : screen_.shown) {
+    if (window->id() == id && window->mapped && window->moved) window->moved(x, y);
   }
 }
 

@@ -49,6 +49,8 @@ class Window {
 
   // A left click, in pixels from the frame's origin; set before the window is mapped.
   std::function<void(int x, int y)> clicked;
+  // The pointer over it, likewise; (-1, -1) as it leaves.
+  std::function<void(int x, int y)> moved;
   Frame frame;
   bool mapped = false;
   bool blurred = false;

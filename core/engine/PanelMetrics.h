@@ -74,6 +74,8 @@ constexpr uint32_t kDanger = 0xb3382c;
 constexpr float kDoubtMarkAlpha = 0.7f;
 // While typing, the guess sits on a highlight of kText at this alpha, not the accent of a choice.
 constexpr float kGuessAlpha = 0.12f;
+// A candidate under the pointer, not selected, sits on kText at this alpha.
+constexpr float kHoverAlpha = 0.07f;
 }  // namespace Colors
 
 }  // namespace ProjectKey::Metrics

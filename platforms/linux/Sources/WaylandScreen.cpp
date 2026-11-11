@@ -215,6 +215,15 @@ class WaylandWindow final : public Window {
   void click(int x, int y) {
     if (mapped && clicked) clicked(x - (frame.x - std::min(0, frame.x)), y - (frame.y - std::min(0, frame.y)));
   }
+  // The pointer at (x, y) on the surface; off it when leaving.
+  void move(int x, int y, bool leaving = false) {
+    if (!mapped || !moved) return;
+    if (leaving) {
+      moved(-1, -1);
+    } else {
+      moved(x - (frame.x - std::min(0, frame.x)), y - (frame.y - std::min(0, frame.y)));
+    }
+  }
 
  private:
   // A shared-memory buffer, busy while the compositor reads it.
@@ -318,13 +327,26 @@ const wl_pointer_listener WaylandScreen::kPointerListener = {
           globals->pointerSurface = surface;
           globals->pointerX = wl_fixed_to_int(x);
           globals->pointerY = wl_fixed_to_int(y);
+          for (WaylandWindow* window : globals->screen->windows_) {
+            if (window->surface() == surface) window->move(globals->pointerX, globals->pointerY);
+          }
         },
-    .leave = [](void* data, wl_pointer*, uint32_t, wl_surface*) { static_cast<Globals*>(data)->pointerSurface = nullptr; },
+    .leave =
+        [](void* data, wl_pointer*, uint32_t, wl_surface* surface) {
+          auto* globals = static_cast<Globals*>(data);
+          globals->pointerSurface = nullptr;
+          for (WaylandWindow* window : globals->screen->windows_) {
+            if (window->surface() == surface) window->move(0, 0, /*leaving=*/true);
+          }
+        },
     .motion =
         [](void* data, wl_pointer*, uint32_t, wl_fixed_t x, wl_fixed_t y) {
           auto* globals = static_cast<Globals*>(data);
           globals->pointerX = wl_fixed_to_int(x);
           globals->pointerY = wl_fixed_to_int(y);
+          for (WaylandWindow* window : globals->screen->windows_) {
+            if (window->surface() == globals->pointerSurface) window->move(globals->pointerX, globals->pointerY);
+          }
         },
     .button =
         [](void* data, wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
