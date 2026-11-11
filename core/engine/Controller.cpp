@@ -145,9 +145,8 @@ static void SavePersonal(Environment& env, bool force) {
   if (!env.personalDirty || env.personalPath.empty()) return;
   auto now = std::chrono::steady_clock::now();
   if (!force && now - env.personalSaved < kPersonalSaveSeconds) return;
-  env.personal->save(env.personalPath);
-  env.personalDirty = false;
   env.personalSaved = now;
+  if (env.personal->save(env.personalPath)) env.personalDirty = false;  // else it tries again later
 }
 
 void Controller::makeComposer() {
@@ -724,11 +723,21 @@ std::string ReadWholeFile(const std::string& path) {
   return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-// Adds `line` at the end of the file, which is made, with its folder, when missing.
+// Whether the file's text has `line` (which ends in a newline) as one of its lines, the last one
+// even without its newline, as a file saved by hand may end.
+bool HasLine(const std::string& text, const std::string& line) {
+  std::string lines = "\n" + text + (text.ends_with('\n') ? "" : "\n");
+  return lines.find('\n' + line) != std::string::npos;
+}
+
+// Adds `line` at the end of the file, which is made, with its folder, when missing. A last line
+// without its newline gets one first, or the two would run together.
 bool AppendLine(const std::string& path, const std::string& line) {
   std::error_code error;
-  std::filesystem::create_directories(Utf8Path(path).parent_path(), error);
-  std::ofstream out(Utf8Path(path), std::ios::binary | std::ios::app);
+  std::filesystem::create_directories(Path(path).parent_path(), error);
+  std::string text = ReadWholeFile(path);
+  std::ofstream out(Path(path), std::ios::binary | std::ios::app);
+  if (!text.empty() && !text.ends_with('\n')) out << '\n';
   out << line;
   return out.flush().good();
 }
@@ -748,7 +757,7 @@ bool Controller::addSelectedWord() {
   std::optional<std::pair<std::string, std::string>> word = composer_->wordIn(from, to);
   std::string text = word ? ReadWholeFile(env_.userPhrasesPath) : "";
   std::string line = word ? word->first + ' ' + word->second + '\n' : "";
-  bool already = text.rfind(line, 0) == 0 || text.find('\n' + line) != std::string::npos;
+  bool already = HasLine(text, line);
   // At least two syllables: one is a word of the dictionary already.
   if (!word || to - from < 2 || env_.userPhrasesPath.empty() || already || !AppendLine(env_.userPhrasesPath, line)) {
     client_.beep();
@@ -1111,7 +1120,7 @@ void Controller::promoteSelected() {
   }
   std::string line = word + ' ' + reading + '\n';
   std::string text = ReadWholeFile(env_.userPhrasesPath);
-  bool already = text.rfind(line, 0) == 0 || text.find('\n' + line) != std::string::npos;
+  bool already = HasLine(text, line);
   if (already || !AppendLine(env_.userPhrasesPath, line)) {
     client_.beep();
     return;
@@ -1140,10 +1149,10 @@ void Controller::undoLastLine(const std::string& path, const std::string& line) 
     client_.beep();
     return;
   }
-  text.resize(text.size() - line.size());
-  std::ofstream out(file, std::ios::binary | std::ios::trunc);
-  out << text;
-  if (!out.flush()) {
+  // Cut off in place: rewriting the file would leave it empty if the write stopped half way.
+  std::error_code error;
+  std::filesystem::resize_file(file, text.size() - line.size(), error);
+  if (error) {
     client_.beep();
     return;
   }

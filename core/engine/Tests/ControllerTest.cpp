@@ -871,6 +871,24 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   std::filesystem::remove(env.userPhrasesPath);
 
+  // A file saved by hand ends without a newline: the word goes on a line of its own, and a line
+  // that is there already, last and without its newline, is not added again.
+  std::ofstream(env.userPhrasesPath) << "測試 ㄘㄜˋ-ㄕˋ";
+  Type(controller, "ji3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && controller.handleKey(Special(ProjectKey::Key::kRight)));
+  std::string handWord = controller.candidates()[1];
+  assert(controller.handleKey(Press("+")));
+  assert(ReadFileText(env.userPhrasesPath) == "測試 ㄘㄜˋ-ㄕˋ\n" + handWord + " ㄨㄛˇ\n");
+  EscapeAll(controller, client);
+  std::ofstream(env.userPhrasesPath) << handWord + " ㄨㄛˇ";
+  Type(controller, "ji3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && controller.candidates()[0] == handWord);
+  for (size_t i = 0; i < controller.candidates().size(); i++) controller.handleKey(Special(ProjectKey::Key::kLeft));
+  assert(controller.handleKey(Press("+")));  // beeps: the line is there
+  assert(ReadFileText(env.userPhrasesPath) == handWord + " ㄨㄛˇ");
+  EscapeAll(controller, client);
+  std::filesystem::remove(env.userPhrasesPath);
+
   // Shift+Left and Shift+Right select syllables, marked as a chosen word is, and Enter adds them as a word
   // of the user's own instead of committing; a single syllable, or a syllable without a tone, is refused.
   std::filesystem::remove(env.userPhrasesPath);

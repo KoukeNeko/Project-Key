@@ -167,7 +167,8 @@ bool PersonalModel::save(const std::string& path) const {
     std::filesystem::permissions(temporary, perms::owner_read | perms::owner_write, error);
     if (error) return false;
     out << text;
-    if (!out.good()) return false;
+    out.close();  // flushes: a disk that fills up on the last block must not put a cut file in place
+    if (!out) return false;
   }
   std::filesystem::rename(temporary, PathOf(path), error);  // replaces the old file, on Windows too
   return !error;
