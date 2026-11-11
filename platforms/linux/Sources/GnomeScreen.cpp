@@ -29,12 +29,19 @@ namespace {
 
 constexpr char kExtension[] = "org.projectkey.Panel";
 
+// The extension's interfaces, version 2: the scale and a window's place are doubles, for
+// fractional scales. An extension from before an update, until the next login, has only
+// version 1, so the two do not meet and Fcitx5's panel stands in (problem() says to log in).
+constexpr char kExtensionInterface[] = "org.projectkey.Panel2";
+constexpr char kHostInterface[] = "org.projectkey.PanelHost2";
+
 // Where the extension says the focused window and its monitor's work area are, in
-// GNOME's logical coordinates, and the scale that makes them pixels.
+// GNOME's logical coordinates, and the scale that makes them pixels: the monitor's own,
+// such as 1.25 at 125%.
 struct Geometry {
   int originX = 0, originY = 0;
   int areaX = 0, areaY = 0, areaWidth = 0, areaHeight = 0;
-  int scale = 1;
+  double scale = 1;
 };
 
 class GnomeScreen;
@@ -44,13 +51,13 @@ class PanelHost : public fcitx::dbus::ObjectVTable<PanelHost> {
  public:
   explicit PanelHost(GnomeScreen& screen) : screen_(screen) {}
   void geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
-                int32_t scale);
+                double scale);
   void clicked(const std::string& id, int32_t x, int32_t y);  // in pixels from the window's corner
   void moved(const std::string& id, int32_t x, int32_t y);    // likewise; (-1, -1) as the pointer leaves
 
  private:
   GnomeScreen& screen_;
-  FCITX_OBJECT_VTABLE_METHOD(geometry, "Geometry", "iiiiiii", "");
+  FCITX_OBJECT_VTABLE_METHOD(geometry, "Geometry", "iiiiiid", "");
   FCITX_OBJECT_VTABLE_METHOD(clicked, "Clicked", "sii", "");
   FCITX_OBJECT_VTABLE_METHOD(moved, "Moved", "sii", "");
 };
@@ -60,7 +67,7 @@ class GnomeWindow;
 class GnomeScreen final : public Screen {
  public:
   explicit GnomeScreen(fcitx::dbus::Bus* bus) : bus_(bus), host_(*this), watcher_(*bus) {
-    bus_->addObjectVTable("/projectkey/panel", "org.projectkey.PanelHost1", host_);
+    bus_->addObjectVTable("/projectkey/panel", kHostInterface, host_);
     entry_ = watcher_.watchService(kExtension, [this](const std::string&, const std::string&, const std::string& owner) {
       known_ = false;
       if (!owner.empty()) call("Refresh").send();  // the geometry, for this addon loaded after it last went out
@@ -74,14 +81,16 @@ class GnomeScreen final : public Screen {
   // on screen; apps on Fcitx5's own D-Bus frontend (GTK and Qt under Wayland) give it in
   // their window, which the extension says is the focused one.
   fcitx::Rect caret(const fcitx::InputContext& ic, const fcitx::Rect& anchor) const override {
-    int s = geometry_.scale;
+    double s = geometry_.scale;
     bool relative = ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect);
     int originX = relative ? geometry_.originX : 0, originY = relative ? geometry_.originY : 0;
-    int left = (originX + anchor.left() - geometry_.areaX) * s, top = (originY + anchor.top() - geometry_.areaY) * s;
-    return fcitx::Rect(left, top, left + anchor.width() * s, top + anchor.height() * s);
+    int left = static_cast<int>(std::lround((originX + anchor.left() - geometry_.areaX) * s));
+    int top = static_cast<int>(std::lround((originY + anchor.top() - geometry_.areaY) * s));
+    return fcitx::Rect(left, top, left + static_cast<int>(std::lround(anchor.width() * s)),
+                       top + static_cast<int>(std::lround(anchor.height() * s)));
   }
-  int width() const override { return geometry_.areaWidth * geometry_.scale; }
-  int height() const override { return geometry_.areaHeight * geometry_.scale; }
+  int width() const override { return static_cast<int>(std::lround(geometry_.areaWidth * geometry_.scale)); }
+  int height() const override { return static_cast<int>(std::lround(geometry_.areaHeight * geometry_.scale)); }
   float scale() const override { return static_cast<float>(geometry_.scale); }
   bool composited() override { return true; }
   bool blurs() override { return true; }  // Shell.BlurEffect, in the extension
@@ -96,7 +105,7 @@ class GnomeScreen final : public Screen {
     if (known_) geometry_ = geometry;
   }
   fcitx::dbus::Message call(const char* member) {
-    return bus_->createMethodCall(kExtension, "/org/projectkey/Panel", "org.projectkey.Panel1", member);
+    return bus_->createMethodCall(kExtension, "/org/projectkey/Panel", kExtensionInterface, member);
   }
   const Geometry& geometry() const { return geometry_; }
   int nextId() { return ++windows_; }
@@ -113,7 +122,7 @@ class GnomeScreen final : public Screen {
 };
 
 void PanelHost::geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
-                         int32_t scale) {
+                         double scale) {
   screen_.setGeometry({originX, originY, areaX, areaY, areaWidth, areaHeight, scale});
 }
 
@@ -190,7 +199,8 @@ class GnomeWindow final : public Window {
     if (!write(file)) return;
     const Geometry& g = screen_.geometry();
     auto message = screen_.call("Show");
-    message << id_ << static_cast<int32_t>(frame.x / g.scale + g.areaX) << static_cast<int32_t>(frame.y / g.scale + g.areaY)
+    // The extension moves the place onto the monitor's pixel grid.
+    message << id_ << frame.x / g.scale + g.areaX << frame.y / g.scale + g.areaY
             << static_cast<int32_t>(frame.width) << static_cast<int32_t>(frame.height) << file << blurred
             << static_cast<int32_t>(std::lround(kWindowRadius * g.scale));
     message.send();

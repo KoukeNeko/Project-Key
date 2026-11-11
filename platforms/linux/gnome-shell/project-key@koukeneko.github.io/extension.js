@@ -16,12 +16,15 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 const NAME = 'org.projectkey.Panel';
 // How far the blur spreads, in logical pixels: about what KWin's blur gives on KDE.
 const BLUR_RADIUS = 30;
+// Version 2 carries the scale and the window's place as doubles, for fractional scales (125%).
+// Fcitx5 and this change together; until the next login after an update the old extension
+// keeps running, and the versions not matching leaves Project Key on Fcitx5's own panel.
 const PANEL = `<node>
-  <interface name="org.projectkey.Panel1">
+  <interface name="org.projectkey.Panel2">
     <method name="Show">
       <arg type="s" name="id" direction="in"/>
-      <arg type="i" name="x" direction="in"/>
-      <arg type="i" name="y" direction="in"/>
+      <arg type="d" name="x" direction="in"/>
+      <arg type="d" name="y" direction="in"/>
       <arg type="i" name="width" direction="in"/>
       <arg type="i" name="height" direction="in"/>
       <arg type="s" name="pixels" direction="in"/>
@@ -44,6 +47,8 @@ const PANEL = `<node>
 
 export default class ProjectKeyExtension extends Extension {
     enable() {
+        this._monitor = -1;
+        this._scale = 1;
         this._windows = new Map();
         this._reactive = new Set();
         this._opacity = new Map();
@@ -76,7 +81,7 @@ export default class ProjectKeyExtension extends Extension {
 
     // D-Bus: one of Project Key's windows, x and y in the stage's coordinates; pixels is
     // a file (in XDG_RUNTIME_DIR) of Cairo's ARGB32, premultiplied BGRA in memory, at the
-    // stage's scale. A file, as a D-Bus byte array would cost Fcitx5 a call per byte.
+    // scale _sendGeometry last sent. A file, as a D-Bus byte array would cost Fcitx5 a call per byte.
     // blur asks for what is behind the window, inside its corners of radius (in pixels), blurred.
     Show(id, x, y, width, height, pixels, blur, radius) {
         // Only Project Key's own frames: this must not show any other file of the user's.
@@ -95,7 +100,7 @@ export default class ProjectKeyExtension extends Extension {
             Main.layoutManager.uiGroup.add_child(actor);
             this._windows.set(id, actor);
         }
-        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const scale = this._scale;
         const content = St.ImageContent.new_with_preferred_size(width / scale, height / scale);
         let bytes;
         try {
@@ -115,7 +120,7 @@ export default class ProjectKeyExtension extends Extension {
         actor._image.set_content(content);
         actor._image.set_size(width / scale, height / scale);
         this._shapeBlur(actor, blur ? Math.round(width / scale) : 0, Math.round(height / scale), radius / scale);
-        actor.set_position(x, y);
+        actor.set_position(...this._onPixel(x, y));
         Main.layoutManager.uiGroup.set_child_above_sibling(actor, null);
         actor.show();
     }
@@ -193,12 +198,29 @@ export default class ProjectKeyExtension extends Extension {
     // An event's place in pixels from the window's corner.
     _pixels(actor, event) {
         const [, x, y] = actor.transform_stage_point(...event.get_coords());
-        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        return [Math.round(x * scale), Math.round(y * scale)];
+        return [Math.round(x * this._scale), Math.round(y * this._scale)];
+    }
+
+    // Pixels per stage unit on a monitor. On Wayland the stage is in logical units and each
+    // monitor has a scale of its own, fractional ones (125%) included, while St's scale factor
+    // stays 1. On X11 the stage is in pixels already and St's factor is the UI's integer scale.
+    _monitorScale(monitor) {
+        const ui = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        return ui === 1 && monitor >= 0 ? global.display.get_monitor_scale(monitor) : ui;
+    }
+
+    // A place moved onto the monitor's pixel grid: at a fractional scale a place in between
+    // would have the image resampled, which blurs its text.
+    _onPixel(x, y) {
+        if (this._monitor < 0 || Number.isInteger(this._scale))
+            return [Math.round(x), Math.round(y)];
+        const {x: left, y: top} = global.display.get_monitor_geometry(this._monitor);
+        const snap = (value, origin) => origin + Math.round((value - origin) * this._scale) / this._scale;
+        return [snap(x, left), snap(y, top)];
     }
 
     _send(method, id, x, y) {
-        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost1', method,
+        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost2', method,
             new GLib.Variant('(sii)', [id, x, y]), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
     }
 
@@ -230,15 +252,17 @@ export default class ProjectKeyExtension extends Extension {
     }
 
     // The focused window's surface (where an app's caret is measured from), the work
-    // area of its monitor, and the scale, all in the stage's logical coordinates.
+    // area of its monitor, in the stage's coordinates, and the monitor's pixels per stage unit,
+    // the scale Project Key draws at.
     _sendGeometry() {
         const window = this._window;
         const origin = window ? window.get_buffer_rect() : {x: 0, y: 0};
         const monitor = window ? window.get_monitor() : global.display.get_primary_monitor();
         const area = Main.layoutManager.getWorkAreaForMonitor(monitor);
-        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost1', 'Geometry',
-            new GLib.Variant('(iiiiiii)', [origin.x, origin.y, area.x, area.y, area.width, area.height, scale]),
+        this._monitor = monitor;
+        this._scale = this._monitorScale(monitor);
+        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost2', 'Geometry',
+            new GLib.Variant('(iiiiiid)', [origin.x, origin.y, area.x, area.y, area.width, area.height, this._scale]),
             null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
     }
 }
