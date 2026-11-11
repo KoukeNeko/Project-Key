@@ -210,6 +210,7 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "NextDoubtful", "選完跳到下一個可疑處"},
            {Row::kToggle, "OmitTones", "省略聲調", "開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ"},
            {Row::kToggle, "Abbreviated", "簡拼", "開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音"},
+           {Row::kToggle, "FuzzySounds", "近似音", "開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後"},
            {Row::kToggle, "KeypadPicks", "數字鍵盤選字", "開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音"},
            {Row::kToggle, "RememberChoices", "記住選過的字"},
            {Row::kClearChoices, "", "選字紀錄"},

@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window {
     Bind(NextDoubtful, "NextDoubtful");
     Bind(OmitTones, "OmitTones", false);
     Bind(Abbreviated, "Abbreviated", false);
+    Bind(FuzzySounds, "FuzzySounds", false);
     Bind(KeypadPicks, "KeypadPicks", false);
     Bind(RememberChoices, "RememberChoices");
     Bind(CapsLockToggle, "CapsLockToggle", false);

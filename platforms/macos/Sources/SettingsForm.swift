@@ -6,6 +6,7 @@ import SwiftUI
 struct SettingsForm: View {
   @AppStorage(PKOmitTonesKey) private var omitTones = false
   @AppStorage(PKAbbreviatedKey) private var abbreviated = false
+  @AppStorage(PKFuzzySoundsKey) private var fuzzySounds = false
   @AppStorage(PKKeypadPicksKey) private var keypadPicks = false
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
@@ -42,6 +43,10 @@ struct SettingsForm: View {
         Toggle(isOn: $abbreviated) {
           Text("簡拼")
           Text("開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音")
+        }
+        Toggle(isOn: $fuzzySounds) {
+          Text("近似音")
+          Text("開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後")
         }
         Toggle(isOn: $keypadPicks) {
           Text("數字鍵盤選字")

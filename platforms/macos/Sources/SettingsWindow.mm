@@ -6,6 +6,7 @@ NSString *const PKProofPreviewKey = @"ProofPreview";
 NSString *const PKChoosingProofKey = @"ChoosingProof";
 NSString *const PKAbbreviatedKey = @"Abbreviated";
 NSString *const PKOmitTonesKey = @"OmitTones";
+NSString *const PKFuzzySoundsKey = @"FuzzySounds";
 NSString *const PKRememberChoicesKey = @"RememberChoices";
 NSString *const PKShiftToggleKey = @"ShiftToggle";
 NSString *const PKFullWidthToggleKey = @"FullWidthToggle";
@@ -85,6 +86,7 @@ void PKShowDataFolder(void) {
   [PKDefaults() registerDefaults:@{
     PKAbbreviatedKey : @NO,
     PKOmitTonesKey : @NO,
+    PKFuzzySoundsKey : @NO,
     PKRememberChoicesKey : @YES,
     PKShiftToggleKey : @YES,
     PKFullWidthToggleKey : @YES,

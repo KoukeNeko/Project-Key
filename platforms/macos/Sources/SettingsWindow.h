@@ -11,6 +11,7 @@ FOUNDATION_EXPORT NSString *const PKProofPreviewKey;     // the bubble beside th
 FOUNDATION_EXPORT NSString *const PKChoosingProofKey;    // the row under the candidates while choosing
 FOUNDATION_EXPORT NSString *const PKAbbreviatedKey;      // 簡拼: a lone symbol stands for a syllable
 FOUNDATION_EXPORT NSString *const PKOmitTonesKey;        // a key in the place a whole syllable ends in starts the next
+FOUNDATION_EXPORT NSString *const PKFuzzySoundsKey;       // 近似音: the words of a near sound are offered too
 FOUNDATION_EXPORT NSString *const PKRememberChoicesKey;  // the user override model
 FOUNDATION_EXPORT NSString *const PKShiftToggleKey;      // a lone Shift switches 中/英
 FOUNDATION_EXPORT NSString *const PKFullWidthToggleKey;  // ⇧ Space switches full-width
