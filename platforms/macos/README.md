@@ -99,6 +99,10 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 
 候選視窗支援滑鼠操作：點選候選字即選取，點選第一列尾端的頁碼或箭頭即展開或收合候選格線。輸入時顯示的候選列亦可點選，點選後可繼續輸入。
 
+## 朗讀程式
+
+選字時，候選視窗出現或反白的候選改變，即由 VoiceOver 朗讀反白的候選字及其於該列的位置，例如「程式，1/6」。VoiceOver 依焦點朗讀，而候選視窗不取得焦點，因此以朗讀通知（`NSAccessibilityAnnouncementRequestedNotification`）讀出。輸入時顯示的候選列不朗讀。
+
 ## 尚未實作
 
 - 聯想詞：McBopomofo 的聯想詞資料須另行產生。

@@ -576,6 +576,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   BOOL _hiding;     // fading out; a show before it ends fades back in
   NSUInteger _fades;  // counts fades, so a fade-out that ends after a show does not order the window out
   NSTimer *_morphTimer;  // moves and resizes the window to _target, with the view's progress
+  NSString *_announced;  // what VoiceOver last read of the selection; nil while typing or hidden
 }
 
 + (instancetype)shared {
@@ -732,10 +733,32 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   }
   _view.needsDisplay = YES;
   [self orderFront];
+  [self announceSelection];
+}
+
+// VoiceOver follows the focus, which stays in the app being typed into, and this panel never
+// becomes key: an announcement reads the selected candidate and its place in the row instead.
+- (void)announceSelection {
+  PKPanelContent *content = _view.content;
+  NSString *text = nil;
+  if (content.selectedRow >= 0 && content.selectedRow < (NSInteger)content.rows.count) {
+    NSArray<NSString *> *row = content.rows[content.selectedRow];
+    if (content.selection >= 0 && content.selection < (NSInteger)row.count) {
+      text = [NSString stringWithFormat:@"%@，%ld/%lu", row[content.selection], (long)content.selection + 1, (unsigned long)row.count];
+    }
+  }
+  BOOL changed = text && ![text isEqualToString:_announced];
+  _announced = text;
+  if (!changed) return;
+  NSAccessibilityPostNotificationWithUserInfo(_panel, NSAccessibilityAnnouncementRequestedNotification, @{
+    NSAccessibilityAnnouncementKey : text,
+    NSAccessibilityPriorityKey : @(NSAccessibilityPriorityHigh),
+  });
 }
 
 - (void)hide {
   if (!self.isVisible) return;
+  _announced = nil;
   _hiding = YES;
   NSUInteger fade = ++_fades;
   if (ReducesMotion()) {
