@@ -843,6 +843,17 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   std::filesystem::remove(excludedPath);
 
+  // Shift+Backspace excludes as Delete does, for a keyboard without one; a lone Backspace still closes the list.
+  Type(controller, "ji3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  KeyEvent shiftBackspace = Special(ProjectKey::Key::kBackspace);
+  shiftBackspace.shift = true;
+  assert(controller.handleKey(shiftBackspace) && controller.panel()->excluding && !std::filesystem::exists(excludedPath));
+  assert(controller.handleKey(shiftBackspace) && client.marked != "我");
+  assert(ReadFileText(excludedPath) == "我 ㄨㄛˇ\n");
+  EscapeAll(controller, client);
+  std::filesystem::remove(excludedPath);
+
   // + makes the selected candidate one of the user's own words, which come first; Backspace takes it back.
   std::filesystem::remove(env.userPhrasesPath);
   Type(controller, "ji3");

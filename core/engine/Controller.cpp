@@ -755,9 +755,11 @@ bool Controller::addSelectedWord() {
 }
 
 bool Controller::handleChoosing(const KeyEvent& event) {
-  bool confirming = excludeConfirm_ && event.key == Key::kForwardDelete;
+  // Delete, or Shift+Backspace where there is no Delete key (a laptop's takes fn).
+  bool excludes = event.key == Key::kForwardDelete || (event.key == Key::kBackspace && event.shift);
+  bool confirming = excludeConfirm_ && excludes;
   if (!confirming) excludeConfirm_ = false;  // any other key takes the question back
-  std::string undoable = event.key == Key::kBackspace ? undoLine_ : "";
+  std::string undoable = event.key == Key::kBackspace && !event.shift ? undoLine_ : "";
   std::string undoPath = undoPath_;
   notice_.clear();
   undoLine_.clear();
@@ -833,6 +835,10 @@ bool Controller::handleChoosing(const KeyEvent& event) {
       }
       break;
     case Key::kBackspace:
+      if (event.shift) {
+        excludeSelected();
+        return true;
+      }
       choosing_ = false;
       if (!symbolReading_.empty()) composer_->backspace();
       break;

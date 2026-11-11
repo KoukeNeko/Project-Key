@@ -123,7 +123,7 @@ ProjectKey::Environment &SharedEnvironment() {
       return static_cast<int>([PKCandidatePanel columnsSpannedBy:String(candidate)]);
     };
     env->tabKeycap = "⇥";
-    env->deleteKeycap = "⌦";
+    env->deleteKeycap = "⇧⌫";  // as well as ⌦, which a laptop only has as fn Delete
     env->backspaceKeycap = "⌫";
     env->shiftTabKeycap = "⇧⇥";
     env->appTypesUnhandledKeys = true;
