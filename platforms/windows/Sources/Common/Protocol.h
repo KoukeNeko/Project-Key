@@ -190,7 +190,7 @@ struct Message {
   Request type = Request::kState;
   KeyEvent key;         // kKeyDown
   bool down = false;    // kShift
-  std::string context;  // kKeyDown of Tab in 英: text before the caret, for turning English typed there into Zhuyin
+  std::string context;  // kKeyDown: text before the caret, for Tab in 英 and for a composition the key may start in 中
   int row = 0, index = 0;  // kClickCandidate
 };
 

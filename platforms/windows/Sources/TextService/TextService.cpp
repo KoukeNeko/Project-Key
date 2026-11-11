@@ -375,7 +375,10 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
   Protocol::Message message{Protocol::Request::kKeyDown, keyEvent(wParam)};
   // In 英, Tab may turn the Zhuyin just typed into a composition; the engine checks it is still there.
   // Apps reached through the IMM32 compatibility layer expose no text, so there Tab stays a Tab.
-  if (englishMode_ && wParam == VK_TAB) message.context = textBeforeCaret(context);
+  // In 中, the key that may start a composition sends the text before the caret too: the
+  // composition is ranked after the Han characters there, as on macOS and Linux.
+  bool typing = !message.key.characters.empty() && !message.key.control && !message.key.alt && !message.key.win;
+  if ((englishMode_ && wParam == VK_TAB) || (!englishMode_ && !composition_ && typing)) message.context = textBeforeCaret(context);
   std::optional<Protocol::Reply> reply = engine_.send(message);
   if (!reply) return;
   // In 英, the preview offers to turn Zhuyin into a composition, which needs the
