@@ -988,11 +988,20 @@ std::optional<std::pair<std::string, std::string>> Composer::wordIn(size_t from,
   if (from >= to || to > readings.size()) return std::nullopt;
   std::string word, reading;
   for (size_t i = from; i < to; i++) {
-    if (readings[i].find(kAnyTone) != std::string::npos) return std::nullopt;
+    // Without a tone it stands for several; punctuation (_punctuation_…) is no part of a word.
+    if (readings[i].find(kAnyTone) != std::string::npos || readings[i][0] == '_') return std::nullopt;
     reading += (i > from ? grid_.readingSeparator() : "") + readings[i];
   }
   for (const Segment& segment : segments_) {
     if (segment.start + segment.length <= from || segment.start >= to) continue;
+    if (fuzzy_) {  // a word of a near sound is listed under what was typed, which is not its reading
+      std::string own;
+      for (size_t i = segment.start; i < segment.start + segment.length; i++) {
+        own += (i > segment.start ? grid_.readingSeparator() : "") + readings[i];
+      }
+      std::vector<Formosa::Gramambular2::LanguageModel::Unigram> words = lm_->getUnigrams(own);
+      if (std::none_of(words.begin(), words.end(), [&](const auto& unigram) { return unigram.value() == segment.text; })) return std::nullopt;
+    }
     std::vector<size_t> starts;  // where each character begins
     for (size_t at = 0; at < segment.text.size();) {
       starts.push_back(at);

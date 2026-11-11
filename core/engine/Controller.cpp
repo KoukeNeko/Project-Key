@@ -1094,18 +1094,18 @@ void Controller::excludeSelected() {
     client_.beep();  // the Zhuyin itself is no word
     return;
   }
+  std::string word = candidates_[selection_];
+  std::string reading = composer_->readingOf(*segment, word, choosesFromEnd());
+  if (reading.empty() || reading.find('_') != std::string::npos) {  // punctuation (_punctuation_…) is no word either
+    client_.beep();
+    return;
+  }
   if (!excludeConfirm_) {  // the first press asks, in the proof row
     excludeConfirm_ = true;
     refresh();
     return;
   }
   excludeConfirm_ = false;
-  std::string word = candidates_[selection_];
-  std::string reading = composer_->readingOf(*segment, word, choosesFromEnd());
-  if (reading.empty()) {
-    client_.beep();
-    return;
-  }
   std::string path = ExcludedPhrasesPath(env_);
   if (!AppendLine(path, word + ' ' + reading + '\n')) {
     client_.beep();
@@ -1141,8 +1141,9 @@ void Controller::promoteSelected() {
     refresh();
     return;
   }
-  // A reading typed without a tone stands for several; the file's lines have the whole one.
-  if (reading.empty() || reading.find(Composer::kAnyTone) != std::string::npos) {
+  // A reading typed without a tone stands for several; the file's lines have the whole one. Punctuation
+  // (_punctuation_…) is no word.
+  if (reading.empty() || reading.find(Composer::kAnyTone) != std::string::npos || reading.find('_') != std::string::npos) {
     client_.beep();
     return;
   }

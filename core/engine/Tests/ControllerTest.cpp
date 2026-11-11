@@ -859,6 +859,15 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   std::filesystem::remove(excludedPath);
 
+  // Punctuation is no word: Delete and + leave the files alone.
+  std::filesystem::remove(env.userPhrasesPath);
+  assert(controller.handleKey(Shifted("<")) && controller.handleKey(Special(ProjectKey::Key::kDown)));
+  controller.handleKey(Special(ProjectKey::Key::kForwardDelete));
+  controller.handleKey(Special(ProjectKey::Key::kForwardDelete));
+  controller.handleKey(Press("+"));
+  assert(!std::filesystem::exists(excludedPath) && !std::filesystem::exists(env.userPhrasesPath));
+  EscapeAll(controller, client);
+
   // + makes the selected candidate one of the user's own words, which come first; Backspace takes it back.
   std::filesystem::remove(env.userPhrasesPath);
   Type(controller, "ji3");
@@ -909,6 +918,13 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(shiftLeft) && controller.handleKey(Special(ProjectKey::Key::kReturn)));  // one syllable
   assert(!std::filesystem::exists(env.userPhrasesPath));
   EscapeAll(controller, client);
+  // Nor is a selection over punctuation a word.
+  Type(controller, "ji3");
+  assert(controller.handleKey(Shifted("<")));
+  Type(controller, "ji3");
+  assert(controller.handleKey(shiftLeft) && controller.handleKey(shiftLeft) && controller.handleKey(shiftLeft));
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && !std::filesystem::exists(env.userPhrasesPath));
+  EscapeAll(controller, client);
 
   // A word of a near sound has no reading of the typed Zhuyin's to add: + says so in the proof row.
   settings.set(Setting::kFuzzySounds, 1);
@@ -917,6 +933,15 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kRight)) && controller.candidates()[1] == "怎");
   assert(controller.handleKey(Press("+")));
   assert(controller.panel()->segments[0] == "「怎」是近似音，不能加入自訂詞" && !std::filesystem::exists(env.userPhrasesPath));
+  EscapeAll(controller, client);
+  // Nor through a selection of syllables, once picked.
+  Type(controller, "y/3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && controller.handleKey(Special(ProjectKey::Key::kRight)));
+  assert(controller.candidates()[1] == "怎" && controller.handleKey(Special(ProjectKey::Key::kReturn)));
+  Type(controller, "ji3");
+  assert(client.marked.rfind("怎", 0) == 0);
+  assert(controller.handleKey(shiftLeft) && controller.handleKey(shiftLeft));
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && !std::filesystem::exists(env.userPhrasesPath));
   EscapeAll(controller, client);
   settings.remove(Setting::kFuzzySounds);
 
