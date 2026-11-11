@@ -102,7 +102,6 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 ## 尚未實作
 
 - 聯想詞：McBopomofo 的聯想詞資料須另行產生。
-- 整句預覽列不顯示游標位置，未完成的注音一律繪於句尾。
 - 候選清單的排序仍依詞庫分數，未依前後文調整。
 - Universal binary：僅編譯本機架構。程式碼簽章為 ad-hoc，尚未經公證，無法散布至其他電腦。
 
