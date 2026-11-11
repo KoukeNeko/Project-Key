@@ -137,6 +137,7 @@ class Panel {
   // or changes sides fades from its place in oldContent_ to its new one.
   bool sliding_ = false, resizing_ = false;
   Metrics::PanelHit hover_;  // the candidate under the pointer
+  std::vector<std::vector<int>> spans_;  // grid columns of content_'s candidates, for hitPanel
   std::optional<PanelContent> oldContent_;
   bool oldProofBelow_ = false;
   float oldRowTop_ = 0, progress_ = 1;

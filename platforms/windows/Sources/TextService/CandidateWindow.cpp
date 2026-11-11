@@ -209,12 +209,7 @@ void CandidateWindow::hoverAt(POINT client) {
 
 PanelHit CandidateWindow::hitAt(POINT client) const {
   if (!clicked || !content_ || hiding_) return {};
-  std::vector<std::vector<int>> spans;
-  for (const auto& row : content_->rows) {
-    spans.emplace_back();
-    for (const std::string& word : row) spans.back().push_back(fonts_.span(Widen(word)));
-  }
-  return HitCandidates(spans, !content_->pageLabel.empty(), client.x / scale_, client.y / scale_ - shownRowTop(), fonts_.columnWidth(),
+  return HitCandidates(spans_, !content_->pageLabel.empty(), client.x / scale_, client.y / scale_ - shownRowTop(), fonts_.columnWidth(),
                        content_->columns);
 }
 
@@ -335,6 +330,12 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   bool oldProofBelow = proofBelow_;
   float oldRowTop = content_ ? shownRowTop() : 0;
   content_ = content;
+  // Measured once here, not on each mouse move: DirectWrite lays out every candidate.
+  spans_.clear();
+  for (const auto& row : content_->rows) {
+    spans_.emplace_back();
+    for (const std::string& word : row) spans_.back().push_back(fonts_.span(Widen(word)));
+  }
 
   D2D1_SIZE_F size = fittingSize();
   UINT dpi = DpiOf(owner);

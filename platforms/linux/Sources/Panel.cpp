@@ -320,6 +320,12 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
   owner_ = &ic;
   anchor_ = anchor;
   content_ = content;
+  // Measured once here, not on each pointer move: Pango lays out every candidate.
+  spans_.clear();
+  for (const auto& row : content_->rows) {
+    spans_.emplace_back();
+    for (const std::string& word : row) spans_.back().push_back(span(word));
+  }
   hover_ = {};  // the rows may have moved under a pointer that has not
   if (!wasVisible) {
     rounded_ = screen_->composited();
@@ -381,12 +387,7 @@ void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fci
 
 PanelHit Panel::hitPanel(int x, int y) const {
   if (!clicked || !owner_ || !content_ || panelFade_.hiding() || x < 0) return {};
-  std::vector<std::vector<int>> spans;
-  for (const auto& row : content_->rows) {
-    spans.emplace_back();
-    for (const std::string& word : row) spans.back().push_back(span(word));
-  }
-  return HitCandidates(spans, !content_->pageLabel.empty(), x / scale_, y / scale_ - shownRowTop(), columnWidth_, content_->columns);
+  return HitCandidates(spans_, !content_->pageLabel.empty(), x / scale_, y / scale_ - shownRowTop(), columnWidth_, content_->columns);
 }
 
 void Panel::clickPanel(int x, int y) {

@@ -89,6 +89,7 @@ class CandidateWindow {
   ULONGLONG fadeStart_ = 0;
   Metrics::PanelHit pressed_;  // what the left button went down on
   Metrics::PanelHit hover_;
+  std::vector<std::vector<int>> spans_;  // grid columns of content_'s candidates, for hitAt
 };
 
 class ModeBadge {
