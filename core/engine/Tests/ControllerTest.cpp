@@ -882,6 +882,13 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   std::filesystem::remove(env.userPhrasesPath);
 
+  // A file saved by an editor that starts it with a byte order mark: its first word still counts.
+  std::ofstream(env.userPhrasesPath) << "\xEF\xBB\xBF鍵測 ㄘㄜˋ-ㄕˋ\n";
+  Type(controller, "hk4g4");
+  assert(client.marked == "鍵測");
+  EscapeAll(controller, client);
+  std::filesystem::remove(env.userPhrasesPath);
+
   // A file saved by hand ends without a newline: the word goes on a line of its own, and a line
   // that is there already, last and without its newline, is not added again.
   std::ofstream(env.userPhrasesPath) << "測試 ㄘㄜˋ-ㄕˋ";

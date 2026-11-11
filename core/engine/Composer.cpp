@@ -261,9 +261,12 @@ namespace {
 // Read, not mapped as McBopomofo maps it: on Windows a mapped file cannot be saved over, so the
 // user could not edit it while Project Key runs. The path is UTF-8, which Windows' narrow file
 // calls would read in the ANSI code page.
+// A byte order mark, which some editors start a UTF-8 file with, would join the first word.
 std::string ReadUserFile(const std::string& path) {
   std::ifstream file(std::filesystem::path(std::u8string(path.begin(), path.end())), std::ios::binary);
-  return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+  std::string text(std::istreambuf_iterator<char>(file), {});
+  if (text.rfind("\xEF\xBB\xBF", 0) == 0) text.erase(0, 3);
+  return text;
 }
 }  // namespace
 
