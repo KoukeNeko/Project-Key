@@ -120,7 +120,7 @@ endif()
 configure_file(projectkey-addon.conf.in projectkey-addon.conf @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-addon.conf" RENAME projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/addon")
 install(FILES projectkey.conf DESTINATION "${FCITX_INSTALL_PKGDATADIR}/inputmethod")
-install(FILES "${MCBOPOMOFO}/Source/Data/data.txt" DESTINATION "${DATA_DIR}")
+install(FILES "${MCBOPOMOFO}/Source/Data/data.txt" "${MCBOPOMOFO}/Source/Data/associated-phrases-v2.txt" DESTINATION "${DATA_DIR}")
 install(FILES "${MCBOPOMOFO}/LICENSE.txt" RENAME McBopomofo-LICENSE.txt DESTINATION "${DATA_DIR}")
 # The emoji, and the license of their annotations (tools/emoji/build-emoji.py).
 install(FILES ../../core/data/emoji.txt ../../core/data/EMOJI-NOTICE.txt DESTINATION "${DATA_DIR}")

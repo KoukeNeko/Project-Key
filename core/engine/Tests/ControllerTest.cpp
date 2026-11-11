@@ -1,6 +1,6 @@
 // Drives the Controller with key events against a fake client, covering what a
 // user does: type a sentence, fix a doubtful word, commit.
-// Usage: ControllerTest <path to data.txt>
+// Usage: ControllerTest <path to data.txt>, with associated-phrases-v2.txt beside it
 #undef NDEBUG
 #include <cassert>
 #include <climits>
@@ -175,6 +175,8 @@ int main(int argc, char** argv) {
   env.lm = std::make_shared<Lexicon>();
   env.lm->loadLanguageModel(argv[1]);
   assert(env.lm->isDataModelLoaded());
+  env.lm->loadAssociatedPhrasesV2((std::filesystem::path(argv[1]).parent_path() / "associated-phrases-v2.txt").string().c_str());
+  assert(env.lm->isAssociatedPhrasesV2Loaded());
   env.userModel = ProjectKey::NewUserModel();
   env.settings = &settings;
   env.isEnglish = [](const std::string& text) { return text == "hello" || text == "hello world" || text == "ja"; };
@@ -733,6 +735,8 @@ int main(int argc, char** argv) {
     };
     fs::path bundled = root / "bundled", downloaded = root / "downloaded";
     release(bundled, "2026-01-01", true);
+    // Not in releases: the bundled one always serves.
+    fs::copy_file(fs::path(argv[1]).parent_path() / "associated-phrases-v2.txt", bundled / "associated-phrases-v2.txt");
     release(downloaded / "2025-12-01", "2025-12-01", true);
     release(downloaded / "2026-03-01.partial", "2026-03-01", true);
     release(downloaded / "2026-04-01", "2026-04-01", false);
@@ -746,7 +750,7 @@ int main(int argc, char** argv) {
     release(downloaded / "2026-02-01", "2026-02-01", true);
     assert(ModelsDirectory(bundled, downloaded) == downloaded / "2026-02-01");
     assert(UseNewestModels(env, bundled.string(), downloaded.string()));
-    assert(env.lm != before && env.models == loads + 1);
+    assert(env.lm != before && env.models == loads + 1 && env.lm->isAssociatedPhrasesV2Loaded());
     assert(!fs::exists(downloaded / "2025-12-01") && fs::exists(downloaded / "2026-03-01.partial"));
     Type(controller, "ji3");
     assert(client.marked == "我");
@@ -1027,6 +1031,55 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   env.lm->loadEmoji("");
   std::filesystem::remove(emojiPath);
+
+  // 聯想詞, off by default: Enter commits 輸入 and nothing follows.
+  Type(controller, "gj bj4");
+  assert(client.marked == "輸入");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && !client.panelVisible);
+  // On, a row without digit labels offers what follows the word committed; Shift with a digit commits
+  // one, as do a click and, when they pick, the keypad's digits.
+  settings.set(Setting::kAssociatedPhrases, 1);
+  before = client.committed.size();
+  Type(controller, "gj bj4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)));
+  assert(client.committed.substr(before) == "輸入" && client.panelVisible && client.panel.selectedRow == -1);
+  const std::vector<std::string> following = client.panel.rows[0];
+  assert(following.size() > 2 && following[0] == "法");
+  assert(controller.handleKey(Shifted("!")) && !client.panelVisible && client.marked.empty());
+  assert(client.committed.substr(before) == "輸入法");
+  before = client.committed.size();
+  Type(controller, "gj bj4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && client.panelVisible);
+  controller.clickCandidate(0, 1);
+  assert(client.committed.substr(before) == "輸入" + following[1] && !client.panelVisible);
+  before = client.committed.size();
+  Type(controller, "gj bj4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && client.panelVisible);  // Tab sends it too
+  KeyEvent keypadThree = Press("3");
+  keypadThree.numpad = true;
+  settings.set(Setting::kKeypadPicks, 1);
+  assert(controller.handleKey(keypadThree));
+  settings.remove(Setting::kKeypadPicks);
+  assert(client.committed.substr(before) == "輸入" + following[2] && !client.panelVisible);
+  // Escape closes the row; any other key closes it and goes on: Enter to the app, Zhuyin into a new composition.
+  before = client.committed.size();
+  Type(controller, "gj bj4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && client.panelVisible);
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && !client.panelVisible);
+  Type(controller, "gj bj4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && client.panelVisible);
+  assert(!controller.handleKey(Special(ProjectKey::Key::kReturn)) && !client.panelVisible);
+  Type(controller, "gj bj4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && client.panelVisible);
+  Type(controller, "j");
+  assert(client.marked == "ㄨ" && client.committed.substr(before) == "輸入輸入輸入");
+  EscapeAll(controller, client);
+  // A word typed without tones (ㄨㄛㄇㄣ) has the phrases of its first character that start with it.
+  Type(controller, "jiap");
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && HasSuffix(client.committed, "我們"));
+  assert(client.panelVisible && client.panel.rows[0][0] == "的");
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && !client.panelVisible);
+  settings.remove(Setting::kAssociatedPhrases);
 
   // A click from anywhere, the server's pipe on Windows included, picks nothing it should not.
   Type(controller, "rup ");

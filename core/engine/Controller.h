@@ -90,6 +90,7 @@ enum class Setting {
   kKeypadPicks,         // the keypad's digits pick from the row shown while typing
   kGridColumns,         // candidates per row: 0 to 3 for 6 to 9 columns
   kKeyboardLayout,      // 0 大千, 1 倚天, 2 許氏, 3 倚天 26 鍵, 4 IBM
+  kAssociatedPhrases,   // 聯想詞: after Enter or Tab commits, a row offers the phrases that commonly follow its last word
 };
 
 class Settings {
@@ -296,6 +297,14 @@ class Controller {
   void pickFromTypingRow(int index);  // typing goes on
 
   void commit();
+  // Commits `text`, the composition as Enter or Tab sends it, then offers the phrases that commonly
+  // follow its last word in a row of their own (Setting::kAssociatedPhrases).
+  void commitWithAssociated(const std::string& text);
+  // While that row shows: Shift with a digit, or a keypad digit as Setting::kKeypadPicks says, commits that
+  // phrase, and Escape closes the row; true for those. Any other key closes the row and goes on (false).
+  bool handleAssociated(const KeyEvent& event);
+  void pickAssociated(int index);
+  std::vector<std::string> associated_;  // the row's phrases, while it shows
   // Text the composition put in the document, for what the user typed (Environment::personal).
   void learn(const std::string& committed);
   void refresh();

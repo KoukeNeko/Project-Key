@@ -71,6 +71,8 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | | Delete 或 Shift+Backspace | 排除反白的候選，須按兩次；第一次按下時反白轉為紅色並顯示確認（說明同 macOS 版） |
 | | Esc | 展開時收合，否則返回組字 |
 | | Backspace | 返回組字 |
+| 送出後 | Shift+1–9 | 開啟「聯想詞」（預設關閉）時，以 Enter 或 Tab 送出後，候選視窗列出常接在最後一個詞之後的詞（「輸入」之後為「法」等）；按 Shift 加數字鍵或點選即送出該詞。主鍵盤的數字仍為注音，開啟「數字鍵盤選字」時，數字鍵盤的 1–9 亦可選取（說明同 macOS 版） |
+| | Esc | 關閉聯想詞；按其他鍵亦關閉，該鍵照常作用 |
 | 任何時候 | Caps Lock | 於設定開啟 Caps Lock 切換中英（預設關閉）時，切換中／英；大寫鎖定亮起時字母仍輸入小寫，大寫須按 Shift |
 | | 單按 Shift | 切換中／英，游標下方短暫顯示目前的語言與寬度，如「ㄅ半」「Ａ半」 |
 | | Shift+Space | 切換全形／半形，游標下方短暫顯示目前的語言與寬度，如「ㄅ全」「Ａ半」（說明同 macOS 版） |
@@ -87,7 +89,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 - 選字位置（游標後或游標前）、每列欄數。
 - 鍵盤排列：大千（預設）、倚天、許氏、倚天 26 鍵、IBM。
-- 開關：選完跳到下一個可疑處、簡拼、近似音（預設關閉）、數字鍵盤選字（預設關閉）、記住選過的字（可清除紀錄；開啟時亦自送出的文字學習）、Caps Lock（預設關閉）、單按 Shift 切換中英與 Shift+Space 切換全形（預設開啟），以及 Tab 的英文轉注音與注音轉英文。
+- 開關：選完跳到下一個可疑處、簡拼、近似音（預設關閉）、聯想詞（預設關閉）、數字鍵盤選字（預設關閉）、記住選過的字（可清除紀錄；開啟時亦自送出的文字學習）、Caps Lock（預設關閉）、單按 Shift 切換中英與 Shift+Space 切換全形（預設開啟），以及 Tab 的英文轉注音與注音轉英文。
 - 候選視窗外觀：自動（預設，依 App 的淺色或深色模式，每次顯示時讀取）、淺色、深色，或 Acrylic、Mica、Mica Alt 三種材質；材質亦依 App 的模式採用淺色或深色。
 - 輸入時與選字時的整句預覽：永遠／有可疑字時／關閉，預設為有可疑字時。
 - 恢復原廠設定：「恢復設定」將所有設定改回預設值，保留自訂詞、排除詞與選字紀錄；「一併刪除資料」另刪除這些資料（`phrases.txt`、`exclude-phrases.txt`、`personal.txt`）並清除引擎伺服器記憶體中的選字紀錄。兩者皆保留下載的選字模型。
@@ -127,7 +129,6 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 尚未實作
 
-- 聯想詞。
 - 自行建置的上下文模型：`tools/bigram-trainer` 的訓練腳本為 shell script，於 Windows 上須另行執行，或以 Git Bash 執行 `fetch-models.sh` 下載發行版所用的同一組檔案。存在 `bigram.bin`、`chars.bin` 時，`build.ps1` 一併安裝；存在補充詞彙後的 `data.txt` 時，以其取代 McBopomofo 的詞庫。缺少這些檔案時，選字結果與 McBopomofo 相同。發行版已附有這些檔案。
 - 選過的字僅存於伺服器記憶體，登出或重新安裝後清空（同 macOS）；自送出文字學得的字串次數存於 `%LOCALAPPDATA%\Project Key\personal.txt`，設定中的「清除」一併清空。Store App、沙盒中與低完整性的 App 不依此紀錄排序，亦不寫入紀錄，以免經由候選順序得知於其他 App 輸入過的文字。
 - 程式碼簽章與安裝程式：目前以 PowerShell 腳本安裝，僅支援 x64。

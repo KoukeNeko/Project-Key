@@ -7,6 +7,7 @@ struct SettingsForm: View {
   @AppStorage(PKOmitTonesKey) private var omitTones = false
   @AppStorage(PKAbbreviatedKey) private var abbreviated = false
   @AppStorage(PKFuzzySoundsKey) private var fuzzySounds = false
+  @AppStorage(PKAssociatedPhrasesKey) private var associatedPhrases = false
   @AppStorage(PKKeypadPicksKey) private var keypadPicks = false
   @AppStorage(PKRememberChoicesKey) private var rememberChoices = true
   @AppStorage(PKShiftToggleKey) private var shiftToggle = true
@@ -50,6 +51,10 @@ struct SettingsForm: View {
         Toggle(isOn: $fuzzySounds) {
           Text("近似音")
           Text("開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後")
+        }
+        Toggle(isOn: $associatedPhrases) {
+          Text("聯想詞")
+          Text("開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」，按 ⇧ 與數字鍵選取")
         }
         Toggle(isOn: $keypadPicks) {
           Text("數字鍵盤選字")

@@ -40,6 +40,9 @@
       <tk:SettingsCard Header="近似音" Description="開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後">
         <ToggleSwitch x:Name="FuzzySounds" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
+      <tk:SettingsCard Header="聯想詞" Description="開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」，按 Shift+數字鍵選取">
+        <ToggleSwitch x:Name="AssociatedPhrases" OffContent="關閉" OnContent="開啟" />
+      </tk:SettingsCard>
       <tk:SettingsCard Header="數字鍵盤選字" Description="開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音">
         <ToggleSwitch x:Name="KeypadPicks" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>

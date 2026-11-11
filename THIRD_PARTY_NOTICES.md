@@ -9,8 +9,8 @@ Project Key 以 MIT 授權發布（見 [LICENSE](LICENSE)）。本檔列出 repo
 來源：https://github.com/openvanilla/McBopomofo ，commit `257da536ddaf590aae0e74e6adb9b415988344f6`。
 
 - `tests/corpus/corpus.tsv` 的 `zhuyin` 欄位由 McBopomofo 詞庫自動標註後再人工修正。
-- macOS 輸入法（`platforms/macos`）在建置時下載 McBopomofo 的引擎（gramambular2、Mandarin、McBopomofoLM）並連結進執行檔，詞庫 `data.txt` 隨 App 發布。App 內附授權條文 `McBopomofo-LICENSE.txt`。
-- Windows 輸入法（`platforms/windows`）同樣在建置時下載並連結這些引擎；建置腳本為了讓 MSVC 編譯，會改寫兩個檔案中 `string_view` 迭代器的宣告（見 `build.ps1`）。詞庫 `data.txt` 與 `McBopomofo-LICENSE.txt` 安裝在同一個資料夾。
+- macOS 輸入法（`platforms/macos`）在建置時下載 McBopomofo 的引擎（gramambular2、Mandarin、McBopomofoLM）並連結進執行檔，詞庫 `data.txt` 與由其產生的聯想詞表 `associated-phrases-v2.txt` 隨 App 發布。App 內附授權條文 `McBopomofo-LICENSE.txt`。
+- Windows 輸入法（`platforms/windows`）同樣在建置時下載並連結這些引擎；建置腳本為了讓 MSVC 編譯，會改寫兩個檔案中 `string_view` 迭代器的宣告（見 `build.ps1`）。詞庫 `data.txt`、聯想詞表 `associated-phrases-v2.txt` 與 `McBopomofo-LICENSE.txt` 安裝在同一個資料夾。
 
 ```
 MIT License

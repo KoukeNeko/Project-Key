@@ -308,7 +308,7 @@ jobs:
               # CMakeLists.txt installs them, with their notice, from the trainer's cache.
               %w[data.txt bigram.bin chars.bin sentence.bin].each { |file| (buildpath/"tools/bigram-trainer/.cache").install resource(file) }
               (buildpath/"tools/bigram-trainer/.cache/models-version.txt").write "@MODELS_VERSION@\n"  # as fetch-models.sh records it
-              system "make", "-C", "mcbopomofo/Source/Data", "data.txt"
+              system "make", "-C", "mcbopomofo/Source/Data", "data.txt", "associated-phrases-v2.txt"
               system "cmake", "-S", "platforms/linux", "-B", "build", "-G", "Ninja",
                      "-DCMAKE_C_COMPILER=/usr/bin/cc", "-DCMAKE_CXX_COMPILER=/usr/bin/c++",
                      "-DMCBOPOMOFO=#{buildpath}/mcbopomofo", "-DREQUIRE_MODELS=ON", *std_cmake_args

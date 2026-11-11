@@ -47,28 +47,34 @@ if (-not (Test-Path "$Mcb\.git")) {
   Invoke-Native git -C $Mcb remote add origin https://github.com/openvanilla/McBopomofo
 }
 $Data = Join-Path $Mcb 'Source\Data\data.txt'
+$Associated = Join-Path $Mcb 'Source\Data\associated-phrases-v2.txt'
 # Again whenever MCBOPOMOFO_COMMIT moves, with the dictionary built from it.
 if ((& git -C $Mcb rev-parse -q --verify HEAD 2>$null) -ne $McbCommit) {
   Invoke-Native git -C $Mcb fetch -q --depth 1 origin $McbCommit
   Invoke-Native git -C $Mcb checkout -q FETCH_HEAD
-  Remove-Item $Data -ErrorAction SilentlyContinue
+  Remove-Item $Data, $Associated -ErrorAction SilentlyContinue
 }
-if (-not (Test-Path $Data)) {
+if (-not (Test-Path $Associated)) {
   $python = (& uv python find 3.12 2>$null) ; if (-not $python) { Invoke-Native uv python install 3.12; $python = & uv python find 3.12 }
   $env:PYTHONUTF8 = '1'
   Push-Location (Join-Path $Mcb 'Source\Data')
   try {
-    # The Makefile's data.txt recipe, without make.
-    Invoke-Native $python -m curation.builders.frequency_builder
-    Invoke-Native $python -m curation.compilers.main_compiler --heterophony1 heterophony1.list --heterophony2 heterophony2.list `
-      --heterophony3 heterophony3.list --phrase_freq PhraseFreq.txt --bpmf_mappings BPMFMappings.txt --bpmf_base BPMFBase.txt `
-      --punctuations BPMFPunctuations.txt --symbols Symbols.txt --macros Macros.txt --output data-raw.txt
-    Invoke-Native $python -m curation.compilers.postprocess --input data-raw.txt --directive Postprocess.txt --output data.txt
+    # The Makefile's data.txt and associated-phrases-v2.txt recipes, without make.
+    if (-not (Test-Path $Data)) {
+      Invoke-Native $python -m curation.builders.frequency_builder
+      Invoke-Native $python -m curation.compilers.main_compiler --heterophony1 heterophony1.list --heterophony2 heterophony2.list `
+        --heterophony3 heterophony3.list --phrase_freq PhraseFreq.txt --bpmf_mappings BPMFMappings.txt --bpmf_base BPMFBase.txt `
+        --punctuations BPMFPunctuations.txt --symbols Symbols.txt --macros Macros.txt --output data-raw.txt
+      Invoke-Native $python -m curation.compilers.postprocess --input data-raw.txt --directive Postprocess.txt --output data.txt
+    }
+    Invoke-Native $python -m curation.builders.phrase_deriver data.txt associated-phrases-v2.txt associated-punctuation.txt
   } finally { Pop-Location }
   # Python on Windows writes CRLF; the engine reads LF lines.
-  $bytes = [IO.File]::ReadAllBytes($Data)
-  $text = [Text.Encoding]::UTF8.GetString($bytes).Replace("`r`n", "`n")
-  [IO.File]::WriteAllBytes($Data, [Text.UTF8Encoding]::new($false).GetBytes($text))
+  foreach ($file in $Data, $Associated) {
+    $bytes = [IO.File]::ReadAllBytes($file)
+    $text = [Text.Encoding]::UTF8.GetString($bytes).Replace("`r`n", "`n")
+    [IO.File]::WriteAllBytes($file, [Text.UTF8Encoding]::new($false).GetBytes($text))
+  }
 }
 
 $Engine = Join-Path $Mcb 'Source\Engine'
@@ -175,6 +181,7 @@ Copy-Item $Icon "$Out\Settings"
 # trained, the dictionary with the words McBopomofo lacks (replacing McBopomofo's)
 # and the context ranking model; the server falls back to unigrams without it.
 if (Test-Path "$Trained\data.txt") { Copy-Item "$Trained\data.txt" $Out } else { Copy-Item $Data $Out }
+Copy-Item $Associated $Out  # derived from McBopomofo's data.txt, whichever dictionary is used
 Copy-Item "$Mcb\LICENSE.txt" "$Out\McBopomofo-LICENSE.txt"
 Copy-Item "$PSScriptRoot\..\..\core\data\emoji.txt", "$PSScriptRoot\..\..\core\data\EMOJI-NOTICE.txt" $Out  # the emoji, and the license of their annotations
 Copy-Item "$PSScriptRoot\..\..\LICENSE" "$Out\LICENSE.txt"

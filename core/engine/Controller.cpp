@@ -122,6 +122,7 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kCandidatePosition:
     case Setting::kGridColumns:
     case Setting::kKeyboardLayout:
+    case Setting::kAssociatedPhrases:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
       return 0;
@@ -151,6 +152,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kKeypadPicks: return "KeypadPicks";
     case Setting::kGridColumns: return "GridColumns";
     case Setting::kKeyboardLayout: return "KeyboardLayout";
+    case Setting::kAssociatedPhrases: return "AssociatedPhrases";
   }
   return "";
 }
@@ -222,6 +224,7 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   }
   if (!lm->isDataModelLoaded()) return false;
   lm->loadEmoji(Utf8(Path(bundled) / "emoji.txt"));  // not a model: the bundled one always serves
+  lm->loadAssociatedPhrasesV2(Utf8(Path(bundled) / "associated-phrases-v2.txt").c_str());  // likewise
   auto bigram = std::make_shared<Bigram>();
   auto chars = std::make_shared<CharModel>();
   env.lm = lm;
@@ -390,6 +393,7 @@ bool Controller::handleKey(const KeyEvent& original) {
     event.capsLock = false;
     event.characters = lowered;
   }
+  if (!associated_.empty() && handleAssociated(event)) return true;
 
   if (event.control || event.alt || event.win) {
     forgetEnglishRun();
@@ -617,11 +621,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
       // when Tab offers English instead.
       if (empty) return false;
       composer_->endOpenSyllable();  // 為 for ㄨㄟ typed last without a tone, where 簡拼 is off
-      std::string sentence = composer_->text() + composer_->pendingReading();
-      client_.insertText(sentence);
-      learn(sentence);
-      composer_->clear();
-      commit();
+      commitWithAssociated(composer_->text() + composer_->pendingReading());
       return true;
     }
     case Key::kReturn:
@@ -631,10 +631,7 @@ bool Controller::handleComposing(const KeyEvent& event) {
       // Zhuyin, which is a candidate of its own; Zhuyin that is no word yet goes as it is.
       composer_->showSymbols();
       refresh();
-      client_.insertText(shown_);
-      learn(shown_);
-      composer_->clear();
-      commit();
+      commitWithAssociated(shown_);
       return true;
     case Key::kBackspace:
       if (empty) return false;
@@ -1199,6 +1196,10 @@ void Controller::pickFromTypingRow(int index) {
 }
 
 void Controller::clickCandidate(int row, int index) {
+  if (!associated_.empty()) {
+    if (row == 0 && index >= 0 && index < static_cast<int>(associated_.size())) pickAssociated(index);
+    return;
+  }
   // From the window, or on Windows from any app through the server's pipe: anything may come.
   if (row < 0 || index < 0 || index >= static_cast<int>(candidates_.size()) || row >= static_cast<int>(candidates_.size())) return;
   if (!choosing_) {
@@ -1274,6 +1275,7 @@ void Controller::showPanel(const PanelContent& content) {
 }
 
 void Controller::hidePanel() {
+  associated_.clear();
   client_.hideHint();
   if (!panel_) return;
   panel_.reset();
@@ -1299,6 +1301,65 @@ void Controller::commit() {
   }
   choosing_ = false;
   hidePanel();
+}
+
+void Controller::commitWithAssociated(const std::string& text) {
+  std::vector<std::string> phrases;
+  const std::vector<Segment>& segments = composer_->segments();
+  // The last word, unless the text ends otherwise (in a syllable sent as its Zhuyin), or it is punctuation.
+  if (env_.settings->flag(Setting::kAssociatedPhrases) && !segments.empty() && !segments.back().text.empty() &&
+      segments.back().reading[0] != '_' && text.ends_with(segments.back().text)) {
+    const Segment& last = segments.back();
+    // A syllable typed without a tone has no reading to look up, so then the phrases are those that
+    // start with the word's first character, in any reading.
+    size_t first = 0;
+    NextCodePoint(last.text, first);
+    std::vector<McBopomofo::AssociatedPhrasesV2::Phrase> found =
+        last.reading.find(Composer::kAnyTone) == std::string::npos
+            ? env_.lm->findAssociatedPhrasesV2(last.text, McBopomofo::AssociatedPhrasesV2::SplitReadings(last.reading))
+            : env_.lm->findAssociatedPhrasesV2(last.text.substr(0, first), {});
+    for (const auto& phrase : found) {
+      if (phrase.value.size() > last.text.size() && phrase.value.starts_with(last.text)) phrases.push_back(phrase.value.substr(last.text.size()));
+    }
+    phrases.resize(firstRowSize(phrases));
+  }
+  client_.insertText(text);
+  learn(text);
+  composer_->clear();
+  commit();
+  if (phrases.empty()) return;
+  PanelContent content;
+  content.columns = columns();
+  content.rows = {phrases};
+  content.selectedRow = -1;  // no digit labels: the digits alone still type Zhuyin
+  content.selection = -1;
+  showPanel(content);
+  associated_ = std::move(phrases);
+}
+
+bool Controller::handleAssociated(const KeyEvent& event) {
+  // Shift with a digit picks, as in McBopomofo: the digits alone are Zhuyin (大千's 1 is ㄅ).
+  static constexpr std::string_view kShiftedDigits = "!@#$%^&*(";
+  char c = SingleCharacter(event);
+  size_t index = std::string::npos;
+  if (event.numpad && c >= '1' && c <= '9' && env_.settings->flag(Setting::kKeypadPicks)) {
+    index = c - '1';
+  } else if (event.shift && !event.control && !event.alt && !event.win && c) {
+    index = kShiftedDigits.find(c);
+  }
+  if (index < associated_.size()) {
+    pickAssociated(static_cast<int>(index));
+    return true;
+  }
+  hidePanel();
+  return event.key == Key::kEscape;
+}
+
+void Controller::pickAssociated(int index) {
+  std::string phrase = associated_[index];
+  hidePanel();
+  client_.insertText(phrase);
+  learn(phrase);
 }
 
 void Controller::refresh() {
