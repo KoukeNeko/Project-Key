@@ -47,7 +47,7 @@ sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://koukeneko.github.io/Project-Key/apt/key.asc | sudo tee /etc/apt/keyrings/projectkey.asc >/dev/null
 echo "deb [signed-by=/etc/apt/keyrings/projectkey.asc] https://koukeneko.github.io/Project-Key/apt trixie main" | sudo tee /etc/apt/sources.list.d/projectkey.list
 sudo apt update
-url=$(curl -fsSL https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest | grep -o 'https://[^"]*projectkey-data[^"]*\.deb')
+url=$(curl -fsSL https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest | grep -o 'https://[^"]*projectkey-data[^"]*\.deb"' | tr -d '"')
 curl -fsSLO "$url" -O "$url.asc"
 export GNUPGHOME=$(mktemp -d) && gpg --import /etc/apt/keyrings/projectkey.asc &&
   gpg --verify fcitx5-projectkey-data_*.deb.asc fcitx5-projectkey-data_*.deb &&
@@ -63,7 +63,7 @@ gpgcheck=0
 repo_gpgcheck=1
 gpgkey=https://koukeneko.github.io/Project-Key/rpm/key.asc
 EOF
-url=$(curl -fsSL https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest | grep -o 'https://[^"]*projectkey-data[^"]*\.rpm')
+url=$(curl -fsSL https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest | grep -o 'https://[^"]*projectkey-data[^"]*\.rpm"' | tr -d '"')
 curl -fsSLO "$url" -O "$url.asc"
 export GNUPGHOME=$(mktemp -d) && curl -fsSL https://koukeneko.github.io/Project-Key/rpm/key.asc | gpg --import &&
   gpg --verify fcitx5-projectkey-data-*.rpm.asc fcitx5-projectkey-data-*.rpm &&
