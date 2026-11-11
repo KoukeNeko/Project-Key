@@ -1,9 +1,19 @@
 #!/bin/sh
-# The installer runs as root; the input method is registered and started in the console user's session.
-user="$(stat -f %Su /dev/console)"
-[ "$user" != root ] || exit 0
-uid="$(id -u "$user")"
-app="$(eval echo "~$user")/Library/Input Methods/ProjectKey.app"
-pkill -x ProjectKey || true
-launchctl asuser "$uid" sudo -u "$user" "$app/Contents/MacOS/ProjectKey" --register
-launchctl asuser "$uid" sudo -u "$user" open -g "$app"
+# Registers and starts the input method just installed. $2 is where the package went: the home
+# folder of the user it was installed for (enable_currentUserHome), not always the console user's.
+app="$2/Library/Input Methods/ProjectKey.app"
+[ -d "$app" ] || exit 0
+if [ "$(id -u)" = 0 ]; then
+  # Run as root: act in that user's session only, never on other users' input methods.
+  user="$(stat -f %Su "$2")"
+  uid="$(id -u "$user")" || exit 0
+  pkill -u "$uid" -x ProjectKey || true
+  launchctl asuser "$uid" sudo -u "$user" "$app/Contents/MacOS/ProjectKey" --register || true
+  launchctl asuser "$uid" sudo -u "$user" open -g "$app" || true
+else
+  pkill -u "$(id -u)" -x ProjectKey || true
+  "$app/Contents/MacOS/ProjectKey" --register || true
+  open -g "$app" || true
+fi
+# A failure to start it leaves it to be added in System Settings; the files are in place.
+exit 0
