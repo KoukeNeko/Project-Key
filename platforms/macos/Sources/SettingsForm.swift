@@ -14,7 +14,7 @@ struct SettingsForm: View {
   @AppStorage(PKCapsLockToggleKey) private var capsLockToggle = false
   @AppStorage(PKEnglishToZhuyinKey) private var englishToZhuyin = true
   @AppStorage(PKZhuyinToEnglishKey) private var zhuyinToEnglish = true
-  @AppStorage(PKAppearanceKey) private var appearance = 1
+  @AppStorage(PKAppearanceKey) private var appearance = 3
   @AppStorage(PKProofPreviewKey) private var proofPreview = 1
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
   @AppStorage(PKCandidatePositionKey) private var candidatePosition = 1
@@ -84,10 +84,11 @@ struct SettingsForm: View {
       }
       Section("外觀") {
         Picker("候選視窗", selection: $appearance) {
+          Text("自動").tag(3)
+          Text("淺色").tag(2)
           Text("深色").tag(0)
-          Text("Liquid Glass").tag(1)
+          if PKGlassAvailable() { Text("Liquid Glass").tag(1) }
         }
-        .disabled(!PKGlassAvailable())
         Picker("輸入時的整句預覽", selection: $proofPreview) {
           Text("永遠").tag(0)
           Text("有可疑字時").tag(1)

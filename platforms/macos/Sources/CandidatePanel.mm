@@ -33,8 +33,13 @@ NSColor *const kMuted = Hex(Colors::kMuted);
 NSColor *const kAccent = Hex(Colors::kAccent);
 NSColor *const kAccentSoft = Hex(Colors::kAccentSoft);
 NSColor *const kDanger = Hex(Colors::kDanger);
-NSColor *const kDoubtMark = Hex(Colors::kAccentSoft, Colors::kDoubtMarkAlpha);
 NSColor *const kEdge = Hex(0x000000, 0.5);
+NSColor *const kLightBackground = Hex(Colors::Light::kBackground);
+NSColor *const kLightLine = Hex(Colors::Light::kLine);
+NSColor *const kLightText = Hex(Colors::Light::kText);
+NSColor *const kLightMuted = Hex(Colors::Light::kMuted);
+NSColor *const kLightAccentSoft = Hex(Colors::Light::kAccentSoft);
+NSColor *const kLightEdge = Hex(0x000000, 0.12);
 
 // macOS corners; the other metrics are PanelMetrics.h's, shared with Windows and Linux.
 constexpr CGFloat kRadius = 14, kPillRadius = 8;
@@ -53,6 +58,15 @@ CGFloat Ease(CGFloat t) {
 
 BOOL UsesGlass() {
   return PKGlassAvailable() && [NSUserDefaults.standardUserDefaults integerForKey:PKAppearanceKey] == 1;
+}
+
+// 淺色, or 自動 while the system is in light mode; read at each show, so a switch of the system's
+// mode takes effect with the next candidates.
+BOOL UsesLight() {
+  NSInteger appearance = [NSUserDefaults.standardUserDefaults integerForKey:PKAppearanceKey];
+  if (appearance != 3) return appearance == 2;
+  NSAppearance *system = NSApp ? NSApp.effectiveAppearance : NSAppearance.currentDrawingAppearance;
+  return ![[system bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]] isEqualToString:NSAppearanceNameDarkAqua];
 }
 
 // Wraps `content` in a Liquid Glass view, or returns it as is for the dark style.
@@ -117,6 +131,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 @property(nonatomic, strong) PKPanelContent *content;
 @property(nonatomic) BOOL proofBelow;  // window above the text: proof row last, next to the text
 @property(nonatomic) BOOL glass;  // on Liquid Glass: no fill, system label colors
+@property(nonatomic) BOOL light;  // the light fill and colors (淺色)
 - (NSSize)fittingSize;
 // Moves the selection highlight to the content's selection, sliding there when animated.
 - (void)moveSelectionAnimated:(BOOL)animated;
@@ -241,11 +256,15 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (NSColor *)textColor {
-  return self.glass ? NSColor.labelColor : kText;
+  return self.glass ? NSColor.labelColor : self.light ? kLightText : kText;
 }
 
 - (NSColor *)mutedColor {
-  return self.glass ? NSColor.secondaryLabelColor : kMuted;
+  return self.glass ? NSColor.secondaryLabelColor : self.light ? kLightMuted : kMuted;
+}
+
+- (NSColor *)accentSoftColor {
+  return self.light ? kLightAccentSoft : kAccentSoft;
 }
 
 - (NSSize)fittingSize {
@@ -334,9 +353,9 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   NSRect bounds = self.bounds;
   if (!self.glass) {
     NSBezierPath *shape = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(bounds, 0.25, 0.25) xRadius:kRadius yRadius:kRadius];
-    [kBackground setFill];
+    [(self.light ? kLightBackground : kBackground) setFill];
     [shape fill];
-    [kEdge setStroke];
+    [(self.light ? kLightEdge : kEdge) setStroke];
     shape.lineWidth = 0.5;
     [shape stroke];
   }
@@ -367,7 +386,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   CGContextSetAlpha(context, alpha);
   CGContextBeginTransparencyLayer(context, NULL);
   if (content.rows) {
-    [(self.glass ? NSColor.separatorColor : kLine) setFill];
+    [(self.glass ? NSColor.separatorColor : self.light ? kLightLine : kLine) setFill];
     NSRectFill(NSMakeRect(0, below ? top - 1 : height, NSWidth(self.bounds), 1));
   }
   // drawProofAt: draws self.content; an old proof row fading out is drawn from the old content.
@@ -393,7 +412,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   [outside appendBezierPath:face];
   outside.windingRule = NSWindingRuleEvenOdd;
   [outside addClip];
-  [[NSColor.blackColor colorWithAlphaComponent:0.35] setFill];
+  [[NSColor.blackColor colorWithAlphaComponent:self.light ? 0.15 : 0.35] setFill];
   [[NSBezierPath bezierPathWithRoundedRect:NSOffsetRect(cap, 0, kKeyLip) xRadius:kKeyRadius yRadius:kKeyRadius] fill];
   [NSGraphicsContext restoreGraphicsState];
   [[self.mutedColor colorWithAlphaComponent:0.16] setFill];
@@ -443,7 +462,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
       [reading drawAtPoint:NSMakePoint(*at, textTop) withAttributes:muted];
       *at += [self widthOf:reading font:self->_proofFont];
     } else if (self.content.caret < length && self.content.activeSegment < 0) {
-      [kAccentSoft setFill];
+      [self.accentSoftColor setFill];
       NSRectFill(NSMakeRect(*at, lineTop + 1, 1, kProofLine - 2));
     }
   };
@@ -451,7 +470,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   for (NSUInteger i = 0; i < self.content.segments.count; i++) {
     NSString *segment = self.content.segments[i];
     BOOL active = (NSInteger)i == self.content.activeSegment;
-    NSDictionary *attributes = Attributes(_proofFont, active ? kAccentSoft : self.mutedColor);
+    NSDictionary *attributes = Attributes(_proofFont, active ? self.accentSoftColor : self.mutedColor);
     CGFloat left = x;
     NSUInteger split = self.content.caret > start && self.content.caret < start + segment.length ? self.content.caret - start : 0;
     if (split) {
@@ -466,7 +485,9 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
       [segment drawAtPoint:NSMakePoint(x, textTop) withAttributes:attributes];
       x += [self widthOf:segment font:_proofFont];
     }
-    NSColor *mark = active ? kAccentSoft : [self.content.doubtful containsIndex:i] ? kDoubtMark : nil;
+    NSColor *mark = active ? self.accentSoftColor
+                    : [self.content.doubtful containsIndex:i] ? [self.accentSoftColor colorWithAlphaComponent:Colors::kDoubtMarkAlpha]
+                                                              : nil;
     if (mark) {
       [mark setFill];
       NSRect line = NSMakeRect(left + kMarkInset, markTop, x - left - 2 * kMarkInset, kMarkHeight);
@@ -612,7 +633,11 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
 }
 
 - (void)useCurrentAppearance {
-  BOOL glass = UsesGlass();
+  BOOL glass = UsesGlass(), light = !glass && UsesLight();
+  if (light != _view.light) {
+    _view.light = light;
+    _view.needsDisplay = YES;
+  }
   if (glass != _view.glass || !_panel.contentView) {
     _view.glass = glass;
     [_view removeFromSuperview];
@@ -745,6 +770,7 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
   PKCandidateView *view = [[PKCandidateView alloc] initWithFrame:NSZeroRect];
   view.content = content;
   view.proofBelow = proofBelow;
+  view.light = UsesLight();  // Liquid Glass needs a window; a picture of it is drawn dark
   [view moveSelectionAnimated:NO];
   NSSize size = [view fittingSize];
   view.frame = NSMakeRect(0, 0, size.width, size.height);
@@ -829,13 +855,13 @@ static NSRect Beside(NSRect badge, NSRect rect) {
 
 - (void)show:(NSString *)label below:(NSRect)lineRect {
   constexpr CGFloat kSide = kBadgeSide, kHold = kBadgeHoldMs / 1000.0, kFadeIn = kBadgeFadeInMs / 1000.0, kFadeOut = kBadgeFadeOutMs / 1000.0;
-  BOOL glass = UsesGlass();
+  BOOL glass = UsesGlass(), light = !glass && UsesLight();
+  _labelHost.layer.backgroundColor = glass ? nil : (light ? kLightBackground : kBackground).CGColor;
+  _labelHost.layer.borderColor = glass ? nil : (light ? kLightEdge : kEdge).CGColor;
+  _labelHost.layer.borderWidth = glass ? 0 : 0.5;
+  _label.textColor = glass ? NSColor.labelColor : light ? kLightText : kText;
   if (glass != _glass || !_panel.contentView) {
     _glass = glass;
-    _labelHost.layer.backgroundColor = glass ? nil : kBackground.CGColor;
-    _labelHost.layer.borderColor = glass ? nil : kEdge.CGColor;
-    _labelHost.layer.borderWidth = glass ? 0 : 0.5;
-    _label.textColor = glass ? NSColor.labelColor : kText;
     [_labelHost removeFromSuperview];
     _panel.contentView = Container(_labelHost, glass, kPillRadius);
   }

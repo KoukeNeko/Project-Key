@@ -76,6 +76,10 @@ constexpr float kDoubtMarkAlpha = 0.7f;
 constexpr float kGuessAlpha = 0.12f;
 // A candidate under the pointer, not selected, sits on kText at this alpha.
 constexpr float kHoverAlpha = 0.07f;
+// The light theme (macOS 淺色): the same accent and danger; the soft accent darker, to read on white.
+namespace Light {
+constexpr uint32_t kBackground = 0xf7f8f9, kLine = 0xdde2e6, kText = 0x1d2226, kMuted = 0x66717a, kAccentSoft = 0x14806f;
+}  // namespace Light
 }  // namespace Colors
 
 }  // namespace ProjectKey::Metrics

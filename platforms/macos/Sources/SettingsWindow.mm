@@ -113,7 +113,7 @@ BOOL PKRemoveUserWords(void) {
     PKCapsLockToggleKey : @NO,
     PKEnglishToZhuyinKey : @YES,
     PKZhuyinToEnglishKey : @YES,
-    PKAppearanceKey : @(PKGlassAvailable() ? 1 : 0),
+    PKAppearanceKey : @3,  // 自動
     PKProofPreviewKey : @1,
     PKChoosingProofKey : @1,
     PKCandidatePositionKey : @1,  // before the cursor, as the system Zhuyin input does

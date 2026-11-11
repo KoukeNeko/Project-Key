@@ -5,7 +5,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// NSUserDefaults key for the window style: 0 dark, 1 Liquid Glass (macOS 26 and later).
+// NSUserDefaults key for the window style: 0 dark, 1 Liquid Glass (macOS 26 and later), 2 light,
+// 3 light or dark as the system is (the default).
 FOUNDATION_EXPORT NSString *const PKAppearanceKey;
 FOUNDATION_EXPORT BOOL PKGlassAvailable(void);  // C linkage, for SettingsForm.swift
 
