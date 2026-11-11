@@ -1,0 +1,18 @@
+Origin: Project Key
+Label: Project Key
+Codename: noble
+Date: Wed, 11 Nov 2026 03:51:34 UTC
+Architectures: amd64
+Components: main
+MD5Sum:
+ eeb2f6a6272446580c22afdcccbb803d 1340 main/binary-amd64/Packages
+ ef810d1690ad011e63d6f5839bdbda5c 739 main/binary-amd64/Packages.gz
+ 3d983cefd907751fc7be098599d00958 75 main/binary-amd64/Release
+SHA1:
+ 61bf1e64cc383ff6ff056303ae45b36d99e1cc56 1340 main/binary-amd64/Packages
+ a8012b7060524de011362accd0ed7d8b4a13a763 739 main/binary-amd64/Packages.gz
+ 98c05fe6c462b0ac1e1450f7884cf3c9658a1e92 75 main/binary-amd64/Release
+SHA256:
+ 31da65c6b330eba3b5c63dd54b538bb89da071fe0e115c1ae488c46bab2c6115 1340 main/binary-amd64/Packages
+ da1c7cedb895b0e280ef041569acd3818e2bcfce8f9ec9eab3b60580ef2d616f 739 main/binary-amd64/Packages.gz
+ 3607a1a94c098b2a50fa62f3eafdc0469ef9aebeca7ff087027fed92e1e491a8 75 main/binary-amd64/Release
