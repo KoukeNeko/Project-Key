@@ -148,7 +148,16 @@ class GnomeWindow final : public Window {
     message << id_;
     message.send();
   }
-  void setBlur(bool on) override { blurred = on; }  // the next frame carries it
+  void setBlur(bool on) override {
+    blurred = on;  // the next frame carries it
+    // Without blur the alpha is painted, so a fade's last opacity must not stay on the actor.
+    if (!on && opacity_ != 255) {
+      opacity_ = 255;
+      auto message = screen_.call("Opacity");
+      message << id_ << opacity_;
+      message.send();
+    }
+  }
   // The extension fades its actor, blur and all; a painted alpha would leave the blur at full strength.
   bool setOpacity(float alpha) override {
     if (!blurred) return false;

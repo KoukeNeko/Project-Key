@@ -240,9 +240,12 @@ void X11Window::unmap() {
 // The region KWin blurs: the window's rounded rectangle, one row of pixels at
 // a time through the corners, so no blur shows outside them.
 void X11Window::setBlur(bool on) {
+  bool was = blurred;
   blurred = on;
   if (!on) {
     xcb_delete_property(screen_.connection_, id_, screen_.blurAtom_);
+    // Without blur the alpha is painted, so a fade's last opacity must not stay on the window.
+    if (was) xcb_delete_property(screen_.connection_, id_, screen_.opacityAtom_);
     return;
   }
   int radius = static_cast<int>(std::lround(kWindowRadius * screen_.scale_));
