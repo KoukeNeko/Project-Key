@@ -14,6 +14,7 @@ license=(MIT CC-BY-SA-4.0 LGPL-2.1-or-later)  # the program; bigram.bin, chars.b
 depends=(fcitx5 enchant hunspell-en_us libxcb cairo pango wayland qt6-base libadwaita libsoup3 json-glib)
 makedepends=(cmake ninja python git curl)
 optdepends=('noto-fonts-cjk: Chinese candidate text')
+options=(!debug)  # no debug package
 
 prepare() {
   rm -rf pk && mkdir pk

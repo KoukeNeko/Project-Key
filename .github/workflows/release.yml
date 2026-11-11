@@ -86,7 +86,7 @@ jobs:
       - run: |
           useradd -m builder
           chown -R builder .
-          su builder -c 'cd platforms/linux/arch && makepkg --noconfirm -f OPTIONS=-debug'
+          su builder -c 'cd platforms/linux/arch && makepkg --noconfirm -f'
       - uses: actions/upload-artifact@v4
         with:
           name: arch
@@ -105,7 +105,7 @@ jobs:
     steps:
       - run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git curl make dpkg-dev debhelper fakeroot cmake ninja-build g++ python3 pkg-config \
+          apt-get install -y --no-install-recommends ca-certificates git curl make build-essential dpkg-dev debhelper fakeroot cmake ninja-build g++ python3 pkg-config \
             libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev \
             libwayland-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev
       - uses: actions/checkout@v4

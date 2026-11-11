@@ -17,7 +17,11 @@ cp -R "$SETTINGS" "$WORK/root/Applications/"
 
 # Not relocatable: the installer would otherwise update a copy of the bundle it finds elsewhere.
 pkgbuild --analyze --root "$WORK/root" "$WORK/components.plist" >/dev/null
-for i in 0 1; do /usr/libexec/PlistBuddy -c "Add :$i:BundleIsRelocatable bool false" "$WORK/components.plist"; done
+# Some pkgbuild versions list the key already, others do not.
+for i in 0 1; do
+  /usr/libexec/PlistBuddy -c "Set :$i:BundleIsRelocatable false" "$WORK/components.plist" 2>/dev/null ||
+    /usr/libexec/PlistBuddy -c "Add :$i:BundleIsRelocatable bool false" "$WORK/components.plist"
+done
 pkgbuild --root "$WORK/root" --component-plist "$WORK/components.plist" --scripts pkg \
   --identifier "$ID" --version "$VERSION" --install-location / "$WORK/component.pkg" >/dev/null
 
