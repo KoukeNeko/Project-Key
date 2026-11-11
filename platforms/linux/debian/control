@@ -11,6 +11,8 @@ Build-Depends: debhelper-compat (= 13), cmake, ninja-build, g++, python3, git, c
 Package: fcitx5-projectkey
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, fcitx5, hunspell-en-us, fcitx5-projectkey-data (= ${data:Version})
+# The emoji moved here from a data package of the same version, which keeps listing them.
+Replaces: fcitx5-projectkey-data
 Recommends: fonts-noto-cjk
 Description: Zhuyin input method for Fcitx5
  Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,

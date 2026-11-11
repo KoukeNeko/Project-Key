@@ -280,7 +280,7 @@ jobs:
             homepage "https://github.com/KoukeNeko/Project-Key"
             url "https://github.com/KoukeNeko/Project-Key/archive/refs/tags/v@VERSION@.tar.gz"
             sha256 "@SHA256@"
-            license all_of: ["MIT", "CC-BY-SA-4.0", "LGPL-2.1-or-later"]  # the program; bigram.bin, chars.bin and sentence.bin; data.txt
+            license all_of: ["MIT", "CC-BY-SA-4.0", "LGPL-2.1-or-later", "Unicode-3.0"]  # the program; bigram.bin, chars.bin and sentence.bin; data.txt; emoji.txt
 
             livecheck do
               url :stable

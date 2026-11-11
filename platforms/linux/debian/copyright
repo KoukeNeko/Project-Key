@@ -15,5 +15,11 @@ Copyright: McBopomofo contributors
 License: LGPL-2.1+
  See usr/share/fcitx5/projectkey/LICENSE-LGPL-2.1.txt.
 
+Files: usr/share/fcitx5/projectkey/emoji.txt
+Copyright: Unicode, Inc.
+License: Unicode-3.0
+ Built from the Unicode CLDR Traditional Chinese emoji annotations and emoji-test.txt;
+ see usr/share/fcitx5/projectkey/EMOJI-NOTICE.txt.
+
 License: MIT
  See the LICENSE file in the source repository.

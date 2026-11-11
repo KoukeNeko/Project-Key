@@ -18,6 +18,11 @@ override_dh_install:
 	# The package manager's trigger refreshes it; a copy in the package conflicts with the system's.
 	rm -f debian/tmp/usr/share/icons/hicolor/icon-theme.cache
 	dh_install
+	# The emoji change with the program, not with the models and McBopomofo that version the data
+	# package: in that package, an update of them would never reach anyone.
+	mkdir -p debian/fcitx5-projectkey/usr/share/fcitx5/projectkey
+	mv debian/fcitx5-projectkey-data/usr/share/fcitx5/projectkey/emoji.txt debian/fcitx5-projectkey-data/usr/share/fcitx5/projectkey/EMOJI-NOTICE.txt \
+	  debian/fcitx5-projectkey/usr/share/fcitx5/projectkey/
 
 override_dh_gencontrol:
 	dh_gencontrol -pfcitx5-projectkey -- -Vdata:Version=$(DATA_VERSION)

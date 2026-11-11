@@ -2,7 +2,7 @@ Name:           fcitx5-projectkey
 Version:        %{pk_version}
 Release:        1%{?dist}
 Summary:        Zhuyin input method for Fcitx5
-License:        MIT
+License:        MIT AND Unicode-3.0
 URL:            https://github.com/KoukeNeko/Project-Key
 # Made by package-rpm.sh, which also puts McBopomofo and the models in it.
 Source0:        pk.tar.gz
@@ -10,7 +10,7 @@ Source0:        pk.tar.gz
 BuildRequires:  cmake, ninja-build, gcc-c++, python3, git, curl, pkgconf-pkg-config
 BuildRequires:  fcitx5-devel, enchant2-devel, libxcb-devel, cairo-devel, pango-devel, wayland-devel
 BuildRequires:  qt6-qtbase-devel, libadwaita-devel, libsoup3-devel, json-glib-devel
-Requires:       fcitx5, hunspell-en-US, fcitx5-projectkey-data = %{data_version}-1
+Requires:       fcitx5, hunspell-en-US, fcitx5-projectkey-data = %{data_version}-2
 Recommends:     google-noto-sans-cjk-fonts
 
 %global debug_package %{nil}
@@ -24,7 +24,9 @@ for Fcitx5 on GNOME, KDE and other desktops.
 %package data
 Summary:        Dictionary and context models for Project Key
 Version:        %{data_version}
-Release:        1
+# 2: the release that gave the emoji to the program package; rpm has no Replaces, so a data
+# package that still holds them is updated in the same transaction.
+Release:        2
 License:        CC-BY-SA-4.0 AND LGPL-2.1-or-later
 BuildArch:      noarch
 
@@ -55,6 +57,11 @@ rm -f %{buildroot}/usr/share/icons/hicolor/icon-theme.cache
 /usr/share/fcitx5/themes/projectkey
 /usr/share/gnome-shell/extensions/project-key@koukeneko.github.io
 /usr/share/icons/hicolor/scalable/apps/fcitx-projectkey*.svg
+/usr/share/fcitx5/projectkey/emoji.txt
+/usr/share/fcitx5/projectkey/EMOJI-NOTICE.txt
 
 %files data
 /usr/share/fcitx5/projectkey
+# The emoji change with the program, not with the models and McBopomofo that version this package.
+%exclude /usr/share/fcitx5/projectkey/emoji.txt
+%exclude /usr/share/fcitx5/projectkey/EMOJI-NOTICE.txt

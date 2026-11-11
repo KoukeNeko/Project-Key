@@ -49,6 +49,10 @@ SOFTWARE.
 
 自 models-2026-11-09 起，模型另附 `sentence.bin`：`tools/lm-trainer` 訓練的整句模型（字元級 GPT-2 的權重），以[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）經 OpenCC 轉為臺灣正體後訓練，不含原文，以 CC BY-SA 4.0 授權。此檔案為選用；未提供時，引擎不重新排序整句候選。
 
+### 表情符號
+
+`core/data/emoji.txt` 由 `tools/emoji/build-emoji.py` 從 [Unicode CLDR](https://cldr.unicode.org) 的繁體中文表情符號註解（`common/annotations/zh_Hant.xml`）與 Unicode 的 `emoji-test.txt` 產生，以 Unicode License v3（Unicode-3.0）授權。各平台與 `emoji.txt` 一同安裝其條文 [`EMOJI-NOTICE.txt`](core/data/EMOJI-NOTICE.txt)。
+
 ### Wayland 協定定義
 
 `platforms/linux/protocols/` 內含兩份 Wayland 協定的 XML，建置時由 `wayland-scanner` 產生程式碼，連結進 Linux 的 addon。兩者都以 MIT 授權發布，條文在各檔案開頭的 `<copyright>`：
