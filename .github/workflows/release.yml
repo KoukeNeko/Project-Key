@@ -151,6 +151,10 @@ jobs:
         with:
           name: rpm
           path: in/rpm
+      # Too large for the repositories (GitHub refuses 100 MB in a branch), so it is installed from the release.
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" in/deb-trixie/fcitx5-projectkey-data_*.deb in/rpm/fcitx5-projectkey-data-*.rpm --clobber --repo "$GITHUB_REPOSITORY"
       - env:
           KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
         run: |

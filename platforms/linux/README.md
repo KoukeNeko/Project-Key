@@ -46,7 +46,9 @@ Fcitx5 預設用左 Shift 暫時切換輸入法；Project Key 啟用中、且「
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://koukeneko.github.io/Project-Key/apt/key.asc | sudo tee /etc/apt/keyrings/projectkey.asc >/dev/null
 echo "deb [signed-by=/etc/apt/keyrings/projectkey.asc] https://koukeneko.github.io/Project-Key/apt trixie main" | sudo tee /etc/apt/sources.list.d/projectkey.list
-sudo apt update && sudo apt install fcitx5-projectkey
+sudo apt update
+curl -fsSLO "$(curl -fsSL https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest | grep -o 'https://[^"]*projectkey-data[^"]*\.deb')"
+sudo apt install ./fcitx5-projectkey-data_*.deb fcitx5-projectkey
 
 # Fedora
 sudo tee /etc/yum.repos.d/projectkey.repo <<'EOF'
@@ -58,9 +60,9 @@ gpgcheck=0
 repo_gpgcheck=1
 gpgkey=https://koukeneko.github.io/Project-Key/rpm/key.asc
 EOF
-sudo dnf install fcitx5-projectkey
+sudo dnf install "$(curl -fsSL https://api.github.com/repos/KoukeNeko/Project-Key/releases/latest | grep -o 'https://[^"]*projectkey-data[^"]*\.rpm')" fcitx5-projectkey
 ```
-字典與選字模型是獨立的 `fcitx5-projectkey-data` 套件（約 100 MB，只在模型更新時換版），程式套件只有幾百 KB。套件庫由 `release.yml` 在每次發行時更新：`package-deb.sh`、`package-rpm.sh` 在各發行版的容器裡建置，`publish-repos.sh` 簽章後推到 gh-pages 的 `apt/` 與 `rpm/`；簽章金鑰是 secret `REPO_GPG_PRIVATE_KEY`（無密碼的 ASCII 私鑰）。Arch 用 `platforms/linux/arch/PKGBUILD`（`makepkg -si`）。
+字典與選字模型是獨立的 `fcitx5-projectkey-data` 套件（超過 100 MB，只在模型更新時換版），程式套件只有幾百 KB。資料套件超過 GitHub 對分支內單一檔案的上限，所以不在套件庫裡，而是附在每個發行版本上，上面的指令從最新的發行版本取得；模型更新後要再執行一次，才會換成新版。套件庫由 `release.yml` 在每次發行時更新：`package-deb.sh`、`package-rpm.sh` 在各發行版的容器裡建置，`publish-repos.sh` 簽章後推到 gh-pages 的 `apt/` 與 `rpm/`；簽章金鑰是 secret `REPO_GPG_PRIVATE_KEY`（無密碼的 ASCII 私鑰）。Arch 用 `platforms/linux/arch/PKGBUILD`（`makepkg -si`）。
 
 用 Homebrew（Linux）安裝發行版：先裝下面 `apt install` 那一行的套件，再
 
