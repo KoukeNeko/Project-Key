@@ -32,6 +32,7 @@ class EngineClient {
   HANDLE pipe_ = INVALID_HANDLE_VALUE;
   HANDLE event_ = nullptr;
   DWORD lastLaunch_ = 0;
+  bool launchFailed_ = false;  // the last server started never served its pipe
   bool newSession_ = false;
 };
 

@@ -9,6 +9,8 @@ namespace {
 
 constexpr DWORD kTimeoutMs = 500;
 constexpr DWORD kLaunchWaitMs = 3000;
+// After a server that did not come up, keys are not held up again by another try for this long.
+constexpr DWORD kRelaunchAfterFailureMs = 60000;
 constexpr size_t kMaxReply = 1 << 20;  // far beyond any real reply; a bigger one is not the server's
 
 bool InAppContainer() {
@@ -42,19 +44,19 @@ bool PlainUser() {
 // Starts the server next to this DLL. Only from a process with the user's plain
 // token: from an app container it would inherit the sandbox, from an elevated or
 // low-integrity app that app's rights. The installer also starts it at sign-in.
-bool LaunchServer() {
-  if (InAppContainer() || !PlainUser()) return false;
+// The started process, for the caller to close; nullptr when none was started.
+HANDLE LaunchServer() {
+  if (InAppContainer() || !PlainUser()) return nullptr;
   std::wstring path = ModuleDirectory(gInstance) + kServerExe;
   STARTUPINFOW startup{sizeof(startup)};
   PROCESS_INFORMATION process{};
   std::wstring command = L"\"" + path + L"\"";
   if (!CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW | DETACHED_PROCESS, nullptr,
                       nullptr, &startup, &process)) {
-    return false;
+    return nullptr;
   }
   CloseHandle(process.hThread);
-  CloseHandle(process.hProcess);
-  return true;
+  return process.hProcess;
 }
 
 }  // namespace
@@ -72,13 +74,23 @@ bool EngineClient::connect() {
       if (!WaitNamedPipeW(name.c_str(), kTimeoutMs)) return false;
       continue;
     }
-    // No server: start one, at most every few seconds, and wait for its pipe.
+    // No server: start one, at most every few seconds (every minute after one that failed), and
+    // wait for its pipe, or for it to exit first.
     if (error != ERROR_FILE_NOT_FOUND || attempt > 0) return false;
     DWORD now = GetTickCount();
-    if (lastLaunch_ && now - lastLaunch_ < kLaunchWaitMs) return false;
+    if (lastLaunch_ && now - lastLaunch_ < (launchFailed_ ? kRelaunchAfterFailureMs : kLaunchWaitMs)) return false;
     lastLaunch_ = now;
-    if (!LaunchServer()) return false;
-    for (DWORD waited = 0; waited < kLaunchWaitMs && !WaitNamedPipeW(name.c_str(), 50); waited += 50) Sleep(50);
+    HANDLE process = LaunchServer();
+    launchFailed_ = true;
+    if (!process) return false;
+    for (DWORD waited = 0; waited < kLaunchWaitMs; waited += 50) {
+      if (WaitNamedPipeW(name.c_str(), 1)) {
+        launchFailed_ = false;
+        break;
+      }
+      if (WaitForSingleObject(process, 50) == WAIT_OBJECT_0) break;  // it exited without serving
+    }
+    CloseHandle(process);
   }
   if (pipe_ == INVALID_HANDLE_VALUE) return false;
   // Keys go only to the installed server: any process of this user could serve a pipe of
@@ -91,6 +103,7 @@ bool EngineClient::connect() {
     return false;
   }
   newSession_ = true;
+  launchFailed_ = false;
   DWORD mode = PIPE_READMODE_MESSAGE;
   SetNamedPipeHandleState(pipe_, &mode, nullptr, nullptr);
   if (!event_) event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
