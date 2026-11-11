@@ -962,7 +962,7 @@ void Composer::replaceReadings(size_t start, size_t length, const std::string& r
     if (to == std::string::npos) break;
     from = to + separator.size();
   }
-  grid_.setCursor(cursor);
+  grid_.setCursor(std::min(cursor, grid_.length()));  // a syllable with no words of its own does not go in
 }
 
 std::vector<std::string> Composer::candidates(const Segment& segment, bool fromEnd) {
@@ -1014,8 +1014,12 @@ void Composer::reloadWords() {
   // A new dictionary, as the old one keeps the words it looked up.
   dictionary_ = std::make_shared<TonelessModel>(std::static_pointer_cast<Lexicon>(lm_), abbreviated_, fuzzy_);
   grid_ = Formosa::Gramambular2::ReadingGrid(dictionary_);
-  for (const std::string& reading : readings) grid_.insertReading(reading);
-  grid_.setCursor(cursor);
+  // A syllable whose every word was just excluded does not go back in, so the cursor counts those that do.
+  size_t kept = 0;
+  for (size_t i = 0; i < readings.size(); i++) {
+    if (grid_.insertReading(readings[i]) && i < cursor) kept++;
+  }
+  grid_.setCursor(kept);
   walk();
 }
 

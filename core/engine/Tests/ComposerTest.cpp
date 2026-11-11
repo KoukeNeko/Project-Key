@@ -435,6 +435,23 @@ int main(int argc, char** argv) {
     assert(typed && fuzzy.readingOf(*typed, "怎", false).empty() && fuzzy.readingOf(*typed, "增", false) == "ㄗㄥ");
   }
 
+  // Excluding the only word of a syllable: it does not go back in, and the cursor stays inside
+  // the composition, so the next key edits it rather than past its end.
+  {
+    std::string excluded = tempPath("ComposerTest-exclude.txt");
+    std::ofstream(excluded) << "且 ㄑㄧㄝˇ\n";
+    Composer alone(lm);
+    type(alone, "su3fu,3");  // 你且
+    assert(alone.readingCount() == 2 && alone.cursor() == 2);
+    lm->loadUserPhrases("", excluded);
+    alone.reloadWords();
+    assert(alone.readingCount() == 1 && alone.cursor() == 1);
+    type(alone, "ji3");
+    assert(alone.readingCount() == 2);
+    lm->loadUserPhrases("", "");
+    std::filesystem::remove(excluded);
+  }
+
   std::printf("ComposerTest passed\n");
   return 0;
 }
