@@ -170,6 +170,7 @@ class Composer {
  private:
   KeyResult insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned);
   bool startsSyllable(char key) const;
+  bool joinPrevious(const Formosa::Mandarin::BopomofoSyllable& toned);
   void showReading(bool ending = false);
   void hideReading();
   void endReading();

@@ -403,6 +403,11 @@ Composer::KeyResult Composer::completeWithFirstTone() {
 // dropped, except without abbreviated, where the symbols stay to be fixed.
 Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::BopomofoReadingBuffer& untoned) {
   std::string syllable = reading_.syllable().composedString();
+  if (joinPrevious(reading_.syllable())) {
+    reading_.clear();
+    walk();
+    return KeyResult::kHandled;
+  }
   reading_.clear();
   bool inserted = grid_.insertReading(syllable);
   if (!inserted) {
@@ -412,6 +417,42 @@ Composer::KeyResult Composer::insertPendingSyllable(const Formosa::Mandarin::Bop
   }
   walk();
   return inserted ? KeyResult::kHandled : KeyResult::kInvalid;
+}
+
+// Symbols typed out of order, without abbreviated (ㄧㄚㄐ for ㄐㄧㄚ, ㄛㄨㄗˋ for ㄗㄨㄛˋ): a whole syllable
+// ends the open one before a symbol that goes before its own, so each of these began a syllable. When
+// the tone comes, the toneless syllables just before it (at most two, as a syllable has three places)
+// join the toned one, if their symbols fill different places, together make a syllable with words, and
+// as typed make no word (ㄩㄌㄜˋ stays 娛樂). Not on each key, which would undo toneless typing (ㄖㄣㄨㄟ).
+bool Composer::joinPrevious(const BopomofoSyllable& toned) {
+  if (abbreviated_) return false;
+  auto hasWord = [this](const std::string& reading) {
+    for (const auto& unigram : dictionary_->getUnigrams(reading)) {
+      if (unigram.value() != reading) return true;  // the dictionary's lone symbols list themselves
+    }
+    return false;
+  };
+  const std::vector<std::string>& readings = grid_.readings();
+  size_t cursor = grid_.cursor();
+  for (size_t count = std::min<size_t>(2, cursor); count > 0; count--) {
+    BopomofoSyllable joined = toned;
+    std::string typed = toned.composedString();
+    bool fits = true;
+    for (size_t i = cursor; fits && i > cursor - count; i--) {
+      const std::string& previous = readings[i - 1];
+      fits = previous.size() > 1 && previous.back() == kAnyTone && previous[0] != '_' && previous.find(kSeparator) == std::string::npos;
+      if (!fits) break;
+      BopomofoSyllable symbols = BopomofoSyllable::FromComposedString(previous.substr(0, previous.size() - 1));
+      fits = !(symbols.hasConsonant() && joined.hasConsonant()) && !(symbols.hasMiddleVowel() && joined.hasMiddleVowel()) &&
+             !(symbols.hasVowel() && joined.hasVowel());
+      joined = symbols + joined;
+      typed = previous + kSeparator + typed;
+    }
+    if (!fits || hasWord(typed) || !hasWord(joined.composedString())) continue;
+    for (size_t i = 0; i < count; i++) grid_.deleteReadingBeforeCursor();
+    return grid_.insertReading(joined.composedString());
+  }
+  return false;
 }
 
 // With a whole syllable open and no tone typed, whether `key` begins the next syllable:

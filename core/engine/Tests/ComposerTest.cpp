@@ -183,6 +183,34 @@ int main(int argc, char** argv) {
   assert(plain.readingCount() == 0 && plain.pendingReading() == "ㄋㄧ");
   assert(plain.completeWithFirstTone() == Composer::KeyResult::kInvalid && plain.pendingReading() == "ㄋㄧ");
   assert(plain.insertPunctuation('<') && plain.text() == "你，" && !plain.hasPendingReading());
+  // Symbols out of order join into one syllable when the tone comes; toneless typing of words stays.
+  for (const auto& [keys, reading] : std::vector<std::pair<std::string, std::string>>{
+           {"u8r ", "ㄐㄧㄚ"},     // ㄧㄚㄐ, as ㄐ with a tone is no word
+           {"u8r4", "ㄐㄧㄚˋ"},
+           {"ijy4", "ㄗㄨㄛˋ"},    // ㄛㄨㄗˋ, although ㄗˋ is a word: 喔無字 is none
+           {";j5 ", "ㄓㄨㄤ"},     // ㄤㄨㄓ
+           {"0u23", "ㄉㄧㄢˇ"},    // ㄢㄧㄉˇ
+       }) {
+    plain.clear();
+    type(plain, keys);
+    assert(plain.readingCount() == 1 && find(plain, reading) && !plain.hasPendingReading());
+  }
+  for (const auto& [keys, text] : std::vector<std::pair<std::string, std::string>>{
+           {"bpjo6", "認為"},  // ㄖㄣ and ㄨㄟ share the vowel's place
+           {"mxk4", "娛樂"},
+       }) {
+    plain.clear();
+    type(plain, keys);
+    assert(plain.readingCount() == 2 && plain.text() == text);
+  }
+  // ㄨㄗˋ would be ㄗㄨˋ, which has words, but as typed it is one too (污漬), so it stays two syllables.
+  plain.clear();
+  type(plain, "jy4");
+  assert(plain.readingCount() == 2 && !find(plain, "ㄗㄨˋ"));
+  composer.clear();
+  type(composer, "u8r");
+  composer.completeWithFirstTone();
+  assert(!find(composer, "ㄐㄧㄚ"));
   composer.clear();
   type(composer, "1q");
   assert(composer.readingCount() == 2);

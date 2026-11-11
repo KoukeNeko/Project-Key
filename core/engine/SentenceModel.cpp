@@ -1,7 +1,6 @@
 #include "SentenceModel.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <condition_variable>
 #include <cstring>
@@ -92,11 +91,19 @@ class Pool {
       });
     }
   }
+  // Takes an index and the task it belongs to under the lock: a worker that is late from the call
+  // before may get here while run() sets up the next one, and must see all of it or none of it.
   void work() {
     for (;;) {
-      int i = next_++;
-      if (i >= count_) return;
-      (*task_)(i);
+      const std::function<void(int)>* task;
+      int i;
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (next_ >= count_) return;
+        i = next_++;
+        task = task_;
+      }
+      (*task)(i);
       std::lock_guard<std::mutex> lock(mutex_);
       if (++done_ == count_) finished_.notify_all();
     }
@@ -104,10 +111,8 @@ class Pool {
   std::vector<std::thread> workers_;
   std::mutex mutex_;
   std::condition_variable wake_, finished_;
-  // Atomic: a worker late from the call before may read them while the next call sets them.
-  std::atomic<const std::function<void(int)>*> task_{nullptr};
-  std::atomic<int> next_{0}, count_{0};
-  int done_ = 0;
+  const std::function<void(int)>* task_ = nullptr;
+  int next_ = 0, count_ = 0, done_ = 0;
   unsigned generation_ = 0;
   bool stopping_ = false;
 };
