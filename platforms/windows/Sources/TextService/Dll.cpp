@@ -76,6 +76,7 @@ const GUID* const kCategories[] = {
     &GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER,
     &GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,  // Store apps and the Start menu
     &GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
+    &GUID_TFCAT_TIPCAP_UIELEMENTENABLED,  // CandidateList: apps that draw the candidates themselves
 };
 
 HRESULT RegisterServer() {

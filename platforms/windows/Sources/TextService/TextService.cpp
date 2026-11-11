@@ -44,12 +44,6 @@ class EditSession : public ITfEditSession {
   std::function<void(TfEditCookie)> body_;
 };
 
-template <typename T>
-void SafeRelease(T*& p) {
-  if (p) p->Release();
-  p = nullptr;
-}
-
 void SetSelection(TfEditCookie cookie, ITfContext* context, ITfRange* range) {
   TF_SELECTION selection{};
   selection.range = range;
@@ -168,6 +162,18 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
     items->Release();
   }
   candidates_.clicked = [this](const Metrics::PanelHit& hit) { candidateClicked(hit); };
+  candidateList_ = new CandidateList;
+  candidateList_->picked = [this](int row, int index) { candidateClicked({Metrics::PanelHit::kCandidate, row, index}); };
+  candidateList_->aborted = [this] {
+    KeyEvent escape;
+    escape.key = Key::kEscape;
+    if (compositionContext_) request(compositionContext_, {Protocol::Request::kKeyDown, escape});
+  };
+  candidateList_->shownChanged = [this](bool shown) {
+    if (shown) return;  // shown again with the next update, which knows where
+    candidates_.hide();
+    hint_.hide();
+  };
   // Starts the server if needed and learns the mode for the language bar.
   if (std::optional<Protocol::Reply> reply = engine_.send({Protocol::Request::kState})) {
     englishMode_ = reply->englishMode;
@@ -202,6 +208,13 @@ STDMETHODIMP TextService::Deactivate() {
   }
   if (langBar_) langBar_->detach();
   SafeRelease(langBar_);
+  if (candidateList_) {
+    candidateList_->end(threadMgr_);
+    candidateList_->picked = nullptr;  // an app may hold the element past this
+    candidateList_->aborted = nullptr;
+    candidateList_->shownChanged = nullptr;
+  }
+  SafeRelease(candidateList_);
   SafeRelease(composition_);
   SafeRelease(compositionContext_);
   watchLayout(nullptr);
@@ -219,6 +232,7 @@ STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr* focus, ITfDocumentMgr*) {
     request(compositionContext_, {Protocol::Request::kDeactivate});
   } else {
     candidates_.hide();
+    if (candidateList_) candidateList_->end(threadMgr_);
     hint_.hide();
   }
   // The badge tells which mode the field starts in.
@@ -234,6 +248,7 @@ STDMETHODIMP TextService::OnSetFocus(ITfDocumentMgr* focus, ITfDocumentMgr*) {
 STDMETHODIMP TextService::OnKillThreadFocus() {
   if (composition_) request(compositionContext_, {Protocol::Request::kDeactivate});
   candidates_.hide();
+  if (candidateList_) candidateList_->end(threadMgr_);
   hint_.hide();
   badge_.hide();
   return S_OK;
@@ -256,6 +271,7 @@ STDMETHODIMP TextService::OnCompositionTerminated(TfEditCookie cookie, ITfCompos
   }
   engine_.send({Protocol::Request::kReset});
   candidates_.hide();
+  if (candidateList_) candidateList_->end(threadMgr_);
   hint_.hide();
   return S_OK;
 }
@@ -465,7 +481,7 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
                      o.op == Protocol::Op::kIndicator;
   }
   // The windows follow the composition, so they update after the document does.
-  auto showWindows = [this, reply](const RECT* anchor, HWND window) {
+  auto showWindows = [this, reply, context](const RECT* anchor, HWND window) {
     const Protocol::Operation* panel = nullptr;
     const Protocol::Operation* hint = nullptr;
     const Protocol::Operation* indicator = nullptr;
@@ -476,9 +492,13 @@ void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
       if (o.op == Protocol::Op::kBeep) MessageBeep(MB_OK);
     }
     HWND owner = window ? GetAncestor(window, GA_ROOT) : GetForegroundWindow();
-    if (panel && panel->op == Protocol::Op::kShowPanel && anchor) {
+    // An app that draws the candidates itself (CandidateList) keeps the window hidden.
+    bool drawn = panel && panel->op == Protocol::Op::kShowPanel && anchor &&
+                 (!candidateList_ || candidateList_->present(threadMgr_, composition_ ? compositionContext_ : context, &panel->panel));
+    if (drawn) {
       candidates_.show(panel->panel, *anchor, owner, appearance_);
     } else if (panel) {
+      if (candidateList_ && panel->op == Protocol::Op::kHidePanel) candidateList_->end(threadMgr_);
       candidates_.hide();
       hint_.hide();
     }

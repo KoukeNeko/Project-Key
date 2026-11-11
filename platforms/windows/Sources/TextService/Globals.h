@@ -24,4 +24,10 @@ extern HINSTANCE gInstance;
 void AddRefDll();
 void ReleaseDll();
 
+template <typename T>
+void SafeRelease(T*& p) {
+  if (p) p->Release();
+  p = nullptr;
+}
+
 }  // namespace ProjectKey

@@ -156,7 +156,7 @@ if (-not (Test-Path $Icon)) {
   [IO.File]::WriteAllBytes($Icon, $ico.ToArray())
 }
 Invoke-Native rc.exe /nologo /c65001 /i $Obj "/fo$Obj\ProjectKey.res" "$PSScriptRoot\Sources\TextService\ProjectKey.rc"
-$dllSources = 'Dll', 'TextService', 'EngineClient', 'CandidateWindow', 'DisplayAttributes', 'LangBarButton' |
+$dllSources = 'Dll', 'TextService', 'EngineClient', 'CandidateWindow', 'CandidateList', 'DisplayAttributes', 'LangBarButton' |
   ForEach-Object { "$PSScriptRoot\Sources\TextService\$_.cpp" }
 $dllObjects = @(Compile 'textservice' $dllSources)
 Invoke-Native link.exe @LinkFlags /DLL "/DEF:$PSScriptRoot\Sources\TextService\ProjectKey.def" "/OUT:$Out\ProjectKey.dll" `

@@ -12,6 +12,7 @@
 #include <optional>
 
 #include "Common/Protocol.h"
+#include "TextService/CandidateList.h"
 #include "TextService/CandidateWindow.h"
 #include "TextService/EngineClient.h"
 
@@ -117,6 +118,7 @@ class TextService : public ITfTextInputProcessorEx,
   ModeBadge badge_;
   CandidateWindow candidates_{badge_};
   CandidateWindow hint_{badge_};  // the Tab hint, beside the candidates (Op::kShowHint)
+  CandidateList* candidateList_ = nullptr;  // the candidates for apps that draw them themselves
   LangBarButton* langBar_ = nullptr;
   bool englishMode_ = false;
   bool fullWidth_ = false;
