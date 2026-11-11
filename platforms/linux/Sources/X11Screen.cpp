@@ -135,8 +135,11 @@ X11Screen::X11Screen(fcitx::EventLoop& loop, xcb_connection_t* connection, int s
   opacityAtom_ = Atom(connection_, "_NET_WM_WINDOW_OPACITY");
   scale_ = DpiScale(connection_, screen_);
 
-  io_ = loop.addIOEvent(xcb_get_file_descriptor(connection_), fcitx::IOEventFlag::In, [this](fcitx::EventSourceIO*, int, fcitx::IOEventFlags) {
+  io_ = loop.addIOEvent(xcb_get_file_descriptor(connection_), fcitx::IOEventFlag::In, [this](fcitx::EventSourceIO* source, int, fcitx::IOEventFlags) {
     sync();
+    // The X server went away: its socket stays readable with nothing to read, which would wake
+    // this every time round the loop.
+    if (xcb_connection_has_error(connection_)) source->setEnabled(false);
     return true;
   });
   xcb_flush(connection_);
