@@ -34,6 +34,7 @@ targets:
       - path: ../../core/engine/CharModel.cpp
       - path: ../../core/engine/SentenceModel.cpp
       - path: ../../core/engine/PersonalModel.cpp
+      - path: ../../core/engine/InputMacro.cpp
       - path: build/mcbopomofo/Source/Engine/AssociatedPhrasesV2.cpp
       - path: build/mcbopomofo/Source/Engine/ByteBlockBackedDictionary.cpp
       - path: build/mcbopomofo/Source/Engine/McBopomofoLM.cpp

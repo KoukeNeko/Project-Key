@@ -13,7 +13,7 @@ if [ "${1:-}" = --require-models ]; then
 fi
 BUILD=build
 CORE=../../core/engine  # the engine shared with Windows
-ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/SentenceModel.cpp $CORE/PersonalModel.cpp $CORE/Controller.cpp"
+ENGINE="$CORE/Composer.cpp $CORE/Bigram.cpp $CORE/CharModel.cpp $CORE/SentenceModel.cpp $CORE/PersonalModel.cpp $CORE/Controller.cpp $CORE/InputMacro.cpp"
 MCB=$BUILD/mcbopomofo
 APP=$BUILD/ProjectKey.app
 CXXFLAGS="-std=c++20 -O2 -Wall -mmacosx-version-min=13.0 -I$MCB/Source/Engine -I$CORE -I$BUILD"

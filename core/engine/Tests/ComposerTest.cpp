@@ -12,6 +12,7 @@
 
 #include "Composer.h"
 #include "Controller.h"
+#include "InputMacro.h"
 
 using ProjectKey::Composer;
 using ProjectKey::Segment;
@@ -450,6 +451,91 @@ int main(int argc, char** argv) {
     assert(alone.readingCount() == 2);
     lm->loadUserPhrases("", "");
     std::filesystem::remove(excluded);
+  }
+
+  // McBopomofo's input macros, in its forms, at 2026-11-11 (a Wednesday) 20:06:21.
+  {
+    std::tm now{};
+    now.tm_year = 2026 - 1900;
+    now.tm_mon = 10;
+    now.tm_mday = 11;
+    now.tm_hour = 20;
+    now.tm_min = 6;
+    now.tm_sec = 21;
+    auto macro = [&now](const std::string& name) { return ProjectKey::ConvertMacro("MACRO@" + name, now); };
+    assert(macro("DATE_TODAY_SHORT") == "2026/11/11");
+    assert(macro("DATE_TODAY_MEDIUM") == "2026年11月11日");
+    assert(macro("DATE_TODAY_MEDIUM_ROC") == "民國 115年11月11日");
+    assert(macro("DATE_TODAY_MEDIUM_CHINESE") == "2026年十月初三");
+    assert(macro("DATE_TODAY_MEDIUM_JAPANESE") == "令和8年11月11日");
+    assert(macro("DATE_TODAY_WEEKDAY_SHORT") == "週三");
+    assert(macro("DATE_TODAY_WEEKDAY") == "星期三");
+    assert(macro("DATE_TODAY2_WEEKDAY") == "禮拜三");
+    assert(macro("DATE_TODAY_WEEKDAY_JAPANESE") == "水曜日");
+    assert(macro("DATE_YESTERDAY_MEDIUM") == "2026年11月10日" && macro("DATE_YESTERDAY2_WEEKDAY") == "禮拜二");
+    assert(macro("DATE_TOMORROW_SHORT") == "2026/11/12" && macro("DATE_TOMORROW2_WEEKDAY") == "禮拜四");
+    assert(macro("THIS_YEAR_PLAIN") == "2026年" && macro("THIS_YEAR_PLAIN_WITH_ERA") == "西元2026年");
+    assert(macro("THIS_YEAR_ROC") == "民國115年" && macro("LAST_YEAR_ROC") == "民國114年");
+    assert(macro("THIS_YEAR_JAPANESE") == "令和8年" && macro("NEXT_YEAR_JAPANESE") == "令和9年");
+    assert(macro("THIS_YEAR_GANZHI") == "丙午年" && macro("LAST_YEAR_GANZHI") == "乙巳年");
+    assert(macro("THIS_YEAR_CHINESE_ZODIAC") == "火馬年" && macro("NEXT_YEAR_CHINESE_ZODIAC") == "火羊年");
+    assert(macro("TIME_NOW_SHORT") == "晚上8:06" && macro("TIME_NOW_MEDIUM") == "晚上8:06:21");
+    assert(macro("TIMEZONE_STANDARD") == "MACRO@TIMEZONE_STANDARD" && macro("NO_SUCH") == "MACRO@NO_SUCH");
+    assert(ProjectKey::ConvertMacro("今天", now) == "今天");
+    now.tm_hour = 0;
+    assert(macro("TIME_NOW_SHORT") == "凌晨12:06");
+    now.tm_hour = 12;
+    assert(macro("TIME_NOW_SHORT") == "中午12:06");
+    now.tm_mon = 11;
+    now.tm_mday = 31;
+    assert(macro("DATE_TOMORROW_SHORT") == "2027/1/1");
+    // The Chinese year, which starts 2026-02-17, and its leap months; a Japanese era's first year.
+    now.tm_mon = 1;
+    now.tm_mday = 16;
+    assert(macro("DATE_TODAY_MEDIUM_CHINESE") == "2025年臘月廿九" && macro("DATE_TOMORROW_MEDIUM_CHINESE") == "2026年正月初一");
+    now.tm_year = 2025 - 1900;
+    now.tm_mon = 6;
+    now.tm_mday = 25;
+    assert(macro("DATE_TODAY_MEDIUM_CHINESE") == "2025年閏六月初一" && macro("DATE_YESTERDAY_MEDIUM_CHINESE") == "2025年六月三十");
+    now.tm_year = 2019 - 1900;
+    now.tm_mon = 4;
+    now.tm_mday = 1;
+    assert(macro("DATE_TODAY_MEDIUM_JAPANESE") == "令和元年5月1日" && macro("DATE_YESTERDAY_MEDIUM_JAPANESE") == "平成31年4月30日");
+    assert(macro("THIS_YEAR_JAPANESE") == "令和1年");
+  }
+
+  // ㄐㄧㄣ-ㄊㄧㄢ offers today's dates among its words.
+  composer.clear();
+  type(composer, "rup wu0 ");
+  {
+    auto values = composer.candidates(composer.segments()[0]);
+    assert(std::find(values.begin(), values.end(), ProjectKey::ConvertMacro("MACRO@DATE_TODAY_MEDIUM")) != values.end());
+    assert(std::none_of(values.begin(), values.end(), [](const std::string& value) { return value.starts_with("MACRO@"); }));
+  }
+  // A new composition looks a date up again, though the composer keeps the words it looked up
+  // without tones (ㄐㄧㄣ ㄊㄧㄢ), as after midnight.
+  {
+    std::string date = "day one";
+    lm->setMacroConverter([&date](const std::string& value) { return value == "MACRO@DATE_TODAY_MEDIUM" ? date : value; });
+    auto offers = [&](const std::string& value) {
+      assert(composer.segments().size() == 1);
+      auto values = composer.candidates(composer.segments()[0]);
+      return std::find(values.begin(), values.end(), value) != values.end();
+    };
+    composer.clear();
+    type(composer, "rupwu0");
+    assert(offers("day one"));
+    composer.clear();
+    date = "day two";
+    type(composer, "rupwu0");
+    assert(offers("day two") && !offers("day one"));
+    assert(composer.choose(composer.segments()[0], "day two") && composer.text() == "day two");
+    while (composer.backspace()) {
+    }
+    date = "day three";
+    type(composer, "rupwu0");
+    assert(offers("day three") && !offers("day two"));
+    lm->setMacroConverter([](const std::string& value) { return ProjectKey::ConvertMacro(value); });
   }
 
   std::printf("ComposerTest passed\n");

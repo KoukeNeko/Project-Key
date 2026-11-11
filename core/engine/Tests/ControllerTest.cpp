@@ -177,6 +177,8 @@ int main(int argc, char** argv) {
   assert(env.lm->isDataModelLoaded());
   env.lm->loadAssociatedPhrasesV2((std::filesystem::path(argv[1]).parent_path() / "associated-phrases-v2.txt").string().c_str());
   assert(env.lm->isAssociatedPhrasesV2Loaded());
+  // Without the dates and times (InputMacro.h), which would lay out 今天's candidates by the day.
+  env.lm->setMacroConverter(nullptr);
   env.userModel = ProjectKey::NewUserModel();
   env.settings = &settings;
   env.isEnglish = [](const std::string& text) { return text == "hello" || text == "hello world" || text == "ja"; };
@@ -751,6 +753,9 @@ int main(int argc, char** argv) {
     assert(ModelsDirectory(bundled, downloaded) == downloaded / "2026-02-01");
     assert(UseNewestModels(env, bundled.string(), downloaded.string()));
     assert(env.lm != before && env.models == loads + 1 && env.lm->isAssociatedPhrasesV2Loaded());
+    // The new lexicon has the dates and times, which the tests below do without, as above.
+    assert(env.lm->convertMacro("MACRO@THIS_YEAR_PLAIN").ends_with("年"));
+    env.lm->setMacroConverter(nullptr);
     assert(!fs::exists(downloaded / "2025-12-01") && fs::exists(downloaded / "2026-03-01.partial"));
     Type(controller, "ji3");
     assert(client.marked == "我");
@@ -1091,6 +1096,25 @@ int main(int argc, char** argv) {
   controller.clickCandidate(INT_MAX, INT_MAX);
   assert(client.marked == unclicked);
   EscapeAll(controller, client);
+
+  // The controller keeps its composer, yet each composition looks a date up anew: after
+  // midnight, ㄐㄧㄣ ㄊㄧㄢ offers the new day's.
+  {
+    std::string date = "day one";
+    env.lm->setMacroConverter([&date](const std::string& value) { return value == "MACRO@DATE_TODAY_MEDIUM" ? date : value; });
+    auto offers = [&](const std::string& value) {
+      Type(controller, "rupwu0");
+      assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+      const std::vector<std::string>& values = controller.candidates();
+      bool found = std::find(values.begin(), values.end(), value) != values.end();
+      EscapeAll(controller, client);
+      return found;
+    };
+    assert(offers("day one"));
+    date = "day two";
+    assert(offers("day two"));
+    env.lm->setMacroConverter(nullptr);
+  }
 
   // A click picks what it lands on, in the row, in the unfolded grid and in the row shown while
   // typing. Last, as what it picks is remembered.

@@ -11,6 +11,7 @@
 #include <iterator>
 #include <sstream>
 
+#include "InputMacro.h"
 #include "Utf8.h"
 
 namespace ProjectKey {
@@ -126,6 +127,7 @@ class TonelessModel : public LanguageModel {
     }
     std::stable_sort(unigrams.begin(), unigrams.end(), [](const Unigram& a, const Unigram& b) { return a.score() > b.score(); });
     if (fuzzyCache_.size() >= kCacheSize) fuzzyCache_.clear();
+    if (std::any_of(unigrams.begin(), unigrams.end(), IsMacro)) macroReadings_.push_back(reading);
     return fuzzyCache_.emplace(reading, std::move(unigrams)).first->second;
   }
 
@@ -172,6 +174,7 @@ class TonelessModel : public LanguageModel {
     }
     std::stable_sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.second.score() > b.second.score(); });
     if (matchCache_.size() >= kCacheSize) matchCache_.clear();
+    if (std::any_of(found.begin(), found.end(), [](const auto& match) { return IsMacro(match.second); })) macroReadings_.push_back(reading);
     return matchCache_.emplace(reading, std::move(found)).first->second;
   }
 
@@ -180,8 +183,21 @@ class TonelessModel : public LanguageModel {
     return !getUnigrams(reading).empty();
   }
 
+  // Drops the cached words of the readings with a macro (InputMacro.h) among them, so a new
+  // composition gets the date and time anew rather than those of the first lookup.
+  void forgetMacros() {
+    for (const std::string& reading : macroReadings_) {
+      fuzzyCache_.erase(reading);
+      cache_.erase(reading);
+      matchCache_.erase(reading);
+    }
+    macroReadings_.clear();
+  }
+
  private:
   static constexpr size_t kCacheSize = 4096;
+
+  static bool IsMacro(const Unigram& unigram) { return unigram.rawValue().starts_with(kMacroPrefix); }
 
   // A grid reading's syllable: exact, without a tone, or a lone symbol without a tone.
   struct Typed {
@@ -222,6 +238,7 @@ class TonelessModel : public LanguageModel {
   std::unordered_map<std::string, std::vector<Unigram>> fuzzyCache_;
   std::unordered_map<std::string, std::vector<Unigram>> cache_;
   std::unordered_map<std::string, std::vector<std::pair<std::string, Unigram>>> matchCache_;
+  std::vector<std::string> macroReadings_;
 };
 
 // A grid reading with each syllable in any tone: ㄨㄟˇ-ㄗㄠˋ as ㄨㄟ*-ㄗㄠ*.
@@ -246,6 +263,10 @@ std::string AnyTone(const std::string& reading) {
 
 
 }  // namespace
+
+Lexicon::Lexicon() {
+  setMacroConverter([](const std::string& value) { return ConvertMacro(value); });
+}
 
 void Lexicon::loadLanguageModel(const char* path) {
   McBopomofoLM::loadLanguageModel(path);
@@ -608,6 +629,7 @@ void Composer::clear() {
   endReading();
   grid_.clear();
   segments_.clear();
+  static_cast<TonelessModel&>(*dictionary_).forgetMacros();
 }
 
 std::string Composer::text() const {
@@ -647,6 +669,8 @@ void Composer::walk() {
     std::vector<State> states;
     std::vector<uint32_t> chars;  // code points, with a character model
   };
+  // Backspaced away, the composition ends as clear() ends it.
+  if (grid_.length() == 0) static_cast<TonelessModel&>(*dictionary_).forgetMacros();
   const std::vector<ReadingGrid::Span>& spans = grid_.spans();
   const size_t n = spans.size();
   const uint32_t boundary = bigram_ ? bigram_->id(Bigram::kBoundary).value_or(kNoWord) : kNoWord;

@@ -35,6 +35,8 @@ struct Segment {
 // McBopomofo's language model, which also finds data.txt's rows by the start of a reading.
 class Lexicon : public McBopomofo::McBopomofoLM {
  public:
+  // With McBopomofo's input macros (InputMacro.h) as the local date and time they stand for.
+  Lexicon();
   // Hides McBopomofoLM's own, which loads only the exact lookups.
   void loadLanguageModel(const char* path);
   // The user's own words, one "word reading" line each (小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ), '#' starting a
