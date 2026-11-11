@@ -13,23 +13,23 @@ jobs:
   macos:
     runs-on: macos-26  # NSGlassEffectView needs the macOS 26 SDK
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: platforms/macos/build.sh
 
   # Builds the app and keyboard for the iOS Simulator.
   ios:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: platforms/ios/build.sh
 
   # Builds the text service, server and settings app, and runs the engine and protocol tests.
   windows:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 10.0.x
       - run: platforms/windows/build.ps1
@@ -39,6 +39,6 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev
       - run: platforms/linux/build.sh

@@ -20,7 +20,7 @@ jobs:
     outputs:
       version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - id: check
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -37,13 +37,13 @@ jobs:
     needs: version
     runs-on: macos-26  # NSGlassEffectView needs the macOS 26 SDK
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # The trained dictionary and context models (tools/bigram-trainer/MODELS-NOTICE.txt).
       - run: tools/bigram-trainer/fetch-models.sh
       - run: platforms/macos/build.sh --require-models
       - run: ditto -c -k --keepParent platforms/macos/build/ProjectKey.app "ProjectKey-${{ needs.version.outputs.version }}-macos.zip"
       - run: platforms/macos/package.sh && mv platforms/macos/build/ProjectKey-*-macos.pkg .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos
           path: |
@@ -54,9 +54,9 @@ jobs:
     needs: version
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 10.0.x
       - run: tools/bigram-trainer/fetch-models.sh
@@ -70,7 +70,7 @@ jobs:
           Get-ChildItem package -Recurse -Include *.lib, *.exp | Remove-Item
           Copy-Item platforms/windows/install.ps1, platforms/windows/uninstall.ps1 package
           Compress-Archive package/* "ProjectKey-${{ needs.version.outputs.version }}-windows-x64.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows
           path: ProjectKey-*-windows-x64.zip
@@ -81,13 +81,13 @@ jobs:
     container: archlinux:latest
     steps:
       - run: pacman -Syu --noconfirm --needed base-devel git cmake ninja python curl fcitx5 enchant hunspell-en_us libxcb cairo pango wayland qt6-base libadwaita libsoup3 json-glib
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # makepkg refuses to run as root.
       - run: |
           useradd -m builder
           chown -R builder .
           su builder -c 'cd platforms/linux/arch && makepkg --noconfirm -f'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: arch
           path: platforms/linux/arch/*.pkg.tar.zst
@@ -108,9 +108,9 @@ jobs:
           apt-get install -y --no-install-recommends ca-certificates git curl make build-essential dpkg-dev debhelper fakeroot cmake ninja-build g++ python3 pkg-config \
             libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev \
             libwayland-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: sh platforms/linux/package-deb.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: deb-${{ matrix.suite }}
           path: platforms/linux/dist/*.deb
@@ -121,9 +121,9 @@ jobs:
     container: fedora:43
     steps:
       - run: dnf install -y rpm-build make tar gzip findutils git curl cmake ninja-build gcc-c++ python3 pkgconf-pkg-config fcitx5-devel enchant2-devel libxcb-devel cairo-devel pango-devel wayland-devel qt6-qtbase-devel libadwaita-devel libsoup3-devel json-glib-devel
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: sh platforms/linux/package-rpm.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rpm
           path: platforms/linux/dist/*.rpm
@@ -136,18 +136,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: platforms/linux/publish-repos.sh
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: gh-pages
           path: site
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: deb-*
           path: in
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: rpm
           path: in/rpm
@@ -178,10 +178,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: distribution
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           merge-multiple: true
       - run: sha256sum ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst > SHA256SUMS
@@ -198,7 +198,7 @@ jobs:
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Project Key ${{ needs.version.outputs.version }}" \
               "${from[@]}" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: checksums
           path: SHA256SUMS
@@ -210,7 +210,7 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       RELEASES: https://github.com/${{ github.repository }}/releases/download
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: checksums
       - name: Homebrew cask and formula
