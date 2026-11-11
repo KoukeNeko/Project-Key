@@ -381,6 +381,32 @@ int main(int argc, char** argv) {
   type(learning, "xu,4g6");
   assert(learning.text() == "獵食");
 
+  // 近似音: ㄗㄨㄥˇ also offers the words of ㄓㄨㄥˇ, after its own; ㄗㄥˇ those of ㄗㄣˇ. Not unless asked.
+  {
+    auto offered = [&](Composer& c, const std::string& keys, const std::string& reading) {
+      c.clear();
+      type(c, keys);
+      const Segment* segment = find(c, reading);
+      assert(segment);
+      return c.candidates(*segment);
+    };
+    auto has = [](const std::vector<std::string>& values, const std::string& value) {
+      return std::find(values.begin(), values.end(), value) != values.end();
+    };
+    Composer fuzzy(lm, nullptr, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, nullptr, Composer::kCharWeight,
+                   nullptr, /*abbreviated=*/true, /*omitTones=*/false, /*fuzzy=*/true);
+    std::vector<std::string> exact = offered(composer, "yj/3", "ㄗㄨㄥˇ");
+    std::vector<std::string> near = offered(fuzzy, "yj/3", "ㄗㄨㄥˇ");
+    assert(!has(exact, "種") && has(near, "種") && has(near, "總"));
+    assert(near[0] == exact[0] && std::find(near.begin(), near.end(), "種") - near.begin() > std::find(near.begin(), near.end(), "總") - near.begin());
+    assert(!has(offered(composer, "y/3", "ㄗㄥˇ"), "怎") && has(offered(fuzzy, "y/3", "ㄗㄥˇ"), "怎"));
+    // A word of a near sound is not what the typed syllables read as, so it has no reading to add to the user's words.
+    fuzzy.clear();
+    type(fuzzy, "y/3");
+    const Segment* typed = find(fuzzy, "ㄗㄥˇ");
+    assert(typed && fuzzy.readingOf(*typed, "怎", false).empty() && fuzzy.readingOf(*typed, "增", false) == "ㄗㄥ");
+  }
+
   std::printf("ComposerTest passed\n");
   return 0;
 }

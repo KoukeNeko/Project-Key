@@ -49,13 +49,87 @@ std::string UserKey(const std::string& previousReading, const std::string& previ
 }
 constexpr char kSeparator = '-';  // ReadingGrid's default
 
+// Sounds some speakers do not tell apart: 翹舌 (ㄓㄗ, ㄔㄘ, ㄕㄙ) and 前後鼻音 (ㄣㄥ, ㄢㄤ).
+// A word that needs one swapped is offered, below the words of the sound as typed.
+constexpr double kFuzzyPenalty = 1.5;  // log10: the sound as typed is about 30 times likelier
+constexpr size_t kMaxFuzzyReadings = 16;
+constexpr std::pair<std::string_view, std::string_view> kFuzzyInitials[] = {{"ㄓ", "ㄗ"}, {"ㄔ", "ㄘ"}, {"ㄕ", "ㄙ"}};
+constexpr std::pair<std::string_view, std::string_view> kFuzzyFinals[] = {{"ㄣ", "ㄥ"}, {"ㄢ", "ㄤ"}};
+
+// A syllable, with each swap made or not, tone (or kAnyTone) kept.
+std::vector<std::string> FuzzySyllables(const std::string& syllable) {
+  size_t cut = syllable.size();
+  for (const std::string_view tone : {"ˊ", "ˇ", "ˋ", "˙", "*"}) {
+    if (syllable.ends_with(tone)) cut -= tone.size();
+  }
+  std::string tail = syllable.substr(cut);
+  std::vector<std::string> alternatives{syllable.substr(0, cut)};
+  for (const auto& [a, b] : kFuzzyInitials) {
+    for (size_t i = 0, n = alternatives.size(); i < n; i++) {
+      std::string_view from = alternatives[i].starts_with(a) ? a : alternatives[i].starts_with(b) ? b : "";
+      if (!from.empty()) alternatives.push_back(std::string(from == a ? b : a) + alternatives[i].substr(from.size()));
+    }
+  }
+  for (const auto& [a, b] : kFuzzyFinals) {
+    for (size_t i = 0, n = alternatives.size(); i < n; i++) {
+      std::string_view from = alternatives[i].ends_with(a) ? a : alternatives[i].ends_with(b) ? b : "";
+      if (!from.empty()) alternatives.push_back(alternatives[i].substr(0, alternatives[i].size() - from.size()) + std::string(from == a ? b : a));
+    }
+  }
+  for (std::string& alternative : alternatives) alternative += tail;
+  return alternatives;
+}
+
+// The grid reading with some of its syllables swapped for their near sounds, not itself. None
+// when there are more than kMaxFuzzyReadings of them: a long run of such syllables is no word.
+std::vector<std::string> FuzzyReadings(const std::string& reading) {
+  std::vector<std::vector<std::string>> syllables;
+  size_t count = 1;
+  for (size_t start = 0;;) {
+    size_t end = reading.find(kSeparator, start);
+    syllables.push_back(FuzzySyllables(reading.substr(start, end - start)));
+    count *= syllables.back().size();
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  if (count == 1 || count > kMaxFuzzyReadings) return {};
+  std::vector<std::string> readings{""};
+  for (size_t i = 0; i < syllables.size(); i++) {
+    std::vector<std::string> next;
+    for (const std::string& prefix : readings) {
+      for (const std::string& syllable : syllables[i]) next.push_back(i ? prefix + kSeparator + syllable : syllable);
+    }
+    readings = std::move(next);
+  }
+  readings.erase(readings.begin());  // the first is the reading as typed
+  return readings;
+}
+
 // The dictionary, reading a syllable that ends in Composer::kAnyTone as any of its tones,
 // and, when abbreviated, a lone symbol that ends in it as any syllable it begins.
 class TonelessModel : public LanguageModel {
  public:
-  TonelessModel(std::shared_ptr<Lexicon> lm, bool abbreviated) : lm_(std::move(lm)), abbreviated_(abbreviated) {}
+  TonelessModel(std::shared_ptr<Lexicon> lm, bool abbreviated, bool fuzzy)
+      : lm_(std::move(lm)), abbreviated_(abbreviated), fuzzy_(fuzzy) {}
 
   std::vector<Unigram> getUnigrams(const std::string& reading) override {
+    if (!fuzzy_ || reading.empty() || reading[0] == '_') return lookup(reading);
+    auto cached = fuzzyCache_.find(reading);
+    if (cached != fuzzyCache_.end()) return cached->second;
+    std::vector<Unigram> unigrams = lookup(reading);
+    std::unordered_set<std::string> values;
+    for (const Unigram& unigram : unigrams) values.insert(unigram.value());
+    for (const std::string& variant : FuzzyReadings(reading)) {
+      for (const Unigram& unigram : lookup(variant)) {
+        if (values.insert(unigram.value()).second) unigrams.emplace_back(unigram.value(), unigram.score() - kFuzzyPenalty, unigram.rawValue());
+      }
+    }
+    std::stable_sort(unigrams.begin(), unigrams.end(), [](const Unigram& a, const Unigram& b) { return a.score() > b.score(); });
+    if (fuzzyCache_.size() >= kCacheSize) fuzzyCache_.clear();
+    return fuzzyCache_.emplace(reading, std::move(unigrams)).first->second;
+  }
+
+  std::vector<Unigram> lookup(const std::string& reading) {
     // Punctuation readings such as _punctuation_* are not syllables.
     if (reading.find(Composer::kAnyTone) == std::string::npos || reading[0] == '_') return lm_->getUnigrams(reading);
     auto cached = cache_.find(reading);
@@ -102,7 +176,7 @@ class TonelessModel : public LanguageModel {
   }
 
   bool hasUnigrams(const std::string& reading) override {
-    if (reading.find(Composer::kAnyTone) == std::string::npos) return lm_->hasUnigrams(reading);
+    if (!fuzzy_ && reading.find(Composer::kAnyTone) == std::string::npos) return lm_->hasUnigrams(reading);
     return !getUnigrams(reading).empty();
   }
 
@@ -144,7 +218,8 @@ class TonelessModel : public LanguageModel {
   }
 
   std::shared_ptr<Lexicon> lm_;
-  bool abbreviated_;
+  bool abbreviated_, fuzzy_;
+  std::unordered_map<std::string, std::vector<Unigram>> fuzzyCache_;
   std::unordered_map<std::string, std::vector<Unigram>> cache_;
   std::unordered_map<std::string, std::vector<std::pair<std::string, Unigram>>> matchCache_;
 };
@@ -283,9 +358,9 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, std::shared_ptr<const CharModel> chars,
-                   double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated, bool omitTones)
+                   double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated, bool omitTones, bool fuzzy)
     : lm_(lm),
-      dictionary_(std::make_shared<TonelessModel>(lm, abbreviated)),
+      dictionary_(std::make_shared<TonelessModel>(lm, abbreviated, fuzzy)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
       contextWeight_(contextWeight),
       trigramWeight_(trigramWeight),
@@ -295,6 +370,7 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
       userModel_(std::move(userModel)),
       abbreviated_(abbreviated),
       omitTones_(omitTones),
+      fuzzy_(fuzzy),
       grid_(dictionary_),
       reading_(BopomofoKeyboardLayout::StandardLayout()) {}
 
@@ -881,7 +957,12 @@ std::optional<std::pair<std::string, std::string>> Composer::wordIn(size_t from,
 
 std::string Composer::readingOf(const Segment& segment, const std::string& value, bool fromEnd) {
   for (const auto& [start, candidate] : choices(segment, fromEnd)) {
-    if (candidate.value == value) return candidate.reading;
+    if (candidate.value != value) continue;
+    if (fuzzy_) {  // a word of a near sound is listed under what was typed, which is not its reading
+      std::vector<Formosa::Gramambular2::LanguageModel::Unigram> own = lm_->getUnigrams(candidate.reading);
+      if (std::none_of(own.begin(), own.end(), [&](const auto& unigram) { return unigram.value() == value; })) return "";
+    }
+    return candidate.reading;
   }
   return "";
 }
@@ -890,7 +971,7 @@ void Composer::reloadWords() {
   std::vector<std::string> readings = grid_.readings();
   size_t cursor = grid_.cursor();
   // A new dictionary, as the old one keeps the words it looked up.
-  dictionary_ = std::make_shared<TonelessModel>(std::static_pointer_cast<Lexicon>(lm_), abbreviated_);
+  dictionary_ = std::make_shared<TonelessModel>(std::static_pointer_cast<Lexicon>(lm_), abbreviated_, fuzzy_);
   grid_ = Formosa::Gramambular2::ReadingGrid(dictionary_);
   for (const std::string& reading : readings) grid_.insertReading(reading);
   grid_.setCursor(cursor);

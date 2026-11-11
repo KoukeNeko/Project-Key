@@ -80,7 +80,8 @@ class Composer {
                     double contextWeight = kContextWeight, double trigramWeight = kTrigramWeight,
                     std::shared_ptr<const CharModel> chars = nullptr,
                     double charWeight = kCharWeight,
-                    std::shared_ptr<const PersonalModel> personal = nullptr, bool abbreviated = true, bool omitTones = false);
+                    std::shared_ptr<const PersonalModel> personal = nullptr, bool abbreviated = true, bool omitTones = false,
+                    bool fuzzy = false);
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5;
   // How much the character model's log10 probability adds to a word's score (it only works with a Bigram).
@@ -197,6 +198,7 @@ class Composer {
   SentenceModel::Cache sentenceCache_;  // states for the sentences of the keys before
   bool abbreviated_;
   bool omitTones_;
+  bool fuzzy_;
   Formosa::Gramambular2::ReadingGrid grid_;
   Formosa::Mandarin::BopomofoReadingBuffer reading_;
   bool readingShown_ = false;  // the open syllable is in the grid, toneless, right before the cursor

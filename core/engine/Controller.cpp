@@ -96,6 +96,7 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kCapsLockToggle:
     case Setting::kAbbreviated:
     case Setting::kOmitTones:
+    case Setting::kFuzzySounds:
     case Setting::kKeypadPicks:
     case Setting::kCandidatePosition:
     case Setting::kGridColumns:
@@ -115,6 +116,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kChoosingProofLastOn: return "ChoosingProofLastOn";
     case Setting::kAbbreviated: return "Abbreviated";
     case Setting::kOmitTones: return "OmitTones";
+    case Setting::kFuzzySounds: return "FuzzySounds";
     case Setting::kRememberChoices: return "RememberChoices";
     case Setting::kShiftToggle: return "ShiftToggle";
     case Setting::kFullWidthToggle: return "FullWidthToggle";
@@ -152,22 +154,24 @@ void Controller::makeComposer() {
   if (!composer_) replacing_ = 0;
   bool abbreviated = env_.settings->flag(Setting::kAbbreviated);
   bool omitTones = env_.settings->flag(Setting::kOmitTones);
+  bool fuzzy = env_.settings->flag(Setting::kFuzzySounds);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
   if (!env_.settings->flag(Setting::kFullWidthToggle)) env_.fullWidth = false;  // turned off while it was on
   ReloadUserPhrases(env_);
   // The composer keeps the words it looked up, so new user phrases need a new one.
-  if (composer_ && abbreviated == abbreviated_ && omitTones == omitTones_ && rememberChoices == rememberChoices_ && env_.models == models_ &&
+  if (composer_ && abbreviated == abbreviated_ && omitTones == omitTones_ && fuzzy == fuzzy_ && rememberChoices == rememberChoices_ && env_.models == models_ &&
       env_.userPhrasesVersion == userPhrasesVersion_) {
     return;
   }
   userPhrasesVersion_ = env_.userPhrasesVersion;
   abbreviated_ = abbreviated;
   omitTones_ = omitTones;
+  fuzzy_ = fuzzy;
   rememberChoices_ = rememberChoices;
   models_ = env_.models;
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight,
-                                         rememberChoices && personal_ ? env_.personal : nullptr, abbreviated, omitTones);
+                                         rememberChoices && personal_ ? env_.personal : nullptr, abbreviated, omitTones, fuzzy);
   if (env_.sentences) composer_->setSentenceModel(env_.sentences);
 }
 
@@ -1081,6 +1085,11 @@ void Controller::promoteSelected() {
   }
   std::string word = candidates_[selection_];
   std::string reading = composer_->readingOf(*segment, word, choosesFromEnd());
+  if (reading.empty() && fuzzy_) {  // the only word that has none: one of a near sound, which the typed Zhuyin does not read as
+    notice_ = "「" + word + "」是近似音，不能加入自訂詞";
+    refresh();
+    return;
+  }
   // A reading typed without a tone stands for several; the file's lines have the whole one.
   if (reading.empty() || reading.find(Composer::kAnyTone) != std::string::npos) {
     client_.beep();

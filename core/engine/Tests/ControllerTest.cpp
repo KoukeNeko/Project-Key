@@ -876,6 +876,16 @@ int main(int argc, char** argv) {
   assert(!std::filesystem::exists(env.userPhrasesPath));
   EscapeAll(controller, client);
 
+  // A word of a near sound has no reading of the typed Zhuyin's to add: + says so in the proof row.
+  settings.set(Setting::kFuzzySounds, 1);
+  Type(controller, "y/3");  // ㄗㄥˇ, which 怎 (ㄗㄣˇ) is offered for
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(controller.handleKey(Special(ProjectKey::Key::kRight)) && controller.candidates()[1] == "怎");
+  assert(controller.handleKey(Press("+")));
+  assert(controller.panel()->segments[0] == "「怎」是近似音，不能加入自訂詞" && !std::filesystem::exists(env.userPhrasesPath));
+  EscapeAll(controller, client);
+  settings.remove(Setting::kFuzzySounds);
+
   // ` opens the list of symbols: a digit picks one, Escape takes the list out again, and a capital
   // letter swaps it for that letter's list.
   Type(controller, "`");
