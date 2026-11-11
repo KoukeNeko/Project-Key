@@ -1,6 +1,7 @@
 #include "TextService/CandidateWindow.h"
 
 #include <dwmapi.h>
+#include <uiautomation.h>
 
 #include <algorithm>
 #include <cmath>
@@ -392,6 +393,35 @@ void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND
   UpdateWindow(hwnd_);
   if (!wasVisible) appear();
   if (sliding_ || resizing_ || fading_) SetTimer(hwnd_, kAnimationTimer, kFrameMs, nullptr);
+  announceSelection();
+}
+
+// Screen readers follow the focus, which stays in the app, as this window never takes it. A UI
+// Automation notification reads the selected candidate and its place in the row without moving
+// it; a list of candidates as UIA fragments, for a window nobody focuses, would add much more for
+// the same speech. The host provider of the window is enough to raise it on.
+void CandidateWindow::announceSelection() {
+  std::wstring text;
+  if (content_->selectedRow >= 0 && content_->selectedRow < static_cast<int>(content_->rows.size())) {
+    const auto& row = content_->rows[content_->selectedRow];
+    if (content_->selection >= 0 && content_->selection < static_cast<int>(row.size())) {
+      text = Widen(row[content_->selection]) + L"，" + std::to_wstring(content_->selection + 1) + L"/" + std::to_wstring(row.size());
+    }
+  }
+  bool changed = !text.empty() && text != announced_;
+  announced_ = text;
+  if (!changed || !UiaClientsAreListening()) return;
+  IRawElementProviderSimple* provider = nullptr;
+  if (FAILED(UiaHostProviderFromHwnd(hwnd_, &provider))) return;
+  BSTR displayString = SysAllocString(text.c_str());
+  BSTR activityId = SysAllocString(L"ProjectKey.Candidate");
+  // MostRecent: arrowing quickly through the candidates reads only where the selection stops.
+  if (displayString && activityId) {
+    UiaRaiseNotificationEvent(provider, NotificationKind_Other, NotificationProcessing_MostRecent, displayString, activityId);
+  }
+  SysFreeString(displayString);
+  SysFreeString(activityId);
+  provider->Release();
 }
 
 void CandidateWindow::showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance) {
@@ -485,6 +515,7 @@ void CandidateWindow::tick() {
 
 void CandidateWindow::hide() {
   if (!visible()) return;
+  announced_.clear();
   NotifyWinEvent(EVENT_OBJECT_IME_HIDE, hwnd_, OBJID_CLIENT, CHILDID_SELF);
   if (ReducesMotion()) {
     finishHide();

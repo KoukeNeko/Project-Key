@@ -46,6 +46,7 @@ class CandidateWindow {
   void applyFade();                      // sets the window's opacity to fadeAlpha
   void paint();
   void tick();
+  void announceSelection();  // to screen readers, when the selected candidate changes
   D2D1_SIZE_F fittingSize() const;
   float proofHeight() const;
   float rowHeight() const;
@@ -90,6 +91,7 @@ class CandidateWindow {
   Metrics::PanelHit pressed_;  // what the left button went down on
   Metrics::PanelHit hover_;
   std::vector<std::vector<int>> spans_;  // grid columns of content_'s candidates, for hitAt
+  std::wstring announced_;  // what screen readers last heard of the selection; empty while typing or hidden
 };
 
 class ModeBadge {

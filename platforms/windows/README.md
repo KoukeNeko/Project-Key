@@ -123,10 +123,10 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 候選視窗支援滑鼠操作：點選候選字即選取，點選第一列尾端的頁碼或箭頭即展開或收合候選格線。輸入時顯示的候選列亦可點選，點選後可繼續輸入。點選其他位置時，交由 App 處理。
 - 組字時參考游標前的漢字，不視為句首（同 macOS）：中文模式下，可能開始組字的按鍵連同游標前的文字一併傳給伺服器。透過 IMM32 相容層運作的 App 不提供文件內容，仍視為句首。
 - 候選字亦以 TSF 的 UI Element（`ITfCandidateListUIElement`）提供：自行繪製輸入法介面的 App（例如全螢幕遊戲）與觸控鍵盤接手時，候選視窗不顯示，由 App 顯示候選字並可選取或取消。其他 App 照常顯示候選視窗。
+- 朗讀程式（同 macOS）：選字時，候選視窗出現或反白的候選改變，即以 UI Automation 的通知事件（`UiaRaiseNotificationEvent`）讀出反白的候選字及其於該列的位置，例如「程式，1/6」。候選視窗不取得焦點，因此不提供可逐項瀏覽的候選清單元素。輸入時顯示的候選列不朗讀。
 
 ## 尚未實作
 
-- 候選清單的 UI Automation 支援（供朗讀程式讀出候選字）；目前僅送出 `EVENT_OBJECT_IME_SHOW／HIDE／CHANGE`。
 - 聯想詞。
 - 自行建置的上下文模型：`tools/bigram-trainer` 的訓練腳本為 shell script，於 Windows 上須另行執行，或以 Git Bash 執行 `fetch-models.sh` 下載發行版所用的同一組檔案。存在 `bigram.bin`、`chars.bin` 時，`build.ps1` 一併安裝；存在補充詞彙後的 `data.txt` 時，以其取代 McBopomofo 的詞庫。缺少這些檔案時，選字結果與 McBopomofo 相同。發行版已附有這些檔案。
 - 選過的字僅存於伺服器記憶體，登出或重新安裝後清空（同 macOS）；自送出文字學得的字串次數存於 `%LOCALAPPDATA%\Project Key\personal.txt`，設定中的「清除」一併清空。Store App、沙盒中與低完整性的 App 不依此紀錄排序，亦不寫入紀錄，以免經由候選順序得知於其他 App 輸入過的文字。

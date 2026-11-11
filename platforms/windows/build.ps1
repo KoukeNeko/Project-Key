@@ -160,7 +160,7 @@ $dllSources = 'Dll', 'TextService', 'EngineClient', 'CandidateWindow', 'Candidat
   ForEach-Object { "$PSScriptRoot\Sources\TextService\$_.cpp" }
 $dllObjects = @(Compile 'textservice' $dllSources)
 Invoke-Native link.exe @LinkFlags /DLL "/DEF:$PSScriptRoot\Sources\TextService\ProjectKey.def" "/OUT:$Out\ProjectKey.dll" `
-  @dllObjects @commonObjects "$Obj\ProjectKey.res" @SystemLibs
+  @dllObjects @commonObjects "$Obj\ProjectKey.res" @SystemLibs uiautomationcore.lib
 
 # The settings window (WinUI 3, .NET), into Settings\ beside the text service.
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
