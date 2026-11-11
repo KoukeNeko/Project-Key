@@ -118,7 +118,7 @@ $SystemLibs = @('ole32.lib', 'oleaut32.lib', 'uuid.lib', 'advapi32.lib', 'user32
 
 # The engine server.
 $serverObjects = @(Compile 'server' @("$PSScriptRoot\Sources\Server\Server.cpp"))
-Invoke-Native link.exe @LinkFlags /SUBSYSTEM:WINDOWS "/OUT:$Out\ProjectKeyServer.exe" @serverObjects @commonObjects "$Obj\engine.lib" @SystemLibs
+Invoke-Native link.exe @LinkFlags /SUBSYSTEM:WINDOWS /MANIFEST:EMBED "/MANIFESTINPUT:$PSScriptRoot\Sources\Server\ProjectKeyServer.manifest" "/OUT:$Out\ProjectKeyServer.exe" @serverObjects @commonObjects "$Obj\engine.lib" @SystemLibs
 
 # The text service DLL, with the icon the input switcher shows: ㄅ on the accent color.
 $Icon = Join-Path $Obj 'ProjectKey.ico'

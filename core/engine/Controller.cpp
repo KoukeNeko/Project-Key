@@ -231,7 +231,7 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
 }
 
 std::string ExcludedPhrasesPath(const Environment& env) {
-  return (std::filesystem::path(env.userPhrasesPath).parent_path() / "exclude-phrases.txt").string();
+  return Utf8(Path(env.userPhrasesPath).parent_path() / "exclude-phrases.txt");
 }
 
 void ReloadUserPhrases(Environment& env) {
@@ -716,10 +716,9 @@ int Controller::indexInRow(int row, int column) const {
 }
 
 namespace {
-std::filesystem::path Utf8Path(const std::string& utf8) { return std::filesystem::path(std::u8string(utf8.begin(), utf8.end())); }
 
 std::string ReadWholeFile(const std::string& path) {
-  std::ifstream in(Utf8Path(path), std::ios::binary);
+  std::ifstream in(Path(path), std::ios::binary);
   return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
@@ -1142,7 +1141,7 @@ void Controller::promoteSelected() {
 }
 
 void Controller::undoLastLine(const std::string& path, const std::string& line) {
-  std::filesystem::path file = Utf8Path(path);
+  std::filesystem::path file = Path(path);
   std::string text = ReadWholeFile(path);
   // Only the line that was added, still the last: the file may have been edited since.
   if (text.size() < line.size() || text.compare(text.size() - line.size(), line.size(), line) != 0) {
