@@ -53,6 +53,8 @@ enum class ProofMode { Always, WhenDoubtful, Off };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(ProofMode, N_("永遠"), N_("有可疑字時"), N_("關閉"));
 enum class GridColumns { Six, Seven, Eight, Nine };  // Setting::kGridColumns: 6 to 9 columns
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(GridColumns, N_("6"), N_("7"), N_("8"), N_("9"));
+enum class KeyboardLayout { Standard, ETen, Hsu, ETen26, IBM };  // Setting::kKeyboardLayout
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(KeyboardLayout, N_("大千"), N_("倚天"), N_("許氏"), N_("倚天 26 鍵"), N_("IBM"));
 enum class CandidatePosition { AfterCursor, BeforeCursor };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(CandidatePosition, N_("游標後"), N_("游標前"));
 // Setting::kAppearance's first two values: the dark window, and a dark tint over the blurred windows behind it.
@@ -97,6 +99,8 @@ FCITX_CONFIGURATION(
         this, "ProofPreview", "輸入時的整句預覽", static_cast<ProofMode>(Settings::DefaultValue(Setting::kProofPreview))};
     fcitx::OptionWithAnnotation<ProofMode, ProofModeI18NAnnotation> choosingProof{
         this, "ChoosingProof", "選字時的整句預覽", static_cast<ProofMode>(Settings::DefaultValue(Setting::kChoosingProof))};
+    fcitx::OptionWithAnnotation<KeyboardLayout, KeyboardLayoutI18NAnnotation> keyboardLayout{
+        this, "KeyboardLayout", "鍵盤排列", static_cast<KeyboardLayout>(Settings::DefaultValue(Setting::kKeyboardLayout))};
     fcitx::Option<bool> capsLockToggle{this, "CapsLockToggle", "Caps Lock 切換中英", DefaultFlag(Setting::kCapsLockToggle)};
     fcitx::Option<bool> shiftToggle{this, "ShiftToggle", "單按 Shift 切換中英", DefaultFlag(Setting::kShiftToggle)};
     fcitx::Option<bool> fullWidthToggle{this, "FullWidthToggle", "Shift+Space 切換全形", DefaultFlag(Setting::kFullWidthToggle)};
@@ -130,6 +134,7 @@ class ConfigSettings : public Settings {
       case Setting::kNextDoubtful: return *config_.nextDoubtful;
       case Setting::kAppearance: return static_cast<int>(*config_.appearance);
       case Setting::kGridColumns: return static_cast<int>(*config_.gridColumns);
+      case Setting::kKeyboardLayout: return static_cast<int>(*config_.keyboardLayout);
     }
     return std::nullopt;
   }

@@ -1,6 +1,6 @@
 # macOS 輸入法
 
-以 InputMethodKit 實作的注音輸入法（大千鍵盤），候選視窗採用 [A 整句校對條](../../docs/design/candidate-window/notes.md) 第 02 輪的設計。選字引擎與詞庫目前採用 McBopomofo（MIT，固定 commit）。組字與按鍵邏輯位於 `../../core/engine`，與其他平台共用，不依賴 InputMethodKit；`Sources/InputController.mm` 僅負責將按鍵與畫面接至 IMK。
+以 InputMethodKit 實作的注音輸入法，候選視窗採用 [A 整句校對條](../../docs/design/candidate-window/notes.md) 第 02 輪的設計。選字引擎與詞庫目前採用 McBopomofo（MIT，固定 commit）。組字與按鍵邏輯位於 `../../core/engine`，與其他平台共用，不依賴 InputMethodKit；`Sources/InputController.mm` 僅負責將按鍵與畫面接至 IMK。
 
 ## 建置與安裝
 
@@ -57,7 +57,7 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 | 任何時候 | 單按 ⇧ | 切換中／英，游標下方短暫顯示目前的語言與寬度，如「ㄅ半」「Ａ半」 |
 | 任何時候 | ⇧ Space | 切換全形／半形（可於設定關閉，預設開啟，關閉時與 Space 相同），游標下方短暫顯示目前的語言與寬度，如「ㄅ全」「Ａ半」。全形時，非組字中輸入的字母、符號與空白以全形輸出，中文與英文模式皆適用，注音鍵仍照常組字 |
 | | 游標進入輸入欄位 | 游標下方短暫顯示目前的語言與寬度，不切換 |
-| 英文模式 | ⇥ | 剛於英文模式輸入的大千鍵若為含聲調鍵的完整注音（如 ji3cl3），轉為組字中的「我好」並切回中文；之前的英文不受影響。可轉換時，游標下方預覽轉換結果與 ⇥ 鍵帽；無預覽時 ⇥ 照常輸入。終端機（Terminal、iTerm2、Ghostty 等）無法收回已送至 shell 的字，不提供此轉換 |
+| 英文模式 | ⇥ | 剛於英文模式輸入的注音鍵若為含聲調鍵的完整注音（如 ji3cl3），轉為組字中的「我好」並切回中文；之前的英文不受影響。可轉換時，游標下方預覽轉換結果與 ⇥ 鍵帽；無預覽時 ⇥ 照常輸入。終端機（Terminal、iTerm2、Ghostty 等）無法收回已送至 shell 的字，不提供此轉換 |
 | 組字中 | ⇥ | 組字的按鍵若拼成英文單字（如 hello，且非注音音節），轉回英文並切換至英文模式。可轉換時，游標下方預覽英文與 ⇥ 鍵帽；最後一個音節尚未結束時，預覽顯示於候選視窗旁的小視窗。按過 Delete、於文字中移動游標或選過字後即不再判斷 |
 | 組字中 | ⌃⇧P | 開關整句預覽 |
 
@@ -65,6 +65,7 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 
 - 候選視窗與中英提示的外觀：Liquid Glass（macOS 26 以上的預設）或深色。
 - 選字位置：游標後或游標前。
+- 鍵盤排列：大千（預設）、倚天、許氏、倚天 26 鍵、IBM。
 - 開關：選完跳到下一個可疑處、簡拼、近似音（預設關閉）、數字鍵盤選字（預設關閉）、記住選過的字、⇪ 切換中英（預設關閉）、單按 ⇧ 切換中英、⇧ Space 切換全形（預設開啟），以及 ⇥ 的英文轉注音與注音轉英文（預設開啟）。
 - 記住選過的字：可清除紀錄。開啟時亦自送出的文字學習常用說法，次數存於 `~/Library/Application Support/ProjectKey/personal.txt`；每學習十萬個字串即將所有次數減半，久未使用的說法逐漸淡出；清除紀錄時一併清空。
 - 「關於」：版本、有無新版（查詢 GitHub 最新發行版；按「更新到」即下載發行版的 zip、核對 SHA-256、取代 `~/Library/Input Methods/ProjectKey.app` 並重新開啟輸入法，與 Homebrew cask 的安裝方式相同）、選字模型的日期（有新模型時可直接下載，核對 SHA-256 後無須重新安裝即生效），以及授權與引擎、詞庫的來源。

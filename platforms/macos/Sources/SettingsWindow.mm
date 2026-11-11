@@ -17,6 +17,7 @@ NSString *const PKCandidatePositionKey = @"CandidatePosition";
 NSString *const PKNextDoubtfulKey = @"NextDoubtful";
 NSString *const PKKeypadPicksKey = @"KeypadPicks";
 NSString *const PKGridColumnsKey = @"GridColumns";
+NSString *const PKKeyboardLayoutKey = @"KeyboardLayout";
 NSString *const PKInputMethodBundleID = @"org.projectkey.inputmethod.ProjectKey";
 NSString *const PKClearChoicesNotification = @"org.projectkey.inputmethod.ProjectKey.ClearChoices";
 NSString *const PKReloadModelsNotification = @"org.projectkey.inputmethod.ProjectKey.ReloadModels";
@@ -100,6 +101,7 @@ void PKShowDataFolder(void) {
     PKNextDoubtfulKey : @YES,
     PKKeypadPicksKey : @NO,
     PKGridColumnsKey : @0,
+    PKKeyboardLayoutKey : @0,
   }];
 }
 

@@ -88,6 +88,7 @@ enum class Setting {
   kNextDoubtful,        // picking a candidate moves on to the next doubtful word
   kKeypadPicks,         // the keypad's digits pick from the row shown while typing
   kGridColumns,         // candidates per row: 0 to 3 for 6 to 9 columns
+  kKeyboardLayout,      // 0 大千, 1 倚天, 2 許氏, 3 倚天 26 鍵, 4 IBM
 };
 
 class Settings {
@@ -322,6 +323,7 @@ class Controller {
   std::optional<size_t> rowSegment_;  // the segment whose words the row shown while typing offers
   std::string shown_;  // the composition as last shown, pending reading included
   bool abbreviated_ = false, omitTones_ = false, fuzzy_ = false, rememberChoices_ = false;  // the settings composer_ was made with
+  int keyboardLayout_ = 0;
   unsigned models_ = 0;                                // and Environment::models
   uint64_t userPhrasesVersion_ = 0;                    // and Environment::userPhrasesVersion
   // What English mode let through since the last other key, so Tab

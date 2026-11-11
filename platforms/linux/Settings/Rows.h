@@ -226,6 +226,7 @@ inline const std::vector<Group>& Groups() {
        }},
       {"按鍵",
        {
+           {Row::kChoice, "KeyboardLayout", "鍵盤排列", nullptr, {"大千", "倚天", "許氏", "倚天 26 鍵", "IBM"}},
            {Row::kToggle, "CapsLockToggle", "Caps Lock 切換中英", "開啟時大寫用 Shift；關閉時 Caps Lock 鎖定大寫"},
            {Row::kToggle, "ShiftToggle", "單按 Shift 切換中英"},
            {Row::kToggle, "FullWidthToggle", "Shift+Space 切換全形"},

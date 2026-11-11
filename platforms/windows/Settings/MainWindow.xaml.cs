@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window {
     Bind(ChoosingProof, "ChoosingProof", 1);
     Bind(CandidatePosition, "CandidatePosition", 0);
     Bind(GridColumns, "GridColumns", 0);
+    Bind(KeyboardLayout, "KeyboardLayout", 0);
     // The text service's version (ProjectKey.rc); build.ps1 puts this app in Settings\ beside it.
     Version.Text = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "..", "ProjectKey.dll")).ProductVersion ?? "";
     CheckForModels();

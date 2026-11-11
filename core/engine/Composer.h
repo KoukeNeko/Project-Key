@@ -81,7 +81,9 @@ class Composer {
                     std::shared_ptr<const CharModel> chars = nullptr,
                     double charWeight = kCharWeight,
                     std::shared_ptr<const PersonalModel> personal = nullptr, bool abbreviated = true, bool omitTones = false,
-                    bool fuzzy = false);
+                    bool fuzzy = false,
+                    const Formosa::Mandarin::BopomofoKeyboardLayout* layout =
+                        Formosa::Mandarin::BopomofoKeyboardLayout::StandardLayout());
 
   static constexpr double kContextWeight = 0.3, kTrigramWeight = 0.5;
   // How much the character model's log10 probability adds to a word's score (it only works with a Bigram).
@@ -96,12 +98,15 @@ class Composer {
   // A syllable is open: a tone key or Space completes it.
   bool hasPendingReading() const { return !reading_.isEmpty(); }
   bool isReadingKey(char key) const { return reading_.isValidKey(key); }
+  // Whether `key` types a tone and nothing else (大千's 3, 4, 6, 7). 許氏's and 倚天 26 鍵's tone keys
+  // are consonants too, so they have none.
+  bool isToneKey(char key) const;
   // Whether `keys` type exactly one dictionary syllable: each key sets its own
   // component (none replaces another, as in English words), ending with a tone
   // key, a space for the first tone, or neither for any tone.
   bool isSyllableKeys(const std::string& keys) const;
 
-  // Adds a Daqian key; a tone key completes the syllable. Without a tone, a whole
+  // Adds a key of the layout; a tone key completes the syllable. Without a tone, a whole
   // syllable, or a lone symbol, is in the text as its word right away, and it ends
   // where a key starts the next one.
   KeyResult typeReadingKey(char key);

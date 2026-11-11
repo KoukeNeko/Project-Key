@@ -358,7 +358,8 @@ std::vector<std::string_view> Lexicon::rowsStartingWith(const std::string& prefi
 Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bigram,
                    std::shared_ptr<McBopomofo::UserOverrideModel> userModel, double contextWeight,
                    double trigramWeight, std::shared_ptr<const CharModel> chars,
-                   double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated, bool omitTones, bool fuzzy)
+                   double charWeight, std::shared_ptr<const PersonalModel> personal, bool abbreviated, bool omitTones, bool fuzzy,
+                   const BopomofoKeyboardLayout* layout)
     : lm_(lm),
       dictionary_(std::make_shared<TonelessModel>(lm, abbreviated, fuzzy)),
       bigram_(bigram && bigram->isLoaded() ? std::move(bigram) : nullptr),
@@ -372,7 +373,7 @@ Composer::Composer(std::shared_ptr<Lexicon> lm, std::shared_ptr<const Bigram> bi
       omitTones_(omitTones),
       fuzzy_(fuzzy),
       grid_(dictionary_),
-      reading_(BopomofoKeyboardLayout::StandardLayout()) {}
+      reading_(layout) {}
 
 Composer::KeyResult Composer::typeReadingKey(char key) {
   if (!reading_.isValidKey(key)) return KeyResult::kInvalid;
@@ -462,15 +463,18 @@ bool Composer::startsSyllable(char key) const {
   // Without abbreviated, only once the open syllable is a whole one (ㄖㄣ, not ㄅ): until then
   // each key edits it (ㄅ then ㄆ is ㄆ).
   if (!abbreviated_ && !dictionary_->hasUnigrams(reading_.syllable().composedString() + kAnyTone)) return false;
-  BopomofoSyllable typed = BopomofoKeyboardLayout::StandardLayout()->syllableFromKeySequence(std::string(1, key));
-  if (typed.hasToneMarker()) return false;
-  auto lastPlace = [](const BopomofoSyllable& s) { return s.hasVowel() ? 3 : s.hasMiddleVowel() ? 2 : s.hasConsonant() ? 1 : 0; };
+  const BopomofoKeyboardLayout* layout = reading_.keyboardLayout();
   BopomofoSyllable open = reading_.syllable();
+  // The open syllable with the key, as the reading would take it: in 許氏 and 倚天 26 鍵 a key's
+  // symbol depends on the others (j is ㄓ alone, ㄐ before ㄧ, ˋ after a whole syllable).
+  BopomofoSyllable joined = layout->syllableFromKeySequence(layout->keySequenceFromSyllable(open) + key);
+  if (joined.hasToneMarker()) return false;
+  BopomofoSyllable typed = layout->syllableFromKeySequence(std::string(1, key));
+  auto lastPlace = [](const BopomofoSyllable& s) { return s.hasVowel() ? 3 : s.hasMiddleVowel() ? 2 : s.hasConsonant() ? 1 : 0; };
   // In the place the syllable ends in, as an ordinary Zhuyin input method: it replaces what is there.
   if (!abbreviated_ && !omitTones_ && lastPlace(typed) == lastPlace(open)) return false;
   if (lastPlace(typed) <= lastPlace(open)) return true;
-  std::string joined = (open + typed).composedString();
-  return !dictionary_->hasUnigrams(joined + kAnyTone);
+  return !dictionary_->hasUnigrams(joined.composedString() + kAnyTone);
 }
 
 // Puts the open syllable in the grid, toneless, when the dictionary has it, so its word shows.
@@ -521,7 +525,8 @@ void Composer::endOpenSyllable() {
 }
 
 bool Composer::insertPunctuation(char key) {
-  for (const std::string& prefix : {"_punctuation_Standard_", "_punctuation_"}) {
+  // The layout's own first, as McBopomofo: its Zhuyin keys leave other keys for punctuation.
+  for (const std::string& prefix : {"_punctuation_" + reading_.keyboardLayout()->name() + "_", std::string("_punctuation_")}) {
     if (insertSymbols(prefix + std::string(1, key))) return true;
   }
   return false;
@@ -540,13 +545,18 @@ bool Composer::isSyllableKeys(const std::string& keys) const {
   if (keys.empty()) return false;
   std::string typed = keys.back() == ' ' ? keys.substr(0, keys.size() - 1) : keys;
   if (typed.empty() || typed.find(' ') != std::string::npos) return false;
-  const BopomofoKeyboardLayout* layout = BopomofoKeyboardLayout::StandardLayout();
+  const BopomofoKeyboardLayout* layout = reading_.keyboardLayout();
   BopomofoSyllable syllable = layout->syllableFromKeySequence(typed);
   bool hasTone = syllable.hasToneMarker(), space = keys.back() == ' ';
   if (hasTone && space) return false;  // a tone key ends it, a space for the first tone, or neither for any tone
   if (!hasTone && !space && typed.size() == 1) return false;  // a lone symbol only stands for a syllable
   std::string reading = syllable.composedString() + (hasTone || space ? "" : std::string(1, kAnyTone));
   return layout->keySequenceFromSyllable(syllable) == typed && dictionary_->hasUnigrams(reading);
+}
+
+bool Composer::isToneKey(char key) const {
+  std::vector<BopomofoSyllable::Component> components = reading_.keyboardLayout()->keyToComponents(key);
+  return components.size() == 1 && BopomofoSyllable(components[0]).hasToneMarker();
 }
 
 bool Composer::backspace() {

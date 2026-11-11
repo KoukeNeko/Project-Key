@@ -62,7 +62,7 @@ bool IsDown(int key) {
   return (GetKeyState(key) & 0x8000) != 0;
 }
 
-// What a key types in a US layout, the Daqian keyboard's base: letters, digits
+// What a key types in a US layout, which every Zhuyin layout is drawn on: letters, digits
 // and punctuation with Shift; Caps Lock capitalizes letters.
 std::string UsCharacter(WPARAM vk, bool shift, bool capsLock) {
   if (vk >= 'A' && vk <= 'Z') {

@@ -20,6 +20,7 @@ struct SettingsForm: View {
   @AppStorage(PKCandidatePositionKey) private var candidatePosition = 1
   @AppStorage(PKNextDoubtfulKey) private var nextDoubtful = true
   @AppStorage(PKGridColumnsKey) private var gridColumns = 0
+  @AppStorage(PKKeyboardLayoutKey) private var keyboardLayout = 0
   @State private var cleared = false
   @State private var update = UpdateState.checking
   @ObservedObject var models: ModelsUpdater
@@ -97,6 +98,13 @@ struct SettingsForm: View {
         }
       }
       Section("按鍵") {
+        Picker("鍵盤排列", selection: $keyboardLayout) {
+          Text("大千").tag(0)
+          Text("倚天").tag(1)
+          Text("許氏").tag(2)
+          Text("倚天 26 鍵").tag(3)
+          Text("IBM").tag(4)
+        }
         Toggle(isOn: $capsLockToggle) {
           Text("⇪ 切換中英")
           Text("開啟時大寫用 ⇧；關閉時 ⇪ 鎖定大寫")

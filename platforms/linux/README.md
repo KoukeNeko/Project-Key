@@ -1,6 +1,6 @@
 # Linux 輸入法
 
-以 Fcitx5 實作的注音輸入法（大千鍵盤），按鍵與 [macOS 版](../macos/README.md)、[Windows 版](../windows/README.md) 相同。已測試的環境：Ubuntu 24.04 的 KDE Plasma（X11 與 Wayland）與 GNOME（Xorg 與 Wayland）、Debian 13 的 GNOME（Wayland），以及 Pop!_OS 24.04 的 COSMIC。
+以 Fcitx5 實作的注音輸入法，按鍵與 [macOS 版](../macos/README.md)、[Windows 版](../windows/README.md) 相同。已測試的環境：Ubuntu 24.04 的 KDE Plasma（X11 與 Wayland）與 GNOME（Xorg 與 Wayland）、Debian 13 的 GNOME（Wayland），以及 Pop!_OS 24.04 的 COSMIC。
 
 ## 架構
 

@@ -64,6 +64,23 @@ char SingleCharacter(const KeyEvent& event) {
   return event.characters.size() == 1 && static_cast<unsigned char>(event.characters[0]) < 128 ? event.characters[0] : 0;
 }
 
+// Whether `keys` hold a tone key, which plain words do not: Space for the first tone does not count.
+bool HasToneKey(const Composer& composer, const std::string& keys) {
+  return std::any_of(keys.begin(), keys.end(), [&](char key) { return composer.isToneKey(key); });
+}
+
+// The layout Setting::kKeyboardLayout names; 大千 for a value it does not know.
+const Formosa::Mandarin::BopomofoKeyboardLayout* KeyboardLayout(int value) {
+  using Formosa::Mandarin::BopomofoKeyboardLayout;
+  switch (value) {
+    case 1: return BopomofoKeyboardLayout::ETenLayout();
+    case 2: return BopomofoKeyboardLayout::HsuLayout();
+    case 3: return BopomofoKeyboardLayout::ETen26Layout();
+    case 4: return BopomofoKeyboardLayout::IBMLayout();
+    default: return BopomofoKeyboardLayout::StandardLayout();
+  }
+}
+
 // The full-width form of a printable ASCII character: U+FF01 to U+FF5E, and U+3000 for the space.
 std::string FullWidth(char c) {
   if (c == ' ') return "\xe3\x80\x80";
@@ -100,6 +117,7 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kKeypadPicks:
     case Setting::kCandidatePosition:
     case Setting::kGridColumns:
+    case Setting::kKeyboardLayout:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
       return 0;
@@ -128,6 +146,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kNextDoubtful: return "NextDoubtful";
     case Setting::kKeypadPicks: return "KeypadPicks";
     case Setting::kGridColumns: return "GridColumns";
+    case Setting::kKeyboardLayout: return "KeyboardLayout";
   }
   return "";
 }
@@ -155,10 +174,11 @@ void Controller::makeComposer() {
   bool omitTones = env_.settings->flag(Setting::kOmitTones);
   bool fuzzy = env_.settings->flag(Setting::kFuzzySounds);
   bool rememberChoices = env_.settings->flag(Setting::kRememberChoices);
+  int keyboardLayout = env_.settings->get(Setting::kKeyboardLayout);
   if (!env_.settings->flag(Setting::kFullWidthToggle)) env_.fullWidth = false;  // turned off while it was on
   ReloadUserPhrases(env_);
   // The composer keeps the words it looked up, so new user phrases need a new one.
-  if (composer_ && abbreviated == abbreviated_ && omitTones == omitTones_ && fuzzy == fuzzy_ && rememberChoices == rememberChoices_ && env_.models == models_ &&
+  if (composer_ && abbreviated == abbreviated_ && omitTones == omitTones_ && fuzzy == fuzzy_ && rememberChoices == rememberChoices_ && keyboardLayout == keyboardLayout_ && env_.models == models_ &&
       env_.userPhrasesVersion == userPhrasesVersion_) {
     return;
   }
@@ -167,11 +187,13 @@ void Controller::makeComposer() {
   omitTones_ = omitTones;
   fuzzy_ = fuzzy;
   rememberChoices_ = rememberChoices;
+  keyboardLayout_ = keyboardLayout;
   models_ = env_.models;
   // An app that is not trusted with what was typed elsewhere neither reads nor teaches the choices either.
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices && personal_ ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight,
-                                         rememberChoices && personal_ ? env_.personal : nullptr, abbreviated, omitTones, fuzzy);
+                                         rememberChoices && personal_ ? env_.personal : nullptr, abbreviated, omitTones, fuzzy,
+                                         KeyboardLayout(keyboardLayout));
   if (env_.sentences) composer_->setSentenceModel(env_.sentences);
 }
 
@@ -444,7 +466,7 @@ std::string Controller::zhuyinAtEnd(size_t* trailingSpaces) const {
   size_t start = body.size();
   while (start > 0) {
     size_t begin = start - 1;
-    while (begin > 0 && !std::strchr(" 3467", body[begin - 1])) begin--;
+    while (begin > 0 && body[begin - 1] != ' ' && !composer_->isToneKey(body[begin - 1])) begin--;
     if (!composer_->isSyllableKeys(body.substr(begin, start - begin))) break;
     start = begin;
   }
@@ -467,7 +489,7 @@ void Controller::typeKeys(const std::string& keys) {
 void Controller::showEnglishHint() {
   size_t trailingSpaces = 0;
   std::string keys = env_.settings->flag(Setting::kEnglishToZhuyin) ? zhuyinAtEnd(&trailingSpaces) : "";
-  if (keys.find_first_of("3467") == std::string::npos) {
+  if (!HasToneKey(*composer_, keys)) {
     if (panel_ && !panel_->keyHint.empty()) hidePanel();
     return;
   }
@@ -565,7 +587,7 @@ bool Controller::convertEnglishRun() {
   std::string keys = env_.settings->flag(Setting::kEnglishToZhuyin) ? zhuyinAtEnd(&trailingSpaces) : "";
   englishRun_.clear();
   // Only what the preview shows: after plain words like "so ", Tab is a Tab.
-  if (keys.find_first_of("3467") == std::string::npos) return false;
+  if (!HasToneKey(*composer_, keys)) return false;
   // The keys must still be right before the caret: the app may have moved it.
   std::string typed = keys + std::string(trailingSpaces, ' ');
   std::string before = client_.textBeforeCaret();
@@ -686,8 +708,8 @@ bool Controller::handleComposing(const KeyEvent& event) {
   if (!composer_->hasPendingReading() && ((key == '`' && openSymbolList("_punctuation_list")) || (key == '~' && openSymbolList("_emoji_groups")))) {
     return true;
   }
-  // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on '.
-  if (key == '\\' && !event.shift) key = '\'';
+  // Apple's Zhuyin keyboard prints 、 on the \ key; McBopomofo's table has it on ', where ' is no Zhuyin.
+  if (key == '\\' && !event.shift && !composer_->isReadingKey('\'')) key = '\'';
   if (composer_->insertPunctuation(key)) {
     refresh();
     return true;

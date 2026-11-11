@@ -22,6 +22,7 @@ FOUNDATION_EXPORT NSString *const PKCandidatePositionKey;  // candidates for the
 FOUNDATION_EXPORT NSString *const PKNextDoubtfulKey;       // picking a candidate moves on to the next doubtful word
 FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's digits pick from the row shown while typing
 FOUNDATION_EXPORT NSString *const PKGridColumnsKey;        // candidates per row: 0 to 3 for 6 to 9
+FOUNDATION_EXPORT NSString *const PKKeyboardLayoutKey;     // 0 大千, 1 倚天, 2 許氏, 3 倚天 26 鍵, 4 IBM
 
 // The dictionary and context models the engine uses, and where the settings window puts a
 // newer release for it (core/engine/Models.h).

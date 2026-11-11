@@ -11,6 +11,8 @@
 #include <map>
 #include <exception>
 #include <set>
+#include <tuple>
+#include <vector>
 
 #ifdef _WIN32
 #include <crtdbg.h>
@@ -917,6 +919,24 @@ int main(int argc, char** argv) {
   assert(controller.panel()->segments[0] == "「怎」是近似音，不能加入自訂詞" && !std::filesystem::exists(env.userPhrasesPath));
   EscapeAll(controller, client);
   settings.remove(Setting::kFuzzySounds);
+
+  // The other layouts: 倚天, 許氏, 倚天 26 鍵 and IBM. A key that is a consonant and a tone (許氏's f, 倚天
+  // 26 鍵's j) ends a whole syllable as its tone, and a key that is no Zhuyin there types the layout's
+  // punctuation (許氏's , for ，).
+  int abbreviated = settings.get(Setting::kAbbreviated);
+  settings.set(Setting::kAbbreviated, 0);
+  for (auto [layout, keys, daqian, punctuation] : std::vector<std::tuple<int, std::string, std::string, std::string>>{
+           {1, "ge9 te8 xo3", "rup wu0 ji3", ""}, {2, "jen tem xhf,", "rup wu0 ji3", "，"}, {3, "xoj", "ji3", ""}, {4, "sg,", "ji3", ""}}) {
+    Type(controller, daqian);  // the same Zhuyin in 大千
+    std::string text = client.marked + punctuation;
+    EscapeAll(controller, client);
+    settings.set(Setting::kKeyboardLayout, layout);
+    Type(controller, keys);
+    assert(client.marked == text);
+    EscapeAll(controller, client);
+    settings.remove(Setting::kKeyboardLayout);
+  }
+  settings.set(Setting::kAbbreviated, abbreviated);
 
   // ` opens the list of symbols: a digit picks one, Escape takes the list out again, and a capital
   // letter swaps it for that letter's list.

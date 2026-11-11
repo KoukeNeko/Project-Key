@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/KoukeNeko/Project-Key)](https://github.com/KoukeNeko/Project-Key/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Project Key 為大千注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共用同一套組字引擎。整句可連續輸入後再一併選字；引擎依上下文排序候選，並標示可能選錯之處。
+Project Key 為注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共用同一套組字引擎。整句可連續輸入後再一併選字；引擎依上下文排序候選，並標示可能選錯之處。
 
 ![候選視窗：上方整句預覽標出可疑的「程式」，下方為候選列](.github/assets/candidate-window.png)
 
@@ -13,11 +13,12 @@ Project Key 為大千注音輸入法，macOS、Windows、Linux（Fcitx5）與 iO
 ### 組字
 
 - **整句組字**：整句輸入完畢後一併選字。同音詞分數相近之處於整句預覽中標為可疑，按 Tab 於可疑處之間移動。
+- **鍵盤排列**（macOS、Windows、Linux；iOS 為大千）：大千（預設）、倚天、許氏、倚天 26 鍵、IBM。許氏與倚天 26 鍵的聲調鍵兼作聲母，於完整音節之後按下時為聲調。以下範例皆依大千排列。
 - **省略聲調**：拼成完整音節後，輸入位置較前的注音即開始下一個音節，並不分聲調比對，例如 ㄖㄣㄨㄟ 為「認為」；輸入音節結尾位置的注音則取代原注音，例如 ㄋㄧ 再按 ㄨ 為 ㄋㄨ。開啟設定中的「省略聲調」（預設關閉；macOS、Windows、Linux）後，後者改為開始下一個音節，例如 ㄕㄉㄜ 為「是的」。
 - **注音順序容錯**（簡拼關閉時）：未依聲母、介音、韻母順序輸入的注音，於按下聲調鍵後合併為一個音節，例如 ㄧㄚㄐ 加一聲為 ㄐㄧㄚ、ㄛㄨㄗˋ 為 ㄗㄨㄛˋ。依輸入順序已構成詞語者不合併，例如 ㄨㄗˋ 仍為「污漬」。
 - **簡拼**（預設關閉；macOS、Windows、Linux）：單一注音代表以其開頭的音節，例如 ㄨㄇ 為「我們」、ㄎㄧ 為「可以」；尚未結束的音節亦先轉為字。關閉時，於拼成完整音節前輸入已有注音的位置，即取代該注音。
 - **近似音**（預設關閉；macOS、Windows、Linux）：一併列出 ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 互換後的字，排在所輸入注音的字之後，不影響預設選字。
-- **中英互轉**：於中文模式誤打成英文（如 hello），或於英文模式誤打成注音（如 ji3cl3）時，按 Tab 轉換。
+- **中英互轉**：於中文模式誤打成英文（如 hello），或於英文模式誤打成注音（如 ji3cl3）時，按 Tab 轉換。英文轉注音須含聲調鍵，因此不適用於許氏與倚天 26 鍵。
 - **接續前文選字**：組字時參考游標前的漢字，不視為句首（macOS、Linux、iOS）。
 
 ### 符號與全形

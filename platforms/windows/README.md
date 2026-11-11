@@ -1,6 +1,6 @@
 # Windows 輸入法
 
-以 TSF（Text Services Framework）實作的注音輸入法（大千鍵盤），功能與按鍵與 [macOS 版](../macos/README.md) 相同。候選視窗採用 [A 整句校對條](../../docs/design/candidate-window/notes.md) 第 03 輪的 Windows 版樣式，設定視窗依據 [設定頁：Windows 版](../../docs/design/settings/windows.md)。
+以 TSF（Text Services Framework）實作的注音輸入法，功能與按鍵與 [macOS 版](../macos/README.md) 相同。候選視窗採用 [A 整句校對條](../../docs/design/candidate-window/notes.md) 第 03 輪的 Windows 版樣式，設定視窗依據 [設定頁：Windows 版](../../docs/design/settings/windows.md)。
 
 ## 架構
 
@@ -76,7 +76,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 | | Shift+Space | 切換全形／半形，游標下方短暫顯示目前的語言與寬度，如「ㄅ全」「Ａ半」（說明同 macOS 版） |
 | | 游標進入輸入欄位 | 游標下方短暫顯示目前的語言與寬度，不切換 |
 | | Ctrl、Alt、Win 組合鍵 | 先送出組字，再交由 App 處理 |
-| 英文模式 | Tab | 剛輸入的大千鍵若為含聲調鍵的完整注音（如 ji3cl3），轉為組字中的「我好」並切回中文；輸入聲調鍵時預覽轉換結果與 Tab 鍵帽。無預覽時 Tab 照常輸入 |
+| 英文模式 | Tab | 剛輸入的注音鍵若為含聲調鍵的完整注音（如 ji3cl3），轉為組字中的「我好」並切回中文；輸入聲調鍵時預覽轉換結果與 Tab 鍵帽。無預覽時 Tab 照常輸入 |
 | 組字中 | Tab | 組字的按鍵若拼成英文單字（如 hello，且非注音音節），轉回英文並切換至英文模式；此時游標下方預覽英文與 Tab 鍵帽，最後一個音節尚未結束時，預覽顯示於候選視窗旁的小視窗。拼字檢查採用 Windows 內建的英文拼字檢查 |
 
 工作列通知區域顯示目前的語言與寬度（如 ㄅ半、Ａ全）：按左鍵切換中英，按右鍵開啟「設定…」。Windows「設定」中 Project Key 的「選項」亦開啟設定視窗。安裝程式另於開始選單加入「Project Key」，鍵盤清單或通知區域的圖示未顯示時，可由此開啟設定。設定視窗由引擎伺服器啟動，因為自沙盒中的 App 直接啟動的程式同樣受限於沙盒。
@@ -86,6 +86,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 設定視窗的內容與 macOS 相同：
 
 - 選字位置（游標後或游標前）、每列欄數。
+- 鍵盤排列：大千（預設）、倚天、許氏、倚天 26 鍵、IBM。
 - 開關：選完跳到下一個可疑處、簡拼、近似音（預設關閉）、數字鍵盤選字（預設關閉）、記住選過的字（可清除紀錄；開啟時亦自送出的文字學習）、Caps Lock（預設關閉）、單按 Shift 切換中英與 Shift+Space 切換全形（預設開啟），以及 Tab 的英文轉注音與注音轉英文。
 - 候選視窗外觀：深色、Acrylic（預設）、Mica、Mica Alt。
 - 輸入時與選字時的整句預覽：永遠／有可疑字時／關閉，預設為有可疑字時。

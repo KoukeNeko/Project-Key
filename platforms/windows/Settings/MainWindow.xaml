@@ -84,6 +84,15 @@
       </tk:SettingsCard>
 
       <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="按鍵" />
+      <tk:SettingsCard Header="鍵盤排列">
+        <ComboBox x:Name="KeyboardLayout" MinWidth="160">
+          <x:String>大千</x:String>
+          <x:String>倚天</x:String>
+          <x:String>許氏</x:String>
+          <x:String>倚天 26 鍵</x:String>
+          <x:String>IBM</x:String>
+        </ComboBox>
+      </tk:SettingsCard>
       <tk:SettingsCard Header="Caps Lock 切換中英" Description="開啟時大寫用 Shift；關閉時 Caps Lock 鎖定大寫">
         <ToggleSwitch x:Name="CapsLockToggle" OffContent="關閉" OnContent="開啟" />
       </tk:SettingsCard>
