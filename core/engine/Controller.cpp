@@ -168,7 +168,8 @@ void Controller::makeComposer() {
   fuzzy_ = fuzzy;
   rememberChoices_ = rememberChoices;
   models_ = env_.models;
-  composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices ? env_.userModel : nullptr,
+  // An app that is not trusted with what was typed elsewhere neither reads nor teaches the choices either.
+  composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices && personal_ ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight,
                                          rememberChoices && personal_ ? env_.personal : nullptr, abbreviated, omitTones, fuzzy);
   if (env_.sentences) composer_->setSentenceModel(env_.sentences);
