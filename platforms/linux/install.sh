@@ -322,6 +322,8 @@ if [ "$relogin" = true ]; then
 fi
 note "在輸入欄位按 Ctrl+Space 切換到 Project Key（ㄅ）。"
 note "設定：應用程式選單的「Project Key 設定」，或執行 projectkey-settings。"
+note "更新：再執行一次這個安裝指令。移除："
+note "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/platforms/linux/uninstall.sh | sh"
 if [ "$graphical" = true ] && command -v projectkey-settings >/dev/null; then
   # The welcome window: shows the input method added and lets the user try typing.
   nohup projectkey-settings --welcome >/dev/null 2>&1 &

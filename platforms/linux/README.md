@@ -54,7 +54,15 @@ curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platform
 4. GNOME 上將擴充功能「Project Key」加入 `org.gnome.shell enabled-extensions`；GNOME 於登入時載入擴充功能，因此須再登出登入一次。
 5. 開啟歡迎視窗試打。
 
-再次執行即更新至最新版本並修復設定。若先前以 Homebrew 安裝，`install.sh` 會移除 `projectkey-link` 建立於 `~/.local/share` 的連結，以免 Fcitx5 與 GNOME 繼續載入 Homebrew 版。以 `PROJECTKEY_SOURCE=<checkout>` 執行時，改自該 checkout 建置（測試修改用）。
+再次執行即更新至最新版本並修復設定；自套件庫安裝者亦可隨系統更新（`apt upgrade`、`dnf upgrade`）更新程式，選字模型則由設定視窗的「關於」下載。移除：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/uninstall.sh | sh
+```
+
+`uninstall.sh` 移除套件與套件庫設定、自 GNOME 開啟的擴充功能中移除 Project Key，並重新啟動 Fcitx5（Fcitx5 找不到 Project Key 時自行將其自輸入法中移除）。自訂詞、選字紀錄與設定（`~/.local/share/projectkey`、`~/.config/fcitx5/conf/projectkey.conf`）以及 Fcitx5 作為輸入法框架的設定予以保留，結束時列出移除方式；建置時安裝的開發套件亦不移除。
+
+若先前以 Homebrew 安裝，`install.sh` 會移除 `projectkey-link` 建立於 `~/.local/share` 的連結，以免 Fcitx5 與 GNOME 繼續載入 Homebrew 版。以 `PROJECTKEY_SOURCE=<checkout>` 執行時，改自該 checkout 建置（測試修改用）。
 
 以下為各項手動安裝方式。
 
@@ -112,4 +120,4 @@ Fcitx5 選單的「檢查 Project Key 安裝」以通知列出缺少的項目：
 
 設定視窗的分組與 macOS、Windows 相同，變更立即生效。`projectkey-settings` 依桌面開啟對應版本：KDE 上為 Qt 版（`Settings/Qt.cpp`，排版與 KDE 系統設定相同），GNOME 等 GTK 桌面上為 libadwaita 版（`Settings/Gtk.cpp`，未建置時改開 Qt 版）。環境中無 `XDG_CURRENT_DESKTOP` 時（例如手動重新啟動的 Fcitx5），改讀取 systemd 使用者環境中的桌面。兩者的設定列定義於 `Settings/Rows.h`。可由 Fcitx5 選單的「Project Key 設定…」或應用程式選單開啟。設定視窗透過 Fcitx5 的 D-Bus 介面讀寫設定，因此 Fcitx5 設定中 Project Key 的「設定」頁修改的是同一份設定，存放於 `~/.config/fcitx5/conf/projectkey.conf`。「清除選字紀錄」呼叫 addon 於 Fcitx5 D-Bus 上的 `/projectkey`。選過的字僅存於記憶體；自送出文字學得的字串次數存於 `$XDG_DATA_HOME/projectkey/personal.txt`（預設 `~/.local/share/projectkey/personal.txt`），「清除選字紀錄」一併清空，關閉「記住選過的字」時不學習。「恢復原廠設定」的「恢復設定」呼叫 addon 的 `ResetSettings`，將所有設定改回預設值；「一併刪除資料」另刪除 `phrases.txt`、`exclude-phrases.txt` 與 `personal.txt` 並呼叫 `ClearChoices`；兩者皆保留下載的選字模型。「關於」顯示選字模型的日期，有新模型時可直接下載至同一資料夾，核對 SHA-256 後無須重新安裝即生效。以 Homebrew 安裝時，有新版即顯示「更新到」：執行 `brew upgrade fcitx5-projectkey`（自原始碼建置，約需數分鐘）與 `projectkey-link`，再重新啟動 Fcitx5 並開啟新版的設定視窗，過程記錄於 `~/.cache/projectkey-update.log`；自行建置安裝者則連結至發行版頁面。
 
-移除方式：`sudo xargs rm < platforms/linux/build/install_manifest.txt`。
+以 `cmake --install` 安裝者的移除方式：`sudo xargs rm < platforms/linux/build/install_manifest.txt`。
