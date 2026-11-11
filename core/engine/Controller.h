@@ -246,6 +246,8 @@ class Controller {
   // symbol key then swaps it for that key's list (Ａ ａ Ⓐ for A), Escape and Backspace take it out again.
   // ~ opens the emoji groups the same way, and picking a group swaps them for its emoji.
   bool openSymbolList(const std::string& reading);
+  // Takes an open symbol or emoji list, never picked from, back out of the composition.
+  void dropSymbolList();
   std::string symbolReading_;  // while choosing from such a list, its reading
   bool excludeConfirm_ = false;  // Delete was pressed once on the selected candidate
   std::string notice_;           // shown in the proof row until the next key, after a word was excluded

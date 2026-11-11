@@ -956,6 +956,26 @@ int main(int argc, char** argv) {
   env.lm->loadEmoji("");
   std::filesystem::remove(emojiPath);
 
+  // A list never picked from is taken out, not sent: when the app is left, and by Up past its first
+  // row; Tab and Delete do nothing inside it.
+  std::ofstream(emojiPath) << "G\t表情\t😀 😃\nG\t動物\t🐶 🐱\n";
+  env.lm->loadEmoji(emojiPath);
+  size_t sentBefore = client.committed.size();
+  Type(controller, "~");
+  controller.deactivate();
+  assert(client.committed.size() == sentBefore && client.marked.empty());
+  Type(controller, "ji3~");
+  assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && controller.panel()->segments[0] == "Emoji");
+  assert(controller.handleKey(Special(ProjectKey::Key::kForwardDelete)) && !controller.panel()->excluding);
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)));  // the list first, then
+  Type(controller, "~");
+  controller.handleKey(Special(ProjectKey::Key::kUp));
+  controller.handleKey(Special(ProjectKey::Key::kUp));
+  assert(client.marked == "我");
+  EscapeAll(controller, client);
+  env.lm->loadEmoji("");
+  std::filesystem::remove(emojiPath);
+
   // A click from anywhere, the server's pipe on Windows included, picks nothing it should not.
   Type(controller, "rup ");
   assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));

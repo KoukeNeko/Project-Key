@@ -809,6 +809,7 @@ bool Controller::handleChoosing(const KeyEvent& event) {
       } else if (row > 0) {
         selection_ = rowStarts_[row - 1];
       } else {
+        dropSymbolList();
         choosing_ = false;  // past the first row, Up returns to the sentence
       }
       break;
@@ -831,6 +832,7 @@ bool Controller::handleChoosing(const KeyEvent& event) {
       pick(selection_);
       return true;
     case Key::kTab: {
+      if (!symbolReading_.empty()) return true;  // a list has no doubtful words to go on to
       std::optional<size_t> next = doubtfulAfter(activeStart_, event.shift);
       if (next) startChoosingAt(*next);
       return true;
@@ -1061,6 +1063,10 @@ bool Controller::openSymbolList(const std::string& reading) {
 }
 
 void Controller::excludeSelected() {
+  if (!symbolReading_.empty()) {  // symbols and emoji are no dictionary words to exclude
+    client_.beep();
+    return;
+  }
   std::optional<Segment> segment = activeSegment();
   if (!segment || selection_ == readingIndex_ || env_.userPhrasesPath.empty()) {
     client_.beep();  // the Zhuyin itself is no word
@@ -1262,12 +1268,22 @@ void Controller::hidePanel() {
   client_.hidePanel();
 }
 
+void Controller::dropSymbolList() {
+  if (!choosing_ || symbolReading_.empty()) return;
+  composer_->backspace();
+  symbolReading_.clear();
+}
+
 void Controller::commit() {
+  bool listOpen = choosing_ && !symbolReading_.empty();
+  dropSymbolList();  // leaving the app with a list open sends nothing of it
   if (!composer_->isEmpty()) {
     // A pending reading alone commits nothing but still ends the composition.
     client_.insertText(composer_->text());
     learn(composer_->text());
     composer_->clear();
+  } else if (listOpen) {
+    client_.setComposition(Composition{});  // the list was all there was: nothing replaces it
   }
   choosing_ = false;
   hidePanel();
