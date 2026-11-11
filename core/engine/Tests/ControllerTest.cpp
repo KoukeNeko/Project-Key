@@ -3,6 +3,7 @@
 // Usage: ControllerTest <path to data.txt>
 #undef NDEBUG
 #include <cassert>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -934,6 +935,17 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && client.marked.empty());
   env.lm->loadEmoji("");
   std::filesystem::remove(emojiPath);
+
+  // A click from anywhere, the server's pipe on Windows included, picks nothing it should not.
+  Type(controller, "rup ");
+  assert(controller.handleKey(Special(ProjectKey::Key::kSpace)));
+  std::string unclicked = client.marked;
+  controller.clickCandidate(0, INT_MAX);
+  controller.clickCandidate(INT_MAX, 0);
+  controller.toggleGrid();
+  controller.clickCandidate(INT_MAX, INT_MAX);
+  assert(client.marked == unclicked);
+  EscapeAll(controller, client);
 
   // A click picks what it lands on, in the row, in the unfolded grid and in the row shown while
   // typing. Last, as what it picks is remembered.

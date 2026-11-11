@@ -1164,7 +1164,8 @@ void Controller::pickFromTypingRow(int index) {
 }
 
 void Controller::clickCandidate(int row, int index) {
-  if (row < 0 || index < 0) return;
+  // From the window, or on Windows from any app through the server's pipe: anything may come.
+  if (row < 0 || index < 0 || index >= static_cast<int>(candidates_.size()) || row >= static_cast<int>(candidates_.size())) return;
   if (!choosing_) {
     if (row == 0 && rowSegment_) pickFromTypingRow(index);
     return;
