@@ -689,7 +689,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
   // the app the menu was opened for, whose candidates may go to Fcitx5's panel instead.
   void checkInstall(fcitx::InputContext* ic) {
     std::vector<std::string> problems;
-    if (!environment_.lm->isDataModelLoaded()) {
+    if (!environment_.lm || !environment_.lm->isDataModelLoaded()) {
       problems.push_back(std::string("詞庫沒有載入（") + PROJECTKEY_DATA_DIR + "/data.txt）：請重新安裝");
     }
     if (!spelling_.ok()) problems.push_back("沒有英文字典（Debian／Ubuntu 的 hunspell-en-us）：不會出現 Tab 英文提示");

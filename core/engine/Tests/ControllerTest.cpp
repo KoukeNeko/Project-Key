@@ -738,6 +738,8 @@ int main(int argc, char** argv) {
     std::shared_ptr<Lexicon> before = env.lm;
     assert(!UseNewestModels(env, bundled.string(), downloaded.string()));
     assert(env.lm == before && env.models == loads);
+    Environment starting;  // at start, with nothing to keep, the bundled models serve instead
+    assert(UseNewestModels(starting, bundled.string(), downloaded.string()) && starting.lm && starting.lm->isDataModelLoaded());
     fs::remove_all(downloaded / "2026-04-01");
     release(downloaded / "2026-02-01", "2026-02-01", true);
     assert(ModelsDirectory(bundled, downloaded) == downloaded / "2026-02-01");

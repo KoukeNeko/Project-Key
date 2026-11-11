@@ -201,6 +201,13 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   std::filesystem::path dir = ModelsDirectory(Path(bundled), Path(downloaded));
   auto lm = std::make_shared<Lexicon>();
   lm->loadLanguageModel(Utf8(dir / "data.txt").c_str());
+  // A damaged download at start, with nothing loaded yet: the bundled models serve. Later, the
+  // models in use stay, as below.
+  if (!lm->isDataModelLoaded() && !env.lm && dir != Path(bundled)) {
+    dir = Path(bundled);
+    lm = std::make_shared<Lexicon>();
+    lm->loadLanguageModel(Utf8(dir / "data.txt").c_str());
+  }
   if (!lm->isDataModelLoaded()) return false;
   lm->loadEmoji(Utf8(Path(bundled) / "emoji.txt"));  // not a model: the bundled one always serves
   auto bigram = std::make_shared<Bigram>();
@@ -352,6 +359,7 @@ void Controller::toggleMode() {
 }
 
 bool Controller::handleKey(const KeyEvent& original) {
+  if (!env_.lm) return false;  // no dictionary loaded, even the bundled one: the keys go to the app
   KeyEvent event = original;
   shiftAlone_ = false;
   typed_ = false;
