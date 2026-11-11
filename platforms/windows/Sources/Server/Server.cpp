@@ -8,8 +8,11 @@
 #include <spellcheck.h>
 #include <wrl/client.h>
 
+#include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
+#include <system_error>
 #include <thread>
 
 #include "Common/Layout.h"
@@ -76,6 +79,13 @@ class Recorder : public Client {
 };
 
 std::mutex gLock;  // the shared environment; held for each request
+// Each app's text service holds a connection, but so may any app in a sandbox, without limit: past
+// this many, new ones are turned away rather than each taking a thread.
+constexpr int kMaxConnections = 256;
+std::atomic<int> gConnections{0};
+// kShowSettings from any app, a sandboxed one included: at most one launch per interval.
+constexpr std::chrono::seconds kSettingsInterval{2};
+std::atomic<std::chrono::steady_clock::rep> gSettingsLaunched{0};
 Environment gEnvironment;
 RegistrySettings gSettings;
 std::unique_ptr<Layout::Fonts> gFonts;
@@ -167,6 +177,7 @@ void Serve(HANDLE pipe) {
     Protocol::Message message;
     if (!Protocol::ReadMessage(bytes, message)) break;
     std::string reply;
+    bool showSettings = false;
     {
       std::lock_guard lock(gLock);
       recorder.reply = {};
@@ -190,13 +201,21 @@ void Serve(HANDLE pipe) {
         case Protocol::Request::kClickCandidate: controller->clickCandidate(message.row, message.index); break;
         case Protocol::Request::kToggleGrid: controller->toggleGrid(); break;
         case Protocol::Request::kShowMode: controller->showMode(); break;
-        case Protocol::Request::kShowSettings: LaunchSettings(ModuleDirectory(nullptr)); break;
+        case Protocol::Request::kShowSettings: showSettings = true; break;  // after the lock, which every app's keys wait on
         case Protocol::Request::kState: break;
       }
       recorder.reply.englishMode = gEnvironment.englishMode;
       recorder.reply.fullWidth = gEnvironment.fullWidth;
       recorder.reply.appearance = gSettings.get(Setting::kAppearance);
       reply = Protocol::WriteReply(recorder.reply);
+    }
+    if (showSettings) {
+      auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+      auto last = gSettingsLaunched.load();
+      if (now - last >= std::chrono::duration_cast<std::chrono::steady_clock::duration>(kSettingsInterval).count() &&
+          gSettingsLaunched.compare_exchange_strong(last, now)) {
+        LaunchSettings(ModuleDirectory(nullptr));
+      }
     }
     DWORD written = 0;
     if (!WriteFile(pipe, reply.data(), static_cast<DWORD>(reply.size()), &written, nullptr)) break;
@@ -208,6 +227,7 @@ void Serve(HANDLE pipe) {
   DisconnectNamedPipe(pipe);
   CloseHandle(pipe);
   CoUninitialize();
+  gConnections--;
 }
 
 // The pipe admits this user from any integrity level and app container, as
@@ -270,10 +290,24 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
       return 1;
     }
     first = 0;
-    if (ConnectNamedPipe(pipe, nullptr) || GetLastError() == ERROR_PIPE_CONNECTED) {
-      std::thread(Serve, pipe).detach();
-    } else {
+    if (!ConnectNamedPipe(pipe, nullptr) && GetLastError() != ERROR_PIPE_CONNECTED) {
       CloseHandle(pipe);
+      continue;
+    }
+    if (gConnections >= kMaxConnections) {
+      DisconnectNamedPipe(pipe);
+      CloseHandle(pipe);
+      Sleep(50);  // a client that keeps reconnecting does not keep this loop busy
+      continue;
+    }
+    gConnections++;
+    try {
+      std::thread(Serve, pipe).detach();
+    } catch (const std::system_error&) {  // out of threads: this client goes without, the others keep theirs
+      gConnections--;
+      DisconnectNamedPipe(pipe);
+      CloseHandle(pipe);
+      Log(L"cannot start a thread for a connection");
     }
   }
   CloseHandle(instance);
