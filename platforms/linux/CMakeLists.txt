@@ -16,7 +16,7 @@ find_package(Fcitx5ModuleWayland REQUIRED)
 find_package(Fcitx5ModuleNotifications REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ENCHANT REQUIRED IMPORTED_TARGET enchant-2)
-pkg_check_modules(PANEL REQUIRED IMPORTED_TARGET xcb cairo cairo-xcb pangocairo wayland-client)
+pkg_check_modules(PANEL REQUIRED IMPORTED_TARGET xcb cairo cairo-xcb pangocairo wayland-client gio-2.0)
 find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
 include(GNUInstallDirs)
 

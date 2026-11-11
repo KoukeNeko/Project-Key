@@ -1,6 +1,10 @@
 #include "Panel.h"
 
+#include <dbus_public.h>
+#include <fcitx-utils/dbus/matchrule.h>
+#include <fcitx/addonmanager.h>
 #include <fcitx/instance.h>
+#include <gio/gio.h>
 #include <pango/pangocairo.h>
 
 #include <algorithm>
@@ -24,9 +28,54 @@ constexpr char kTextFont[] = "Noto Sans CJK TC";
 constexpr char kMonoFont[] = "Noto Sans Mono, DejaVu Sans Mono, monospace";
 constexpr char kKeyFont[] = "Noto Sans, sans-serif";
 constexpr char kReplacedArrow[] = " → ";
-// The dark background's opacity over a blur. Darker than over Acrylic (0.6):
-// KWin's blur adds no tint of its own, so over a white page 0.6 reads as light gray.
+// The background's opacity over a blur. Thicker than over Acrylic (0.6):
+// KWin's blur adds no tint of its own, so over a white page 0.6 dark reads as light gray.
 constexpr float kAcrylicTint = 0.85f;
+
+// The colors on the dark or the light fill; the accent and danger are the same on both.
+struct Palette {
+  uint32_t background, line, text, muted, accentSoft;
+  float lip, edge;  // black at these alphas: the keycap's lip, and the badge's edge
+};
+constexpr Palette kDarkPalette{kBackground, kLine, kText, kMuted, kAccentSoft, 0.35f, 0.5f};
+constexpr Palette kLightPalette{Light::kBackground, Light::kLine, Light::kText, Light::kMuted, Light::kAccentSoft, 0.15f, 0.12f};
+
+const Palette& PaletteOf(bool light) {
+  return light ? kLightPalette : kDarkPalette;
+}
+
+// The desktop portal's settings, where KDE, GNOME and others say whether apps should be light or dark.
+constexpr char kPortal[] = "org.freedesktop.portal.Desktop", kPortalPath[] = "/org/freedesktop/portal/desktop";
+constexpr char kPortalSettings[] = "org.freedesktop.portal.Settings", kAppearanceNamespace[] = "org.freedesktop.appearance";
+constexpr uint64_t kPortalTimeoutUs = 5'000'000;  // the portal may start on the first call, at login
+
+// The color-scheme at the message's read position, in `variants` variants: one in the signal,
+// two from Read. (Message::peekType cannot tell: on a plain value it throws.)
+std::optional<uint32_t> ColorScheme(fcitx::dbus::Message& message, int variants) {
+  using fcitx::dbus::Container;
+  for (int i = 1; i < variants; i++) message >> Container(Container::Type::Variant, fcitx::dbus::Signature("v"));
+  uint32_t scheme = 0;
+  message >> Container(Container::Type::Variant, fcitx::dbus::Signature("u")) >> scheme;
+  return message ? std::optional<uint32_t>(scheme) : std::nullopt;
+}
+
+// GNOME's own setting, for a GNOME without the portal: true unless it prefers dark, false
+// elsewhere. Nothing here runs GLib's main loop to hear it change, so it is read at each showing.
+bool GnomePrefersLight() {
+  static GSettings* settings = []() -> GSettings* {
+    GSettingsSchemaSource* source = g_settings_schema_source_get_default();
+    GSettingsSchema* schema = source ? g_settings_schema_source_lookup(source, "org.gnome.desktop.interface", TRUE) : nullptr;
+    bool found = schema && g_settings_schema_has_key(schema, "color-scheme");
+    if (schema) g_settings_schema_unref(schema);
+    return found ? g_settings_new("org.gnome.desktop.interface") : nullptr;
+  }();
+  if (!settings) return false;
+  gchar* scheme = g_settings_get_string(settings, "color-scheme");
+  bool light = g_strcmp0(scheme, "prefer-dark") != 0;
+  g_free(scheme);
+  return light;
+}
+
 constexpr uint64_t kFrameUs = 8000;
 
 uint64_t NowMs() {
@@ -65,13 +114,14 @@ void RoundedRect(cairo_t* cr, double left, double top, double right, double bott
   cairo_close_path(cr);
 }
 
-// A window's background: dark with a 1px edge, rounded where a compositor shows
-// the corners; over a blur, a dark tint, as over Acrylic on Windows.
-void DrawBackground(cairo_t* cr, float width, float height, bool rounded, bool blurred) {
+// A window's background with a 1px edge, rounded where a compositor shows the
+// corners; over a blur, a tint of it, as over Acrylic on Windows.
+void DrawBackground(cairo_t* cr, float width, float height, bool rounded, bool blurred, bool light) {
+  const Palette& colors = PaletteOf(light);
   RoundedRect(cr, 0.5, 0.5, width - 0.5, height - 0.5, rounded ? kWindowRadius : 0);
-  SetColor(cr, kBackground, blurred ? kAcrylicTint : 1);
+  SetColor(cr, colors.background, blurred ? kAcrylicTint : 1);
   cairo_fill_preserve(cr);
-  SetColor(cr, kLine, blurred ? 0.6f : 1);
+  SetColor(cr, colors.line, blurred ? 0.6f : 1);
   cairo_set_line_width(cr, 1);
   cairo_stroke(cr);
 }
@@ -129,6 +179,7 @@ Panel::Panel(fcitx::Instance* instance, const Settings& settings) : settings_(se
   badgeFont_ = Font(kTextFont, kBadgeSize, PANGO_WEIGHT_MEDIUM);
   // Every column fits a two-character word.
   columnWidth_ = kCellSide + width("6", labelFont_) + kLabelGap + width("國國", candidateFont_) + kCellSide;
+  watchColorScheme(instance);
 }
 
 Panel::~Panel() {
@@ -181,7 +232,37 @@ int Panel::span(const std::string& candidate) const {
 // MARK: Windows
 
 bool Panel::blurs() {
-  return settings_.get(Setting::kAppearance) != 0 && screen_->blurs();
+  return settings_.get(Setting::kAppearance) == 1 && screen_->blurs();
+}
+
+// No preference (0) is light: GNOME's default style says so, and libadwaita draws it light.
+bool Panel::light() const {
+  int appearance = settings_.get(Setting::kAppearance);
+  if (appearance == 0 || appearance == 2) return appearance == 2;
+  return colorScheme_ ? *colorScheme_ != 1 : GnomePrefersLight();
+}
+
+// Asks the portal once, without waiting, and follows its changes.
+void Panel::watchColorScheme(fcitx::Instance* instance) {
+  fcitx::AddonInstance* dbus = instance->addonManager().addon("dbus");
+  fcitx::dbus::Bus* bus = dbus ? dbus->call<fcitx::IDBusModule::bus>() : nullptr;
+  if (!bus) return;
+  colorSchemeChanged_ = bus->addMatch(
+      fcitx::dbus::MatchRule(kPortal, kPortalPath, kPortalSettings, "SettingChanged", {kAppearanceNamespace, "color-scheme"}),
+      [this](fcitx::dbus::Message& message) {
+        std::string ns, key;
+        message >> ns >> key;
+        if (ns == kAppearanceNamespace && key == "color-scheme") {
+          if (std::optional<uint32_t> scheme = ColorScheme(message, 1)) colorScheme_ = scheme;
+        }
+        return true;
+      });
+  fcitx::dbus::Message call = bus->createMethodCall(kPortal, kPortalPath, kPortalSettings, "Read");
+  call << std::string(kAppearanceNamespace) << std::string("color-scheme");
+  colorSchemeRead_ = call.callAsync(kPortalTimeoutUs, [this](fcitx::dbus::Message& reply) {
+    if (!reply.isError() && !colorScheme_) colorScheme_ = ColorScheme(reply, 2);  // a change may have come first
+    return true;
+  });
 }
 
 // Over a blur the text sits on a translucent window, where subpixel
@@ -298,6 +379,7 @@ Panel::Rect Panel::shownSelectionRect() const {
 void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fcitx::Rect& anchor) {
   if (!ok()) return;
   scale_ = screen_->scale();  // GNOME's extension reports it after Project Key loads
+  light_ = light();
   if (!panel_) {
     // On Wayland the compositor can move the window above the text once it sees its size.
     panel_ = screen_->createWindow([this] { paintPanel(); },
@@ -549,7 +631,7 @@ void Panel::paintHint() {
   pango_cairo_update_context(cr, context_);
   cairo_scale(cr, scale_, scale_);
   float width = hint_->frame.width / scale_, height = hint_->frame.height / scale_;
-  DrawBackground(cr, width, height, rounded_, blurred);
+  DrawBackground(cr, width, height, rounded_, blurred, light_);
   drawProof(cr, *shown, 0, width);
   cairo_pop_group_to_source(cr);
   float alpha = fadeAlpha(hintFade_);
@@ -568,7 +650,7 @@ void Panel::paintPanel() {
   cairo_scale(cr, scale_, scale_);
   float width = panel_->frame.width / scale_, height = panel_->frame.height / scale_;
 
-  DrawBackground(cr, width, height, rounded_, blurred);
+  DrawBackground(cr, width, height, rounded_, blurred, light_);
 
   // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
   // the window resizes; when it comes, goes or changes sides, it fades between its places.
@@ -600,7 +682,7 @@ void Panel::drawProofRow(cairo_t* cr, const PanelContent& c, bool below, float a
   float top = below ? height - rowHeight : 0;
   cairo_push_group(cr);
   if (!c.rows.empty()) {
-    SetColor(cr, kLine, panel_->blurred ? 0.6f : 1);
+    SetColor(cr, PaletteOf(light_).line, panel_->blurred ? 0.6f : 1);
     cairo_rectangle(cr, 0, below ? top - 1 : rowHeight, width, 1);
     cairo_fill(cr);
   }
@@ -615,24 +697,25 @@ void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windo
   // go without moving the text.
   float lineTop = top + kProofPad;
   float markTop = lineTop + kProofLine + kMarkGap;
+  const Palette& colors = PaletteOf(light_);
   if (!c.keyHint.empty()) {
     float w = keyWidth(c);
     float right = windowWidth - kProofRight;
     float capTop = lineTop + (kProofLine - kKeyHeight) / 2, capBottom = capTop + kKeyHeight;
     // A key: a face with a hairline edge, raised on a darker lip along its bottom.
-    cairo_set_source_rgba(cr, 0, 0, 0, 0.35);
+    cairo_set_source_rgba(cr, 0, 0, 0, colors.lip);
     cairo_set_line_width(cr, kKeyLip);
     cairo_move_to(cr, right - w + kKeyRadius, capBottom + kKeyLip / 2);
     cairo_line_to(cr, right - kKeyRadius, capBottom + kKeyLip / 2);
     cairo_stroke(cr);
     RoundedRect(cr, right - w + 0.25, capTop + 0.25, right - 0.25, capBottom - 0.25, kKeyRadius);
-    SetColor(cr, kMuted, 0.16f);
+    SetColor(cr, colors.muted, 0.16f);
     cairo_fill_preserve(cr);
-    SetColor(cr, kMuted, 0.35f);
+    SetColor(cr, colors.muted, 0.35f);
     cairo_set_line_width(cr, 0.5);
     cairo_stroke(cr);
     Line key(layout(c.keyHint, keyFont_));
-    SetColor(cr, kText);
+    SetColor(cr, colors.text);
     key.draw(cr, right - w + (w - key.width) / 2, capTop, kKeyHeight);
   }
   if (!c.replacedText.empty()) {
@@ -641,7 +724,7 @@ void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windo
     pango_attr_list_insert(attributes, pango_attr_strikethrough_new(TRUE));
     pango_layout_set_attributes(replaced.layout, attributes);
     pango_attr_list_unref(attributes);
-    SetColor(cr, kMuted);
+    SetColor(cr, colors.muted);
     replaced.draw(cr, x, lineTop, kProofLine);
     x += replaced.width;
     Line arrow(layout(kReplacedArrow, proofFont_));
@@ -655,11 +738,11 @@ void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windo
   auto drawCursor = [&](float& at) {
     if (!c.pendingReading.empty()) {
       Line line(layout(c.pendingReading, proofFont_));
-      SetColor(cr, kMuted);
+      SetColor(cr, colors.muted);
       line.draw(cr, at, lineTop, kProofLine);
       at += line.width;
     } else if (c.caret < length && c.activeSegment < 0) {
-      SetColor(cr, kAccentSoft);
+      SetColor(cr, colors.accentSoft);
       cairo_rectangle(cr, at, lineTop + 1, 1, kProofLine - 2);
       cairo_fill(cr);
     }
@@ -671,7 +754,7 @@ void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windo
     uint32_t segmentLength = Utf16Length(segment);
     bool active = static_cast<int>(i) == c.activeSegment;
     // A conversion preview shows its result in full text color.
-    uint32_t color = active ? kAccentSoft : hint ? kText : kMuted;
+    uint32_t color = active ? colors.accentSoft : hint ? colors.text : colors.muted;
     float left = x;
     uint32_t split = c.caret > start && c.caret < start + segmentLength ? c.caret - start : 0;
     auto drawText = [&](const std::string& text) {
@@ -690,7 +773,7 @@ void Panel::drawProof(cairo_t* cr, const PanelContent& c, float top, float windo
     }
     bool doubtful = i < c.doubtful.size() && c.doubtful[i];
     if (active || doubtful) {
-      SetColor(cr, kAccentSoft, active ? 1 : kDoubtMarkAlpha);
+      SetColor(cr, colors.accentSoft, active ? 1 : kDoubtMarkAlpha);
       RoundedRect(cr, left + kMarkInset, markTop, x - kMarkInset, markTop + kMarkHeight, 1);
       cairo_fill(cr);
     }
@@ -704,11 +787,12 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
   Rect pill = shownSelectionRect();
   pill.top += top;
   pill.bottom += top;
+  const Palette& colors = PaletteOf(light_);
   if (!pill.empty()) {
     if (content_->selectedRow >= 0) {
       SetColor(cr, content_->excluding ? kDanger : kAccent);
     } else {
-      SetColor(cr, kText, kGuessAlpha);
+      SetColor(cr, colors.text, kGuessAlpha);
     }
     RoundedRect(cr, pill.left, pill.top, pill.right, pill.bottom, kPillRadius);
     cairo_fill(cr);
@@ -725,7 +809,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
       column += cells;
       bool on = labeled && content_->selectedRow >= 0 && static_cast<int>(i) == content_->selection;  // on the accent
       if (!on && hover_.kind == PanelHit::kCandidate && hover_.row == static_cast<int>(r) && hover_.index == static_cast<int>(i)) {
-        SetColor(cr, kText, kHoverAlpha);
+        SetColor(cr, colors.text, kHoverAlpha);
         RoundedRect(cr, x, cellTop, x + cells * columnWidth_ + (cells - 1) * kCellGap, cellTop + cellHeight, kPillRadius);
         cairo_fill(cr);
       }
@@ -737,14 +821,14 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
         if (on) {
           cairo_set_source_rgba(cr, 1, 1, 1, 0.72);
         } else {
-          SetColor(cr, kMuted);
+          SetColor(cr, colors.muted);
         }
         label.draw(cr, x + kCellSide, wordTop + word.baseline - label.baseline);
       }
       if (on) {
         cairo_set_source_rgb(cr, 1, 1, 1);
       } else {
-        SetColor(cr, kText);
+        SetColor(cr, colors.text);
       }
       word.draw(cr, x + kCellSide + labelWidth + kLabelGap, wordTop);
     }
@@ -752,7 +836,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
   if (!content_->pageLabel.empty()) {  // the chevron and page label sit on the first row
     float x = windowWidth - kChevronInset - kChevronWidth, middle = top + kChevronMiddle;
     float tip = content_->expanded ? -kChevronHeight / 2 : kChevronHeight / 2;  // up or down
-    SetColor(cr, kMuted);
+    SetColor(cr, colors.muted);
     cairo_save(cr);
     cairo_move_to(cr, x, middle - tip);
     cairo_line_to(cr, x + kChevronWidth / 2, middle + tip);
@@ -781,6 +865,7 @@ void Panel::follow(fcitx::InputContext& ic, const fcitx::Rect& anchor) {
 void Panel::showBadge(fcitx::InputContext& ic, const std::string& label, const fcitx::Rect& anchor) {
   if (!ok()) return;
   scale_ = screen_->scale();
+  light_ = light();
   if (!badge_) {
     badge_ = screen_->createWindow([this] { paintBadge(); },
                                    [this] {
@@ -859,14 +944,15 @@ void Panel::paintBadge() {
   pango_cairo_update_context(cr, context_);
   cairo_scale(cr, scale_, scale_);
   float width = badge_->frame.width / scale_;
+  const Palette& colors = PaletteOf(light_);
   RoundedRect(cr, 0.25, 0.25, width - 0.25, kBadgeSide - 0.25, badgeFades_ ? kWindowRadius : 0);
-  SetColor(cr, kBackground, badge_->blurred ? kAcrylicTint : 1);
+  SetColor(cr, colors.background, badge_->blurred ? kAcrylicTint : 1);
   cairo_fill_preserve(cr);
-  cairo_set_source_rgba(cr, 0, 0, 0, 0.5);
+  cairo_set_source_rgba(cr, 0, 0, 0, colors.edge);
   cairo_set_line_width(cr, 0.5);
   cairo_stroke(cr);
   Line line(layout(badgeLabel_, badgeFont_));
-  SetColor(cr, kText);
+  SetColor(cr, colors.text);
   line.draw(cr, (width - line.width) / 2, 0, kBadgeSide);
   cairo_pop_group_to_source(cr);
   PaintGroup(cr, badge_->setOpacity(badgeAlpha_) ? 1 : badgeAlpha_);

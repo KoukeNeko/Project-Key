@@ -57,9 +57,10 @@ enum class KeyboardLayout { Standard, ETen, Hsu, ETen26, IBM };  // Setting::kKe
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(KeyboardLayout, N_("大千"), N_("倚天"), N_("許氏"), N_("倚天 26 鍵"), N_("IBM"));
 enum class CandidatePosition { AfterCursor, BeforeCursor };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(CandidatePosition, N_("游標後"), N_("游標前"));
-// Setting::kAppearance's first two values: the dark window, and a dark tint over the blurred windows behind it.
-enum class Appearance { Dark, Blur };
-FCITX_CONFIG_ENUM_NAME_WITH_I18N(Appearance, N_("深色"), N_("模糊"));
+// Setting::kAppearance, macOS's numbers: the dark window, a tint over the blurred windows behind it,
+// the light window, and light or dark as the desktop is. The config keeps the names.
+enum class Appearance { Dark, Blur, Light, Auto };
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(Appearance, N_("深色"), N_("模糊"), N_("淺色"), N_("自動"));
 
 // $XDG_DATA_HOME/projectkey, where personal.txt and the models the settings windows download go
 // (Settings/Rows.h); empty without a home.

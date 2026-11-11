@@ -13,7 +13,7 @@
 | 前文（Tab 英文轉注音、組字接續游標前的字選字） | surrounding text；App 未提供時 Tab 照常輸入，選字視為句首 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
-「候選視窗外觀」分為深色與模糊（預設）兩種；模糊為模糊視窗後方的內容，再疊加一層深色。中／英標記採用相同外觀。有合成器時視窗為圓角，無合成器時為直角。各桌面的模糊方式如下：
+「候選視窗外觀」分為自動（預設）、淺色、深色與模糊四種；模糊為模糊視窗後方的內容，再疊加一層底色。自動與模糊依桌面的淺色或深色模式採用淺色或深色：模式取自 XDG desktop portal 的 `org.freedesktop.appearance` `color-scheme`（啟動時以非同步方式讀取，之後隨 `SettingChanged` 訊號更新），1 為深色，2 與 0（未指定，GNOME 的預設樣式）為淺色；無 portal 時改讀 GNOME 的 `org.gnome.desktop.interface` `color-scheme`，兩者皆無時為深色。中／英標記採用相同外觀。有合成器時視窗為圓角，無合成器時為直角。各桌面的模糊方式如下：
 
 | 桌面 | 模糊 |
 |---|---|
@@ -21,8 +21,8 @@
 | KDE Plasma（Wayland） | 候選字窗為 Fcitx5 的面板，採用 Project Key 主題的 `EnableBlur` |
 | GNOME | 擴充功能中的 `Shell.BlurEffect` |
 | niri 26.04 以上、KWin 6.7 以上（input-method-v2） | `ext-background-effect-v1` |
-| Hyprland | 由合成器模糊：`decoration:blur:input_methods = true` 時 Project Key 改為繪製半透明，關閉時為深色 |
-| sway、wayfire、COSMIC、其他 X11 視窗管理員 | 合成器未提供模糊，改為深色 |
+| Hyprland | 由合成器模糊：`decoration:blur:input_methods = true` 時 Project Key 改為繪製半透明，關閉時不透明 |
+| sway、wayfire、COSMIC、其他 X11 視窗管理員 | 合成器未提供模糊，改為不透明 |
 
 Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連線至 Fcitx5 時，候選字窗與中／英標記為繪製於 Fcitx5 Wayland 連線上的 input popup，由合成器置於游標下方，下方空間不足時置於上方（COSMIC 將 popup 的左上角置於游標頂端，Project Key 自行向下讓出游標的高度）；模糊方式見上表。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）或 KWin 的輸入法（input-method-v1）連線時，以及 X11 上 App 僅提供相對座標時，改用 Fcitx5 內建的候選面板，外觀依循 Fcitx5 主題。操作與其他平台相同：整句預覽與頁碼位於第一行，選字列逐格選取，按 ↓ 展開的格線以直排列出最多五列（GNOME 上面板由 App 繪製，每個候選僅能為一行純文字，因此選取的列整列反白，選取的字以［］標示）。
 

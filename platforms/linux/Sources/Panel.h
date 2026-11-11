@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cairo.h>
+#include <fcitx-utils/dbus/bus.h>
 #include <fcitx-utils/event.h>
 #include <fcitx-utils/rect.h>
 #include <fcitx/inputcontext.h>
@@ -25,7 +26,8 @@ namespace ProjectKey {
 
 class Panel {
  public:
-  // settings gives the appearance: Setting::kAppearance 1 blurs what is behind the windows.
+  // settings gives the appearance, Setting::kAppearance: 0 深色, 1 模糊 (blurs what is behind
+  // the windows), 2 淺色, 3 自動; 模糊 and 自動 are light or dark as the desktop is.
   Panel(fcitx::Instance* instance, const Settings& settings);
   ~Panel();
   Panel(const Panel&) = delete;
@@ -64,6 +66,9 @@ class Panel {
   // Whether the windows should blur what is behind them: the setting asks for
   // it and the compositor (KWin) offers it.
   bool blurs();
+  // Whether the windows are drawn light: 淺色, or 自動 and 模糊 while the desktop is light.
+  bool light() const;
+  void watchColorScheme(fcitx::Instance* instance);
   void setFontOptions(bool blurred);
   void startTimer(std::unique_ptr<fcitx::EventSourceTime>& timer, bool (Panel::*tick)());
   // A window fading in or out, between two opacities; start is 0 when it is not.
@@ -117,6 +122,11 @@ class Panel {
   fcitx::EventLoop& loop_;
   std::unique_ptr<Screen> screen_;
   float scale_ = 1;
+  bool light_ = false;  // light() as the windows last showed
+  // The desktop portal's org.freedesktop.appearance color-scheme (1 dark, 2 light, 0 no
+  // preference), kept current by its SettingChanged signal; unset until it answers.
+  std::optional<uint32_t> colorScheme_;
+  std::unique_ptr<fcitx::dbus::Slot> colorSchemeRead_, colorSchemeChanged_;
 
   PangoContext* context_ = nullptr;
   PangoFontDescription *proofFont_ = nullptr, *candidateFont_ = nullptr, *labelFont_ = nullptr, *pageFont_ = nullptr,

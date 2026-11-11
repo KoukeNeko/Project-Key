@@ -112,7 +112,7 @@ int Settings::DefaultValue(Setting setting) {
 #ifdef _WIN32
       return 5;  // 自動, numbered after Windows' materials
 #else
-      return 1;  // Linux's 模糊; macOS registers its own default
+      return 3;  // 自動, as macOS registers it
 #endif
     case Setting::kCapsLockToggle:
     case Setting::kAbbreviated:
