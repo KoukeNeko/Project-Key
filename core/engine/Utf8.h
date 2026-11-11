@@ -1,7 +1,8 @@
 // UTF-8 decoding shared by the engine (Controller, Composer, CharModel), so
-// malformed bytes read the same everywhere.
+// malformed bytes read the same everywhere, and UTF-8 paths.
 #pragma once
 
+#include <filesystem>
 #include <string>
 
 namespace ProjectKey {
@@ -17,6 +18,16 @@ inline char32_t NextCodePoint(const std::string& s, size_t& i) {
     cp = cp << 6 | (static_cast<unsigned char>(s[i++]) & 0x3f);
   }
   return cp;
+}
+
+// Paths come and go as UTF-8; a plain std::string would be read in the ANSI code page on Windows.
+inline std::filesystem::path Path(const std::string& utf8) {
+  return std::u8string(utf8.begin(), utf8.end());
+}
+
+inline std::string Utf8(const std::filesystem::path& path) {
+  std::u8string text = path.u8string();
+  return std::string(text.begin(), text.end());
 }
 
 }  // namespace ProjectKey

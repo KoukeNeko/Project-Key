@@ -205,20 +205,6 @@ void ClearChoices(Environment& env) {
   SavePersonal(env, /*force=*/true);
 }
 
-namespace {
-
-// Paths come and go as UTF-8; a plain std::string would be read in the ANSI code page on Windows.
-std::filesystem::path Path(const std::string& utf8) {
-  return std::u8string(utf8.begin(), utf8.end());
-}
-
-std::string Utf8(const std::filesystem::path& path) {
-  std::u8string text = path.u8string();
-  return std::string(text.begin(), text.end());
-}
-
-}  // namespace
-
 bool UseNewestModels(Environment& env, const std::string& bundled, const std::string& downloaded) {
   std::filesystem::path dir = ModelsDirectory(Path(bundled), Path(downloaded));
   auto lm = std::make_shared<Lexicon>();
@@ -259,10 +245,9 @@ std::string ExcludedPhrasesPath(const Environment& env) {
 
 void ReloadUserPhrases(Environment& env) {
   if (env.userPhrasesPath.empty()) return;
-  // UTF-8 paths, which Windows' narrow file calls would read in the ANSI code page.
   auto writtenAt = [](const std::string& utf8Path) {
     std::error_code error;
-    auto written = std::filesystem::last_write_time(std::filesystem::path(std::u8string(utf8Path.begin(), utf8Path.end())), error);
+    auto written = std::filesystem::last_write_time(Path(utf8Path), error);
     return error ? std::nullopt : std::optional(written);
   };
   std::string excludedPath = ExcludedPhrasesPath(env);

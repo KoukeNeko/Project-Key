@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "CharModel.h"
+#include "Utf8.h"
 
 namespace ProjectKey {
 
@@ -15,9 +16,6 @@ constexpr uint64_t kMask = (uint64_t{1} << kBits) - 1;
 constexpr char kBoundaryMark = '^';
 
 uint64_t Key(uint64_t a, uint64_t b) { return a << kBits | b; }
-
-// Paths are UTF-8; Windows would read a plain std::string in the ANSI code page.
-std::filesystem::path PathOf(const std::string& utf8) { return std::filesystem::path(std::u8string(utf8.begin(), utf8.end())); }
 
 void AppendUtf8(std::string& out, uint32_t c) {
   if (c < 0x80) {
@@ -120,7 +118,7 @@ double PersonalModel::blend(double base, uint32_t first, uint32_t second, uint32
 bool PersonalModel::load(const std::string& path) {
   triples_.clear();
   sinceHalving_ = 0;
-  std::ifstream in(PathOf(path));
+  std::ifstream in(Path(path));
   std::string line;
   while (std::getline(in, line)) {
     size_t tab = line.find('\t');
@@ -155,7 +153,7 @@ bool PersonalModel::save(const std::string& path) const {
     }
     text += '\n';
   }
-  std::filesystem::path temporary = PathOf(path + ".tmp");
+  std::filesystem::path temporary = Path(path + ".tmp");
   std::error_code error;
   std::filesystem::create_directories(temporary.parent_path(), error);
   // What the user typed is for the user only. With the folder closed first, no one else can open
@@ -170,7 +168,7 @@ bool PersonalModel::save(const std::string& path) const {
     out.close();  // flushes: a disk that fills up on the last block must not put a cut file in place
     if (!out) return false;
   }
-  std::filesystem::rename(temporary, PathOf(path), error);  // replaces the old file, on Windows too
+  std::filesystem::rename(temporary, Path(path), error);  // replaces the old file, on Windows too
   return !error;
 }
 
