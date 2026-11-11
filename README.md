@@ -46,10 +46,10 @@ Project Key 為注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共�
 |---|---|---|
 | macOS（Apple 晶片） | `brew install --cask koukeneko/tap/project-key` | [platforms/macos](platforms/macos/README.md) |
 | Windows（x64） | `scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket`<br>`scoop install koukeneko/project-key` | [platforms/windows](platforms/windows/README.md) |
-| Linux（Fcitx5） | `brew install koukeneko/tap/fcitx5-projectkey`<br>`projectkey-link` | 須先安裝相依套件；Debian、Ubuntu、Fedora 另有 apt 與 dnf 套件庫，詳見 [platforms/linux](platforms/linux/README.md) |
+| Linux（Fcitx5） | `curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/install.sh \| sh` | 安裝套件並完成設定，適用 Debian、Ubuntu、Fedora、Arch 及其衍生版；GNOME 須再登出登入一次。其他安裝方式見 [platforms/linux](platforms/linux/README.md) |
 | iOS 17 以上 | 從原始碼建置 | [platforms/ios](platforms/ios/README.md) |
 
-安裝完成後開啟歡迎視窗：按「加入」將 Project Key 加入系統輸入法，切換後即可於視窗中試打（Linux 須於重新啟動 Fcitx5 後執行 `projectkey-settings --welcome`）。亦可於系統的輸入法設定中自行加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
+安裝完成後開啟歡迎視窗：按「加入」將 Project Key 加入系統輸入法，切換後即可於視窗中試打（Linux 的安裝指令已加入 Project Key，並自動開啟歡迎視窗）。亦可於系統的輸入法設定中自行加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
 
 發行版附有[上下文模型](#上下文模型)與補充詞彙後的詞庫，選字依上下文排序。這些資料檔另有授權（CC BY-SA 4.0 與 LGPL-2.1-or-later），詳見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 

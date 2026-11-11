@@ -40,6 +40,24 @@ Fcitx5 預設以左 Shift 暫時切換輸入法。Project Key 使用中且「單
 
 ## 建置與安裝
 
+以一行指令安裝（Debian、Ubuntu、Fedora、Arch 及其衍生版）。以自己的帳號執行，不要加 `sudo`，需要時會詢問密碼：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/install.sh | sh
+```
+
+`install.sh` 依序完成：
+
+1. 安裝套件：Debian 13、Ubuntu 24.04（含以其為基礎的 Pop!_OS、Linux Mint）與 Fedora 43 的 x86_64 自下方的套件庫安裝；其他版本與架構則安裝建置所需的套件，以 `package-deb.sh`、`package-rpm.sh` 或 `arch/PKGBUILD` 自最新發行版本的原始碼建置套件後安裝（約需數分鐘）。兩者皆為套件管理員管理的套件，可以 `apt remove`、`dnf remove` 或 `pacman -R` 移除。
+2. 將 Fcitx5 設為輸入法框架：Debian／Ubuntu 以 `im-config` 寫入 `~/.xinputrc`（im-config 1.x 為 `-w fcitx5`，較舊版本為 `-n fcitx5`），Fedora 執行 `imsettings-switch fcitx5`；KDE Plasma 將 Fcitx5 設為 KWin 的虛擬鍵盤。Fcitx5 套件未附自動啟動項目時（例如 Ubuntu 26.10），另將其加入 `~/.config/autostart`，否則 Fcitx5 僅於 App 經由 D-Bus 呼叫時才啟動。
+3. 將 Project Key 加入 Fcitx5 的輸入法（`~/.config/fcitx5/profile`），設為 Ctrl+Space 切換的輸入法，並重新啟動 Fcitx5。
+4. GNOME 上將擴充功能「Project Key」加入 `org.gnome.shell enabled-extensions`；GNOME 於登入時載入擴充功能，因此須再登出登入一次。
+5. 開啟歡迎視窗試打。
+
+再次執行即更新至最新版本並修復設定。若先前以 Homebrew 安裝，`install.sh` 會移除 `projectkey-link` 建立於 `~/.local/share` 的連結，以免 Fcitx5 與 GNOME 繼續載入 Homebrew 版。以 `PROJECTKEY_SOURCE=<checkout>` 執行時，改自該 checkout 建置（測試修改用）。
+
+以下為各項手動安裝方式。
+
 以套件庫安裝（Debian 13、Ubuntu 24.04、Fedora 43，x86_64）：
 ```sh
 # Debian / Ubuntu（suite：Debian 13 用 trixie，Ubuntu 24.04 用 noble）
@@ -88,7 +106,7 @@ platforms/linux/build.sh                       # 下載並編譯引擎、產生�
 sudo cmake --install platforms/linux/build    # 安裝到 /usr
 ```
 
-安裝後重新啟動 Fcitx5（`fcitx5 -r`），執行 `projectkey-settings --welcome` 並按「加入」；亦可於 Fcitx5 設定的「輸入法」加入 Project Key（須取消勾選「只顯示目前語言」才會列出）。之後以 Ctrl+Space 切換。
+手動安裝後重新啟動 Fcitx5（`fcitx5 -r`），執行 `projectkey-settings --welcome` 並按「加入」；亦可於 Fcitx5 設定的「輸入法」加入 Project Key（須取消勾選「只顯示目前語言」才會列出）。之後以 Ctrl+Space 切換。GNOME 上另須開啟擴充功能並重新登入（見上方說明）。Fcitx5 未自動啟動時，以 `im-config -w fcitx5`（Debian／Ubuntu；較舊的 im-config 為 `-n`）或將 `/usr/share/applications/org.fcitx.Fcitx5.desktop` 複製至 `~/.config/autostart` 設定。
 
 Fcitx5 選單的「檢查 Project Key 安裝」以通知列出缺少的項目：詞庫、英文字典（Tab 提示用）、候選字窗的字型、設定程式，以及 Project Key 自行繪製的視窗能否顯示（GNOME 上須啟用擴充功能）。自使用 Fcitx5 候選面板的 App 開啟時，另檢查 Fcitx5 主題是否為 Project Key。
 
