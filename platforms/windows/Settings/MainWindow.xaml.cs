@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.IO.Pipes;
 using System.Linq;
 using System.Net.Http;
@@ -280,8 +279,10 @@ public sealed partial class MainWindow : Window {
 
   private static readonly string UpdateFolder = Path.Combine(Path.GetTempPath(), "ProjectKey-update");
 
-  // Downloads and unpacks the release, then runs its install.ps1, which asks Windows for administrator
-  // rights, stops this window and the engine server, installs, and starts both again.
+  // Downloads the release, then runs the installed install.ps1 on its zip: elevated, that copies the
+  // zip where only administrators can write, checks its SHA-256 again and installs from there, so
+  // nothing in the user's writable %TEMP% runs elevated. It stops this window and the engine server,
+  // installs, and starts both again.
   private async void InstallUpdate(ModelsFile zip) {
     var status = new TextBlock { Text = "下載中 0%" };
     Update.Content = status;
@@ -289,12 +290,14 @@ public sealed partial class MainWindow : Window {
     try {
       if (Directory.Exists(UpdateFolder)) Directory.Delete(UpdateFolder, true);
       await Task.Run(() => Download([zip], UpdateFolder, progress));
-      string package = Path.Combine(UpdateFolder, "package");
-      await Task.Run(() => ZipFile.ExtractToDirectory(Path.Combine(UpdateFolder, zip.Name), package));
       status.Text = "安裝中…";
-      var start = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true };
-      foreach (string argument in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(package, "install.ps1"),
-                                          "-Source", package, "-Update" }) {
+      // Program Files, which build.ps1 and install.ps1 put this app under; only administrators change it.
+      string installer = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "install.ps1"));
+      var start = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe")) {
+        UseShellExecute = false, CreateNoWindow = true,
+      };
+      foreach (string argument in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer,
+                                          "-Zip", Path.Combine(UpdateFolder, zip.Name), "-Digest", zip.Digest, "-Update" }) {
         start.ArgumentList.Add(argument);
       }
       using Process install = Process.Start(start)!;

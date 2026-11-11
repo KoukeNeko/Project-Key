@@ -3,14 +3,30 @@
 # the engine server now and at sign-in, then opens the welcome window, which adds
 # it as a keyboard (the settings app with --welcome, which closes when it is added).
 # -Update: run by the settings window's 更新 button, which it stops; opens it again instead.
-param([string]$Source = (Join-Path $PSScriptRoot 'build\out'), [switch]$Elevated, [switch]$Update)
+# -Zip and -Digest: a downloaded release and its SHA-256 (sha256:<hex>), unpacked only once
+# elevated, in a folder under Program Files that only administrators can change.
+param([string]$Source = (Join-Path $PSScriptRoot 'build\out'), [string]$Zip, [string]$Digest, [switch]$Elevated, [switch]$Update)
 $ErrorActionPreference = 'Stop'
 $Dest = Join-Path $env:ProgramFiles 'Project Key'
-if (-not (Test-Path "$Source\ProjectKey.dll")) { throw 'run .\build.ps1 first' }
+if (-not $Zip -and -not (Test-Path "$Source\ProjectKey.dll")) { throw 'run .\build.ps1 first' }
 
 if ($Elevated) {
   $log = Join-Path $env:TEMP 'ProjectKey-install.log'
+  $staging = Join-Path $env:ProgramFiles 'Project Key Update'
   try {
+    if ($Zip) {
+      # The zip came from the user's %TEMP%, which anything they run can change: it is checked
+      # again only once copied where they cannot.
+      if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
+      New-Item -ItemType Directory $staging | Out-Null
+      Copy-Item -LiteralPath $Zip "$staging\package.zip"
+      if ("sha256:$((Get-FileHash "$staging\package.zip" -Algorithm SHA256).Hash.ToLowerInvariant())" -ne $Digest) {
+        throw 'the downloaded release does not match its SHA-256'
+      }
+      Expand-Archive "$staging\package.zip" "$staging\package"
+      $Source = "$staging\package"
+      if (-not (Test-Path "$Source\ProjectKey.dll")) { throw 'the downloaded release has no ProjectKey.dll' }
+    }
     # Apps keep the old DLL loaded and the server and settings keep their files
     # open: stop those and move loaded DLLs aside; they are deleted once unused.
     # The server moves aside first: an open app starts it again the moment it stops,
@@ -29,6 +45,8 @@ if ($Elevated) {
     & robocopy $Source $Dest /E /R:3 /W:1 /XF *.lib *.exp ProjectKeyServer.exe /NJH /NJS /NFL /NDL /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE" }
     Copy-Item "$Source\ProjectKeyServer.exe" $serverExe -Force
+    # The updater runs this copy, which only administrators can change; a release brings its own.
+    if (-not (Test-Path "$Source\install.ps1") -and $PSCommandPath -ne "$Dest\install.ps1") { Copy-Item $PSCommandPath "$Dest\install.ps1" -Force }
     # Files an earlier Copy-Item flattened out of Settings\.
     Remove-Item "$Dest\SettingsApp.xbf", "$Dest\SettingsMainWindow.xbf" -ErrorAction SilentlyContinue
     # A GUI program: & would not wait for it, nor set its exit code.
@@ -39,12 +57,16 @@ if ($Elevated) {
     # A failed install leaves the server it found, so the input method keeps working.
     if ($serverAside -and (Test-Path $serverAside) -and -not (Test-Path $serverExe)) { Move-Item $serverAside $serverExe }
     exit 1
+  } finally {
+    if ($Zip -and (Test-Path $staging)) { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue }
   }
   exit 0
 }
 
 $pwsh = (Get-Process -Id $PID).Path
-$admin = Start-Process $pwsh -Verb RunAs -Wait -PassThru -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Source', "`"$Source`"", '-Elevated'
+$arguments = '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Elevated'
+$arguments += if ($Zip) { '-Zip', "`"$Zip`"", '-Digest', $Digest } else { '-Source', "`"$Source`"" }
+$admin = Start-Process $pwsh -Verb RunAs -Wait -PassThru -ArgumentList $arguments
 if ($admin.ExitCode) { throw "installing into $Dest failed: $(Get-Content (Join-Path $env:TEMP 'ProjectKey-install.log') -ErrorAction SilentlyContinue)" }
 
 # The server runs as the user, not elevated.
