@@ -151,17 +151,20 @@ jobs:
         with:
           name: rpm
           path: in/rpm
-      # Too large for the repositories (GitHub refuses 100 MB in a branch), so it is installed from the release.
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" in/deb-trixie/fcitx5-projectkey-data_*.deb in/rpm/fcitx5-projectkey-data-*.rpm --clobber --repo "$GITHUB_REPOSITORY"
       - env:
           KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           sudo apt-get update
           sudo apt-get install -y reprepro createrepo-c
           printf '%s\n' "$KEY" | gpg --batch --import
           export GPG_KEY="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')"
+          # Too large for the repositories (GitHub refuses 100 MB in a branch), so they are installed from the
+          # release, with a signature each that the README has the reader check against the repositories' key.
+          for data in in/deb-trixie/fcitx5-projectkey-data_*.deb in/rpm/fcitx5-projectkey-data-*.rpm; do
+            gpg --batch --yes --armor --detach-sign -u "$GPG_KEY" -o "$data.asc" "$data"
+            gh release upload "$GITHUB_REF_NAME" "$data" "$data.asc" --clobber --repo "$GITHUB_REPOSITORY"
+          done
           sh platforms/linux/publish-repos.sh in site
           cd site
           git config user.name "github-actions[bot]"
