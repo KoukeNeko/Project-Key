@@ -83,7 +83,7 @@ enum class Setting {
   kCapsLockToggle,      // Caps Lock switches 中/英 and letters stay lowercase
   kEnglishToZhuyin,     // that Tab turns Zhuyin typed in 英 into a composition
   kZhuyinToEnglish,     // and English typed in 中 back into English
-  kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt
+  kAppearance,          // candidate window: 0 dark, 1 Acrylic, 2 Mica, 3 Mica Alt, 4 light, 5 自動 (as the system is)
   kCandidatePosition,   // candidates for the word: 0 after the cursor (Windows), 1 before it (macOS)
   kNextDoubtful,        // picking a candidate moves on to the next doubtful word
   kKeypadPicks,         // the keypad's digits pick from the row shown while typing

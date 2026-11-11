@@ -47,7 +47,8 @@ public sealed partial class MainWindow : Window {
     Bind(FullWidthToggle, "FullWidthToggle");
     Bind(EnglishToZhuyin, "EnglishToZhuyin");
     Bind(ZhuyinToEnglish, "ZhuyinToEnglish");
-    Bind(Appearance, "Appearance", 1);
+    // 自動, 淺色, 深色, Acrylic, Mica, Mica Alt: 淺色 and 自動 came after the others, which keep their values.
+    Bind(Appearance, "Appearance", 5, [5, 4, 0, 1, 2, 3]);
     Bind(ProofPreview, "ProofPreview", 1);
     Bind(ChoosingProof, "ChoosingProof", 1);
     Bind(CandidatePosition, "CandidatePosition", 0);
@@ -199,12 +200,15 @@ public sealed partial class MainWindow : Window {
     showDefaults.Add(() => toggle.IsOn = fallback);
   }
 
-  private void Bind(ComboBox box, string name, int fallback) {
-    box.SelectedIndex = Math.Clamp(Read(name, fallback), 0, box.Items.Count - 1);
+  // values: what each item stores, in the list's order; without them, its index. A value the
+  // list does not have shows as its first item.
+  private void Bind(ComboBox box, string name, int fallback, int[]? values = null) {
+    int IndexOf(int value) => values is null ? Math.Clamp(value, 0, box.Items.Count - 1) : Math.Max(0, Array.IndexOf(values, value));
+    box.SelectedIndex = IndexOf(Read(name, fallback));
     box.SelectionChanged += (_, _) => {
-      if (!restoring) Write(name, box.SelectedIndex);
+      if (!restoring) Write(name, values is null ? box.SelectedIndex : values[box.SelectedIndex]);
     };
-    showDefaults.Add(() => box.SelectedIndex = fallback);
+    showDefaults.Add(() => box.SelectedIndex = IndexOf(fallback));
   }
 
   // 恢復原廠設定: the settings go, so the engine server reads its defaults at the next composition;

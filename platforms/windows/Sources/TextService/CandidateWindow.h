@@ -38,8 +38,9 @@ class CandidateWindow {
   Metrics::PanelHit hitAt(POINT client) const;
   void hoverAt(POINT client);  // the candidate under the pointer, drawn on a faint highlight
   bool ensureWindow();
-  void applyAppearance(int appearance);  // Setting::kAppearance
-  void prepareToAppear();                // before the first paint of a showing
+  void useAppearance(int appearance);    // Setting::kAppearance, as the system's mode is now
+  void applyAppearance(int material, bool light);
+  void prepareToAppear();               // before the first paint of a showing
   void appear();                         // after it
   void finishHide();                     // once it has faded out
   float fadeAlpha() const;
@@ -69,8 +70,9 @@ class CandidateWindow {
   std::optional<PanelContent> content_;
   bool proofBelow_ = false;  // window above the text: proof row last, next to the text
   RECT placed_{};            // where the last show put the window, before any resize animation ends
-  int appearance_ = 0;
-  bool material() const { return appearance_ != 0; }  // a system material shows through
+  int material_ = 0;    // the system material that shows through: 1 Acrylic, 2 Mica, 3 Mica Alt, or 0 none
+  bool light_ = false;  // drawn in Colors::Light
+  bool material() const { return material_ != 0; }
   float scale_ = 1;
   // The selection highlight slides from one rect to the other, relative to the rows.
   D2D1_RECT_F pillFrom_{}, pillTo_{};
@@ -108,7 +110,7 @@ class ModeBadge {
 
  private:
   static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
-  bool ensureWindow(int appearance);
+  bool ensureWindow(int material, bool light);
   void place(const RECT& anchor, const RECT* avoid);
   void render();
   void present(BYTE alpha);
@@ -117,7 +119,8 @@ class ModeBadge {
 
   // A layered window that fades, material and all.
   HWND hwnd_ = nullptr;
-  int appearance_ = 0;
+  int material_ = 0;  // as the candidate window's
+  bool light_ = false;
   bool cloaked_ = false;   // with a material: mapped but out of sight, between showings
   bool settling_ = false;  // its material was just set, and is not up yet
   Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> target_;

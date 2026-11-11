@@ -109,7 +109,11 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kChoosingProof:
       return 1;  // 有可疑字時
     case Setting::kAppearance:
-      return 1;  // Acrylic; macOS registers its own default
+#ifdef _WIN32
+      return 5;  // 自動, numbered after Windows' materials
+#else
+      return 1;  // Linux's 模糊; macOS registers its own default
+#endif
     case Setting::kCapsLockToggle:
     case Setting::kAbbreviated:
     case Setting::kOmitTones:

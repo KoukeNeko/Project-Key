@@ -88,31 +88,57 @@ ComPtr<ID2D1SolidColorBrush> Brush(ID2D1RenderTarget* target, D2D1_COLOR_F color
   return brush;
 }
 
-int ClampAppearance(int appearance) {
-  return appearance >= 0 && appearance < 4 ? appearance : 0;
+// Setting::kAppearance: 0 深色, 1 Acrylic, 2 Mica, 3 Mica Alt, 4 淺色, 5 自動. The system
+// material it shows through: 1 Acrylic, 2 Mica, 3 Mica Alt, or 0 none.
+int MaterialOf(int appearance) {
+  return appearance >= 1 && appearance <= 3 ? appearance : 0;
+}
+
+// 淺色, or 自動 and the materials while apps are in Windows' light mode; read at each showing,
+// so a switch of the mode takes effect with the next candidates.
+bool LightOf(int appearance) {
+  if (appearance == 0 || appearance == 4) return appearance == 4;
+  DWORD light = 0, size = sizeof(light);
+  RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", L"AppsUseLightTheme",
+               RRF_RT_REG_DWORD, nullptr, &light, &size);
+  return light != 0;
+}
+
+// The colors on the dark or the light fill; the accent and danger are the same on both.
+struct Palette {
+  uint32_t background, line, text, muted, accentSoft;
+  float lip, edge;  // black at these alphas: the keycap's lip, and the edge of the badge without a material
+};
+constexpr Palette kDarkPalette{kBackground, kLine, kText, kMuted, kAccentSoft, 0.35f, 0.5f};
+constexpr Palette kLightPalette{Light::kBackground, Light::kLine, Light::kText, Light::kMuted, Light::kAccentSoft, 0.15f, 0.12f};
+
+const Palette& PaletteOf(bool light) {
+  return light ? kLightPalette : kDarkPalette;
 }
 
 // Windows 11 draws the rounded corners, the 1px border and the shadow; the
-// materials (Acrylic, Mica, Mica Alt) show behind transparent content.
-void ApplyAppearance(HWND hwnd, int appearance) {
+// materials (Acrylic, Mica, Mica Alt) show behind transparent content, tinted
+// light or dark as the window is.
+void ApplyAppearance(HWND hwnd, int material, bool light) {
   static constexpr DWM_SYSTEMBACKDROP_TYPE kBackdrops[] = {DWMSBT_NONE, DWMSBT_TRANSIENTWINDOW, DWMSBT_MAINWINDOW, DWMSBT_TABBEDWINDOW};
-  bool material = appearance != 0;
   DWM_WINDOW_CORNER_PREFERENCE corners = DWMWCP_ROUND;
   DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corners, sizeof(corners));
-  BOOL dark = TRUE;
+  BOOL dark = !light;
   DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
-  COLORREF border = material ? DWMWA_COLOR_DEFAULT : RGB((kLine >> 16) & 0xff, (kLine >> 8) & 0xff, kLine & 0xff);
+  uint32_t line = PaletteOf(light).line;
+  COLORREF border = material ? DWMWA_COLOR_DEFAULT : RGB((line >> 16) & 0xff, (line >> 8) & 0xff, line & 0xff);
   DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &border, sizeof(border));
-  DWM_SYSTEMBACKDROP_TYPE backdrop = kBackdrops[appearance];
+  DWM_SYSTEMBACKDROP_TYPE backdrop = kBackdrops[material];
   DwmSetWindowAttribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, &backdrop, sizeof(backdrop));
   MARGINS margins = material ? MARGINS{-1, -1, -1, -1} : MARGINS{0, 0, 0, 0};
   DwmExtendFrameIntoClientArea(hwnd, &margins);
 }
 
-// What a window fills its client area with: the dark background, a dark tint
-// over Acrylic, which shows the window behind as is, or nothing over Mica.
-D2D1_COLOR_F Fill(int appearance) {
-  return appearance == 0 ? Color(kBackground) : appearance == 1 ? Color(kBackground, kAcrylicTint) : D2D1::ColorF(0, 0, 0, 0);
+// What a window fills its client area with: the background, a tint of it over
+// Acrylic, which shows the window behind as is, or nothing over Mica.
+D2D1_COLOR_F Fill(int material, bool light) {
+  uint32_t background = PaletteOf(light).background;
+  return material == 0 ? Color(background) : material == 1 ? Color(background, kAcrylicTint) : D2D1::ColorF(0, 0, 0, 0);
 }
 
 void Cloak(HWND hwnd, BOOL on) {
@@ -224,13 +250,20 @@ bool CandidateWindow::ensureWindow() {
                           nullptr, nullptr, gInstance, this);
   if (!hwnd_) return false;
   SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
-  applyAppearance(0);
+  applyAppearance(0, false);
   return true;
 }
 
-void CandidateWindow::applyAppearance(int appearance) {
-  appearance_ = ClampAppearance(appearance);
-  ApplyAppearance(hwnd_, appearance_);
+void CandidateWindow::useAppearance(int appearance) {
+  int material = MaterialOf(appearance);
+  bool light = LightOf(appearance);
+  if (material != material_ || light != light_) applyAppearance(material, light);
+}
+
+void CandidateWindow::applyAppearance(int material, bool light) {
+  material_ = material;
+  light_ = light;
+  ApplyAppearance(hwnd_, material_, light_);
   target_.Reset();
   settling_ = true;
 }
@@ -320,7 +353,7 @@ D2D1_RECT_F CandidateWindow::shownSelectionRect() const {
 
 void CandidateWindow::show(const PanelContent& content, const RECT& anchor, HWND owner, int appearance) {
   if (!ensureWindow()) return;
-  if (appearance != appearance_) applyAppearance(appearance);
+  useAppearance(appearance);
   bool wasVisible = visible();
   // One window changing shape: it moves and resizes to the new content, across the text when it
   // changes sides, while the highlight slides, the rows move with it and the proof row fades
@@ -426,7 +459,7 @@ void CandidateWindow::announceSelection() {
 
 void CandidateWindow::showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance) {
   if (!ensureWindow()) return;
-  if (appearance != appearance_) applyAppearance(appearance);
+  useAppearance(appearance);
   bool wasVisible = visible();
   content_ = content;
   proofBelow_ = false;
@@ -561,7 +594,7 @@ void CandidateWindow::paint() {
   float width = client.right / scale_, height = client.bottom / scale_;
 
   target_->BeginDraw();
-  target_->Clear(Fill(appearance_));
+  target_->Clear(Fill(material_, light_));
   // The proof row hugs the edge next to the text (the bottom above it), so it stays put while
   // the window resizes; when it comes, goes or changes sides, it fades between its places.
   bool moves = proofMoves();
@@ -590,7 +623,7 @@ void CandidateWindow::drawProofRow(ID2D1RenderTarget* target, const PanelContent
                       layer.Get());
   }
   if (!c.rows.empty()) {
-    auto line = Brush(target, Color(kLine, material() ? 0.6f : 1));
+    auto line = Brush(target, Color(PaletteOf(light_).line, material() ? 0.6f : 1));
     float y = below ? top - 1 : rowHeight;
     target->FillRectangle(D2D1::RectF(0, y, width, y + 1), line.Get());
   }
@@ -604,23 +637,24 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, const PanelContent& c
   // go without moving the text.
   float lineTop = top + kProofPad;
   float markTop = lineTop + kProofLine + kMarkGap;
-  auto muted = Brush(target, Color(kMuted));
-  auto accentSoft = Brush(target, Color(kAccentSoft));
-  auto doubtMark = Brush(target, Color(kAccentSoft, kDoubtMarkAlpha));
+  const Palette& colors = PaletteOf(light_);
+  auto muted = Brush(target, Color(colors.muted));
+  auto accentSoft = Brush(target, Color(colors.accentSoft));
+  auto doubtMark = Brush(target, Color(colors.accentSoft, kDoubtMarkAlpha));
   if (!c.keyHint.empty()) {
     float w = keyWidth(c);
     float right = static_cast<float>(target->GetSize().width) - kProofRight;
     D2D1_RECT_F cap = D2D1::RectF(right - w, lineTop + (kProofLine - kKeyHeight) / 2, right, lineTop + (kProofLine + kKeyHeight) / 2);
     // A key: a face with a hairline edge, raised on a darker lip along its bottom.
     D2D1_ROUNDED_RECT face = D2D1::RoundedRect(D2D1::RectF(cap.left + 0.25f, cap.top + 0.25f, cap.right - 0.25f, cap.bottom - 0.25f), kKeyRadius, kKeyRadius);
-    auto lip = Brush(target, D2D1::ColorF(0, 0, 0, 0.35f));
+    auto lip = Brush(target, D2D1::ColorF(0, 0, 0, colors.lip));
     target->DrawLine(D2D1::Point2F(cap.left + kKeyRadius, cap.bottom + kKeyLip / 2), D2D1::Point2F(cap.right - kKeyRadius, cap.bottom + kKeyLip / 2), lip.Get(), kKeyLip);
-    auto faceFill = Brush(target, Color(kMuted, 0.16f));
+    auto faceFill = Brush(target, Color(colors.muted, 0.16f));
     target->FillRoundedRectangle(face, faceFill.Get());
-    auto edge = Brush(target, Color(kMuted, 0.35f));
+    auto edge = Brush(target, Color(colors.muted, 0.35f));
     target->DrawRoundedRectangle(face, edge.Get(), 0.5f);
     Line key = Measure(fonts_, Widen(c.keyHint), fonts_.key());
-    auto text = Brush(target, Color(kText));
+    auto text = Brush(target, Color(colors.text));
     DrawLine(target, key, (cap.left + cap.right - key.width) / 2, cap.top, kKeyHeight, text.Get());
   }
   if (!c.replacedText.empty()) {
@@ -654,7 +688,7 @@ void CandidateWindow::drawProof(ID2D1RenderTarget* target, const PanelContent& c
     uint32_t segmentLength = static_cast<uint32_t>(segment.size());
     bool active = static_cast<int>(i) == c.activeSegment;
     // A conversion preview shows its result in full text color.
-    auto brush = active ? accentSoft : hint ? Brush(target, Color(kText)) : muted;
+    auto brush = active ? accentSoft : hint ? Brush(target, Color(colors.text)) : muted;
     float left = x;
     uint32_t split = c.caret > start && c.caret < start + segmentLength ? c.caret - start : 0;
     if (split) {
@@ -685,14 +719,15 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
   D2D1_RECT_F pill = shownSelectionRect();
   pill.top += top;
   pill.bottom += top;
+  const Palette& colors = PaletteOf(light_);
   if (!IsEmpty(pill)) {
-    auto fill = Brush(target, content_->selectedRow >= 0 ? Color(content_->excluding ? kDanger : kAccent) : Color(kText, kGuessAlpha));
+    auto fill = Brush(target, content_->selectedRow >= 0 ? Color(content_->excluding ? kDanger : kAccent) : Color(colors.text, kGuessAlpha));
     target->FillRoundedRectangle(D2D1::RoundedRect(pill, kPillRadius, kPillRadius), fill.Get());
   }
-  auto text = Brush(target, Color(kText));
+  auto text = Brush(target, Color(colors.text));
   auto white = Brush(target, D2D1::ColorF(1, 1, 1, 1));
   auto onLabel = Brush(target, D2D1::ColorF(1, 1, 1, 0.72f));
-  auto muted = Brush(target, Color(kMuted));
+  auto muted = Brush(target, Color(colors.muted));
   float labelWidth = fonts_.widthOf(L"6", fonts_.label());
   for (size_t r = 0; r < content_->rows.size(); r++) {
     float cellTop = top + kRowTop + r * (cellHeight + kCellGap);
@@ -706,7 +741,7 @@ void CandidateWindow::drawCandidates(ID2D1RenderTarget* target, float top, float
       column += span;
       bool on = labeled && content_->selectedRow >= 0 && static_cast<int>(i) == content_->selection;  // on the accent
       if (!on && hover_.kind == PanelHit::kCandidate && hover_.row == static_cast<int>(r) && hover_.index == static_cast<int>(i)) {
-        auto hover = Brush(target, Color(kText, kHoverAlpha));
+        auto hover = Brush(target, Color(colors.text, kHoverAlpha));
         D2D1_RECT_F cell = D2D1::RectF(x, cellTop, x + span * fonts_.columnWidth() + (span - 1) * kCellGap, cellTop + cellHeight);
         target->FillRoundedRectangle(D2D1::RoundedRect(cell, kPillRadius, kPillRadius), hover.Get());
       }
@@ -796,11 +831,11 @@ POINT Beside(POINT position, SIZE size, const RECT& rect, int gap) {
 
 }  // namespace
 
-// Layered either way, but drawn differently: the dark badge is one bitmap
+// Layered either way, but drawn differently: the badge without a material is one bitmap
 // (UpdateLayeredWindow), a material's is painted with an opacity (SetLayeredWindowAttributes), and
 // a window can do only one, so switching between the two makes a new window.
-bool ModeBadge::ensureWindow(int appearance) {
-  if (hwnd_ && (appearance != 0) != (appearance_ != 0)) {
+bool ModeBadge::ensureWindow(int material, bool light) {
+  if (hwnd_ && (material != 0) != (material_ != 0)) {
     target_.Reset();
     DestroyWindow(hwnd_);
     hwnd_ = nullptr;
@@ -810,22 +845,23 @@ bool ModeBadge::ensureWindow(int appearance) {
     hwnd_ = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TRANSPARENT, kBadgeClass, L"", WS_POPUP,
                             0, 0, 1, 1, nullptr, nullptr, gInstance, this);
     if (!hwnd_) return false;
-    appearance_ = -1;  // apply below
+    material_ = -1;  // apply below
     cloaked_ = false;
   }
-  if (appearance != appearance_ && appearance != 0) {
-    ApplyAppearance(hwnd_, appearance);
+  if ((material != material_ || light != light_) && material != 0) {
+    ApplyAppearance(hwnd_, material, light);
     target_.Reset();
     settling_ = true;
   }
-  appearance_ = appearance;
+  material_ = material;
+  light_ = light;
   return true;
 }
 
 void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, const RECT* avoid, int appearance) {
   if (!fonts_.ok()) return;
   if (!factory_ && FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory_.GetAddressOf()))) return;
-  if (!ensureWindow(ClampAppearance(appearance))) return;
+  if (!ensureWindow(MaterialOf(appearance), LightOf(appearance))) return;
   scale_ = DpiOf(owner) / 96.f;
   label_ = label;
   float width = std::max(kBadgeSide, fonts_.widthOf(label, fonts_.badge()) + 2 * kBadgePadding);
@@ -833,7 +869,7 @@ void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, 
   place(anchor, avoid);
   SetWindowLongPtrW(hwnd_, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
   start_ = GetTickCount64();
-  if (appearance_ == 0) {
+  if (material_ == 0) {
     render();
     present(0);
     SetWindowPos(hwnd_, HWND_TOPMOST, position_.x, position_.y, size_.cx, size_.cy, SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -857,7 +893,7 @@ void ModeBadge::show(const std::wstring& label, const RECT& anchor, HWND owner, 
 }
 
 void ModeBadge::paint() {
-  if (appearance_ == 0) return;  // the layered window was drawn by render()
+  if (material_ == 0) return;  // the layered window was drawn by render()
   RECT client;
   GetClientRect(hwnd_, &client);
   D2D1_SIZE_U pixels = D2D1::SizeU(client.right, client.bottom);
@@ -871,9 +907,9 @@ void ModeBadge::paint() {
   target_->SetDpi(96 * scale_, 96 * scale_);
   target_->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
   target_->BeginDraw();
-  target_->Clear(Fill(appearance_));
+  target_->Clear(Fill(material_, light_));
   Line line = Measure(fonts_, label_, fonts_.badge());
-  auto text = Brush(target_.Get(), Color(kText));
+  auto text = Brush(target_.Get(), Color(PaletteOf(light_).text));
   DrawLine(target_.Get(), line, (client.right / scale_ - line.width) / 2, 0, kBadgeSide, text.Get());
   if (target_->EndDraw() == D2DERR_RECREATE_TARGET) target_.Reset();
 }
@@ -903,7 +939,7 @@ void ModeBadge::avoid(const RECT& rect) {
 void ModeBadge::hide() {
   if (!hwnd_) return;
   KillTimer(hwnd_, kAnimationTimer);
-  if (appearance_ != 0) {
+  if (material_ != 0) {
     Cloak(hwnd_, true);
     cloaked_ = true;
   } else {
@@ -926,7 +962,7 @@ void ModeBadge::tick() {
     return;
   }
   BYTE opacity = static_cast<BYTE>(std::lround(alpha * 255));
-  if (appearance_ == 0) {
+  if (material_ == 0) {
     present(opacity);
   } else {
     SetLayeredWindowAttributes(hwnd_, 0, opacity, LWA_ALPHA);
@@ -959,12 +995,13 @@ void ModeBadge::render() {
   target->BeginDraw();
   target->Clear(D2D1::ColorF(0, 0, 0, 0));
   D2D1_ROUNDED_RECT shape = D2D1::RoundedRect(D2D1::RectF(0.25f, 0.25f, width - 0.25f, kBadgeSide - 0.25f), 8, 8);
-  auto fill = Brush(target.Get(), Color(kBackground));
+  const Palette& colors = PaletteOf(light_);
+  auto fill = Brush(target.Get(), Color(colors.background));
   target->FillRoundedRectangle(shape, fill.Get());
-  auto edge = Brush(target.Get(), D2D1::ColorF(0, 0, 0, 0.5f));
+  auto edge = Brush(target.Get(), D2D1::ColorF(0, 0, 0, colors.edge));
   target->DrawRoundedRectangle(shape, edge.Get(), 0.5f);
   Line line = Measure(fonts_, label_, fonts_.badge());
-  auto text = Brush(target.Get(), Color(kText));
+  auto text = Brush(target.Get(), Color(colors.text));
   DrawLine(target.Get(), line, (width - line.width) / 2, 0, kBadgeSide, text.Get());
   target->EndDraw();
 }

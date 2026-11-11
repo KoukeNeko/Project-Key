@@ -88,7 +88,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 選字位置（游標後或游標前）、每列欄數。
 - 鍵盤排列：大千（預設）、倚天、許氏、倚天 26 鍵、IBM。
 - 開關：選完跳到下一個可疑處、簡拼、近似音（預設關閉）、數字鍵盤選字（預設關閉）、記住選過的字（可清除紀錄；開啟時亦自送出的文字學習）、Caps Lock（預設關閉）、單按 Shift 切換中英與 Shift+Space 切換全形（預設開啟），以及 Tab 的英文轉注音與注音轉英文。
-- 候選視窗外觀：深色、Acrylic（預設）、Mica、Mica Alt。
+- 候選視窗外觀：自動（預設，依 App 的淺色或深色模式，每次顯示時讀取）、淺色、深色，或 Acrylic、Mica、Mica Alt 三種材質；材質亦依 App 的模式採用淺色或深色。
 - 輸入時與選字時的整句預覽：永遠／有可疑字時／關閉，預設為有可疑字時。
 - 恢復原廠設定：「恢復設定」將所有設定改回預設值，保留自訂詞、排除詞與選字紀錄；「一併刪除資料」另刪除這些資料（`phrases.txt`、`exclude-phrases.txt`、`personal.txt`）並清除引擎伺服器記憶體中的選字紀錄。兩者皆保留下載的選字模型。
 - 「關於」：版本取自 `ProjectKey.dll`，並查詢 GitHub 最新發行版有無新版。有新版時按「更新到」，即下載發行版的 zip、核對 GitHub 列出的 SHA-256，再執行其中的 `install.ps1 -Update`，經一次系統管理員確認後安裝並重新開啟設定；已開啟的 App 須重新開啟才會改用新版的文字服務。「選字模型」顯示模型日期，有新模型時可直接下載，存放於 `%LOCALAPPDATA%\Project Key`，核對 SHA-256 後無須重新安裝即生效。
@@ -116,7 +116,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 ## 與 macOS 的差異
 
-- 視窗外觀採用 Windows 11 的設計語彙：DWM 圓角 8px 與 1px 外框、選取膠囊圓角 4px、微軟正黑體 19px。macOS 的 Liquid Glass 於 Windows 改為三種系統材質：Acrylic（模糊背後的內容）、Mica 與 Mica Alt（採用桌布的色調）。Mica 僅繪製於作用中的視窗，而候選視窗從不取得焦點，因此由系統將其框線視為作用中。中／英標記與候選視窗採用相同外觀。視窗剛出現時 DWM 尚未完成材質繪製，因此兩者皆先隱形（cloak）備妥材質再顯示，並於使用之間保持隱形而不關閉。候選視窗與 Tab 提示開啟、收起時，整個視窗連同材質一併淡入淡出（分層視窗的 `SetLayeredWindowAttributes`）。Acrylic 會透出背後的視窗，因此兩者皆疊加一層深色。
+- 視窗外觀採用 Windows 11 的設計語彙：DWM 圓角 8px 與 1px 外框、選取膠囊圓角 4px、微軟正黑體 19px。macOS 的 Liquid Glass 於 Windows 改為三種系統材質：Acrylic（模糊背後的內容）、Mica 與 Mica Alt（採用桌布的色調）。Mica 僅繪製於作用中的視窗，而候選視窗從不取得焦點，因此由系統將其框線視為作用中。中／英標記與候選視窗採用相同外觀。視窗剛出現時 DWM 尚未完成材質繪製，因此兩者皆先隱形（cloak）備妥材質再顯示，並於使用之間保持隱形而不關閉。候選視窗與 Tab 提示開啟、收起時，整個視窗連同材質一併淡入淡出（分層視窗的 `SetLayeredWindowAttributes`）。Acrylic 會透出背後的視窗，因此兩者皆疊加一層與模式相同的底色。模式取自「設定 → 個人化 → 色彩」的 App 模式（`HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` 的 `AppsUseLightTheme`）。
 - 轉換預覽的鍵帽標示為「Tab」。
 - 組字中輸入非注音亦非標點的字元時，送出組字並由輸入法輸入該字元。macOS 將按鍵交還 App；TSF 不會再送回已判定交由 App 的按鍵，因此改由輸入法輸入。
 - 透過 IMM32 相容層運作的傳統 Win32 文字框（例如 WinForms 的 TextBox）不向 TSF 提供文件內容：於這類 App 中，英文模式不顯示轉注音預覽，Tab 照常輸入。

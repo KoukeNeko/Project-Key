@@ -26,7 +26,7 @@ constexpr const wchar_t* kKeyFont = L"Segoe UI";
 
 constexpr const wchar_t* kReplacedArrow = L" → ";
 
-constexpr float kAcrylicTint = 0.6f;  // the dark background's opacity over Acrylic
+constexpr float kAcrylicTint = 0.6f;  // the background's opacity over Acrylic
 
 // Text formats and measurement. Not thread-safe; each thread makes its own.
 class Fonts {

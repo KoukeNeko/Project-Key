@@ -62,6 +62,8 @@
       <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="外觀" />
       <tk:SettingsCard Header="候選視窗">
         <ComboBox x:Name="Appearance" MinWidth="160">
+          <x:String>自動</x:String>
+          <x:String>淺色</x:String>
           <x:String>深色</x:String>
           <x:String>Acrylic</x:String>
           <x:String>Mica</x:String>
