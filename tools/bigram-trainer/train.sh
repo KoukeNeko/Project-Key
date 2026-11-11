@@ -26,9 +26,11 @@ DATA=../../platforms/macos/build/mcbopomofo/Source/Data/data.txt  # built by pla
 [ -f "$DATA" ] || { echo "run platforms/macos/build.sh first" >&2; exit 1; }
 command -v opencc >/dev/null || brew install opencc
 mkdir -p "$CACHE/wiki"
-[ -f "$CACHE/wiki/0.parquet" ] || curl -fsSL -o "$CACHE/wiki/0.parquet" "$SHARD_URL"
-[ -f "$CACHE/tsi.csv" ] || curl -fsSL -o "$CACHE/tsi.csv" "$CHEWING_URL"
-[ -f "$CACHE/roads.csv" ] || curl -fsSL -o "$CACHE/roads.csv" "$ROADS_URL"
+# A download cut short stays .part, so the next run fetches it again instead of using it.
+fetch() { [ -f "$1" ] || { curl -fsSL -o "$1.part" "$2" && mv "$1.part" "$1"; }; }
+fetch "$CACHE/wiki/0.parquet" "$SHARD_URL"
+fetch "$CACHE/tsi.csv" "$CHEWING_URL"
+fetch "$CACHE/roads.csv" "$ROADS_URL"
 [ -x "$CACHE/venv/bin/python" ] || { python3 -m venv "$CACHE/venv"; "$CACHE/venv/bin/pip" install -q pyarrow; }
 
 MCB_ENGINE=../../platforms/macos/build/mcbopomofo/Source/Engine  # the models map their files with its MemoryMappedFile
@@ -36,11 +38,15 @@ c++ -std=c++20 -O2 -I../../core/engine -I$MCB_ENGINE train.cpp ../../core/engine
 c++ -std=c++20 -O2 -I../../core/engine -I$MCB_ENGINE chars.cpp ../../core/engine/CharModel.cpp $MCB_ENGINE/MemoryMappedFile.cpp -o "$CACHE/chars"
 c++ -std=c++20 -O2 -I../../core/engine mine.cpp -o "$CACHE/mine"
 if [ ! -f "$TEXT" ]; then
-  {
-    "$CACHE/venv/bin/python" -I extract.py "$CACHE/wiki/0.parquet" "$LIMIT" | opencc -c s2twp.json
-    [ -d "$CACHE/gazette" ] && find "$CACHE/gazette" -name '*.txt' -exec cat {} +
-  } | sed 's/佈/布/g; s/臺/台/g; s/賬/帳/g' > "$TEXT.part"
+  # Each step writes a file of its own: in a pipe, a step that failed part way would leave a
+  # text that looks whole, and it is kept for every later run.
+  "$CACHE/venv/bin/python" -I extract.py "$CACHE/wiki/0.parquet" "$LIMIT" > "$TEXT.wiki"
+  opencc -c s2twp.json -i "$TEXT.wiki" -o "$TEXT.tw"
+  : > "$TEXT.gazette"
+  if [ -d "$CACHE/gazette" ]; then find "$CACHE/gazette" -name '*.txt' -exec cat {} + > "$TEXT.gazette"; fi
+  sed 's/佈/布/g; s/臺/台/g; s/賬/帳/g' "$TEXT.tw" "$TEXT.gazette" > "$TEXT.part"
   mv "$TEXT.part" "$TEXT"
+  rm -f "$TEXT.wiki" "$TEXT.tw" "$TEXT.gazette"
 fi
 
 python3 -I supplement.py chewing "$DATA" "$CACHE/tsi.csv" > "$CACHE/chewing.txt"
