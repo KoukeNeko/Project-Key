@@ -214,6 +214,8 @@ jobs:
         with:
           name: checksums
       - name: Homebrew cask and formula
+        # bash -eo pipefail: a download that fails stops the step, rather than hashing nothing.
+        shell: bash
         env:
           TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
@@ -261,10 +263,15 @@ jobs:
           # The trained dictionary and context models, as pinned by the tag's fetch-models.sh and models.sha256.
           raw="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/tools/bigram-trainer"
           models_tag="$(curl -sSfL "$raw/fetch-models.sh" | sed -n 's/^TAG=//p')"
+          sums="$(curl -sSfL "$raw/models.sha256")"
+          if [ -z "$mcb" ] || [ -z "$models_tag" ] || [ -z "$sums" ]; then
+            echo "::error::could not read MCBOPOMOFO_COMMIT, the models tag or models.sha256" >&2
+            exit 1
+          fi
           models=""
           while read -r sum file; do
             models="$models  resource \"$file\" do\n    url \"https://github.com/KoukeNeko/Project-Key/releases/download/$models_tag/$file\"\n    sha256 \"$sum\"\n  end\n\n"
-          done < <(curl -sSfL "$raw/models.sha256")
+          done <<< "$sums"
           mkdir -p tap/Formula
           sed -e "s/@VERSION@/$VERSION/g" -e "s/@MODELS_VERSION@/${models_tag#models-}/" -e "s/@SHA256@/$src_sha/" -e "s/@MCBOPOMOFO@/$mcb/" -e "s/@MCBOPOMOFO_SHA256@/$mcb_sha/" \
             > tap/Formula/fcitx5-projectkey.rb.in <<'EOF'
@@ -355,6 +362,7 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "project-key $VERSION"
           git push
       - name: Scoop manifest
+        shell: bash
         env:
           TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
         run: |
