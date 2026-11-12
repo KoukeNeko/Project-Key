@@ -385,10 +385,12 @@ bool Controller::handleKey(const KeyEvent& original) {
       env_.englishMode = false;
     }
   }
-  // Caps Lock is the switch, so the lock it leaves on does not capitalize: the
-  // key acts as its lowercase letter (Shift still capitalizes).
+  // With Caps Lock the switch, the lock it leaves on does not capitalize; and in 中 a lock left on
+  // never does, or the layout's capitals would not be Zhuyin keys. The key acts as its lowercase
+  // letter (Shift still capitalizes).
   std::string lowered = Lowercase(event.characters);
-  bool capsLetter = event.capsLock && !event.shift && env_.settings->flag(Setting::kCapsLockToggle) && lowered != event.characters;
+  bool capsLetter = event.capsLock && !event.shift && lowered != event.characters &&
+                    (!env_.englishMode || env_.settings->flag(Setting::kCapsLockToggle));
   if (capsLetter) {
     event.capsLock = false;
     event.characters = lowered;

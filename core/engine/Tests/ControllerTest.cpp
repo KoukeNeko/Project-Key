@@ -555,6 +555,9 @@ int main(int argc, char** argv) {
   // Off by default, Caps Lock leaves 中/英 alone.
   controller.handleCapsLock();
   assert(!controller.englishMode());
+  // A lock left on does not turn 中 into English: the layout's capital is still the Zhuyin key.
+  assert(controller.handleKey(Caps("R")) && controller.isTypingSyllable());
+  EscapeAll(controller, client);
   // With its setting on, Caps Lock switches 中/英 on each press; the lock it leaves on does
   // not capitalize.
   settings.set(Setting::kCapsLockToggle, 1);
