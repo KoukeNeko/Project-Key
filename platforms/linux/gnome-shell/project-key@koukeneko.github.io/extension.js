@@ -10,17 +10,20 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Shell from 'gi://Shell';
 import Cogl from 'gi://Cogl';
+import Meta from 'gi://Meta';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const NAME = 'org.projectkey.Panel';
 // How far the blur spreads, in logical pixels: about what KWin's blur gives on KDE.
 const BLUR_RADIUS = 30;
-// Version 2 carries the scale and the window's place as doubles, for fractional scales (125%).
+// Version 3 has Geometry carry the stage's width while an X11 window is focused, which turns its
+// caret into stage units; version 2 carried the scale and the window's place as doubles, for
+// fractional scales (125%).
 // Fcitx5 and this change together; until the next login after an update the old extension
 // keeps running, and the versions not matching leaves Project Key on Fcitx5's own panel.
 const PANEL = `<node>
-  <interface name="org.projectkey.Panel2">
+  <interface name="org.projectkey.Panel3">
     <method name="Show">
       <arg type="s" name="id" direction="in"/>
       <arg type="d" name="x" direction="in"/>
@@ -220,7 +223,7 @@ export default class ProjectKeyExtension extends Extension {
     }
 
     _send(method, id, x, y) {
-        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost2', method,
+        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost3', method,
             new GLib.Variant('(sii)', [id, x, y]), null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
     }
 
@@ -253,7 +256,8 @@ export default class ProjectKeyExtension extends Extension {
 
     // The focused window's surface (where an app's caret is measured from), the work
     // area of its monitor, in the stage's coordinates, and the monitor's pixels per stage unit,
-    // the scale Project Key draws at.
+    // the scale Project Key draws at. An X11 window (XWayland) measures its caret in X pixels,
+    // so for one the stage's width goes too, for Fcitx5 to find how many of them make a stage unit.
     _sendGeometry() {
         const window = this._window;
         const origin = window ? window.get_buffer_rect() : {x: 0, y: 0};
@@ -261,8 +265,9 @@ export default class ProjectKeyExtension extends Extension {
         const area = Main.layoutManager.getWorkAreaForMonitor(monitor);
         this._monitor = monitor;
         this._scale = this._monitorScale(monitor);
-        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost2', 'Geometry',
-            new GLib.Variant('(iiiiiid)', [origin.x, origin.y, area.x, area.y, area.width, area.height, this._scale]),
+        const x11StageWidth = window?.get_client_type() === Meta.WindowClientType.X11 ? global.stage.width : 0;
+        Gio.DBus.session.call('org.fcitx.Fcitx5', '/projectkey/panel', 'org.projectkey.PanelHost3', 'Geometry',
+            new GLib.Variant('(iiiiiidi)', [origin.x, origin.y, area.x, area.y, area.width, area.height, this._scale, x11StageWidth]),
             null, Gio.DBusCallFlags.NO_AUTO_START, -1, null, null);
     }
 }

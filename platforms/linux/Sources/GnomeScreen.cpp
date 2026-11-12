@@ -13,6 +13,7 @@
 #include <fcitx/instance.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <xcb/xcb.h>
 
 #include <algorithm>
 #include <cmath>
@@ -29,11 +30,12 @@ namespace {
 
 constexpr char kExtension[] = "org.projectkey.Panel";
 
-// The extension's interfaces, version 2: the scale and a window's place are doubles, for
-// fractional scales. An extension from before an update, until the next login, has only
-// version 1, so the two do not meet and Fcitx5's panel stands in (problem() says to log in).
-constexpr char kExtensionInterface[] = "org.projectkey.Panel2";
-constexpr char kHostInterface[] = "org.projectkey.PanelHost2";
+// The extension's interfaces, version 3: Geometry also says how wide the stage is when the
+// focused window is an X11 one, which turns its caret into stage units. An extension from
+// before an update, until the next login, has an older version, so the two do not meet and
+// Fcitx5's panel stands in (problem() says to log in).
+constexpr char kExtensionInterface[] = "org.projectkey.Panel3";
+constexpr char kHostInterface[] = "org.projectkey.PanelHost3";
 
 // Where the extension says the focused window and its monitor's work area are, in
 // GNOME's logical coordinates, and the scale that makes them pixels: the monitor's own,
@@ -42,6 +44,8 @@ struct Geometry {
   int originX = 0, originY = 0;
   int areaX = 0, areaY = 0, areaWidth = 0, areaHeight = 0;
   double scale = 1;
+  // The stage's width in logical pixels while the focused window is an X11 one, else 0.
+  int x11StageWidth = 0;
 };
 
 class GnomeScreen;
@@ -51,13 +55,13 @@ class PanelHost : public fcitx::dbus::ObjectVTable<PanelHost> {
  public:
   explicit PanelHost(GnomeScreen& screen) : screen_(screen) {}
   void geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
-                double scale);
+                double scale, int32_t x11StageWidth);
   void clicked(const std::string& id, int32_t x, int32_t y);  // in pixels from the window's corner
   void moved(const std::string& id, int32_t x, int32_t y);    // likewise; (-1, -1) as the pointer leaves
 
  private:
   GnomeScreen& screen_;
-  FCITX_OBJECT_VTABLE_METHOD(geometry, "Geometry", "iiiiiid", "");
+  FCITX_OBJECT_VTABLE_METHOD(geometry, "Geometry", "iiiiiidi", "");
   FCITX_OBJECT_VTABLE_METHOD(clicked, "Clicked", "sii", "");
   FCITX_OBJECT_VTABLE_METHOD(moved, "Moved", "sii", "");
 };
@@ -74,20 +78,23 @@ class GnomeScreen final : public Screen {
     });
   }
 
+  ~GnomeScreen() override { xcb_disconnect(x11_); }
   // Until the extension has said where things are, Fcitx5's panel stands in.
   bool reaches(const fcitx::InputContext&) const override { return known_; }
   std::unique_ptr<Window> createWindow(std::function<void()>, std::function<void()>) override;
   // In pixels from the work area's corner. Apps GNOME Shell relays (IBus) give the caret
   // on screen; apps on Fcitx5's own D-Bus frontend (GTK and Qt under Wayland) give it in
-  // their window, which the extension says is the focused one.
+  // their window, which the extension says is the focused one. X11 apps (XWayland) give it
+  // in X pixels, xScale_ to a stage unit.
   fcitx::Rect caret(const fcitx::InputContext& ic, const fcitx::Rect& anchor) const override {
     double s = geometry_.scale;
     bool relative = ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect);
+    double unit = relative ? 1 : xScale_;
     int originX = relative ? geometry_.originX : 0, originY = relative ? geometry_.originY : 0;
-    int left = static_cast<int>(std::lround((originX + anchor.left() - geometry_.areaX) * s));
-    int top = static_cast<int>(std::lround((originY + anchor.top() - geometry_.areaY) * s));
-    return fcitx::Rect(left, top, left + static_cast<int>(std::lround(anchor.width() * s)),
-                       top + static_cast<int>(std::lround(anchor.height() * s)));
+    int left = static_cast<int>(std::lround((originX + anchor.left() / unit - geometry_.areaX) * s));
+    int top = static_cast<int>(std::lround((originY + anchor.top() / unit - geometry_.areaY) * s));
+    return fcitx::Rect(left, top, left + static_cast<int>(std::lround(anchor.width() / unit * s)),
+                       top + static_cast<int>(std::lround(anchor.height() / unit * s)));
   }
   int width() const override { return static_cast<int>(std::lround(geometry_.areaWidth * geometry_.scale)); }
   int height() const override { return static_cast<int>(std::lround(geometry_.areaHeight * geometry_.scale)); }
@@ -102,7 +109,10 @@ class GnomeScreen final : public Screen {
 
   void setGeometry(const Geometry& geometry) {
     known_ = geometry.areaWidth > 0 && geometry.areaHeight > 0 && geometry.scale > 0;
-    if (known_) geometry_ = geometry;
+    if (!known_) return;
+    geometry_ = geometry;
+    double rootWidth = geometry.x11StageWidth > 0 ? xRootWidth() : 0;
+    xScale_ = rootWidth > 0 ? rootWidth / geometry.x11StageWidth : 1;
   }
   fcitx::dbus::Message call(const char* member) {
     return bus_->createMethodCall(kExtension, "/org/projectkey/Panel", kExtensionInterface, member);
@@ -112,18 +122,35 @@ class GnomeScreen final : public Screen {
   std::vector<GnomeWindow*> shown;  // for finding a click's window
 
  private:
+  // The X screen's width, which Mutter makes the stage's times an integer (XWayland's scale),
+  // such as 2 at 125%; 0 where X cannot be reached.
+  double xRootWidth() {
+    if (!x11_ || xcb_connection_has_error(x11_)) {
+      xcb_disconnect(x11_);
+      x11_ = xcb_connect(nullptr, nullptr);
+    }
+    if (xcb_connection_has_error(x11_)) return 0;
+    xcb_window_t root = xcb_setup_roots_iterator(xcb_get_setup(x11_)).data->root;
+    xcb_get_geometry_reply_t* reply = xcb_get_geometry_reply(x11_, xcb_get_geometry(x11_, root), nullptr);
+    double width = reply ? reply->width : 0;
+    free(reply);
+    return width;
+  }
+
   fcitx::dbus::Bus* bus_;
   PanelHost host_;
   fcitx::dbus::ServiceWatcher watcher_;
   std::unique_ptr<fcitx::dbus::ServiceWatcherEntry> entry_;
   Geometry geometry_;
+  double xScale_ = 1;  // X pixels per stage unit, for the focused window
+  xcb_connection_t* x11_ = nullptr;
   bool known_ = false;
   int windows_ = 0;
 };
 
 void PanelHost::geometry(int32_t originX, int32_t originY, int32_t areaX, int32_t areaY, int32_t areaWidth, int32_t areaHeight,
-                         double scale) {
-  screen_.setGeometry({originX, originY, areaX, areaY, areaWidth, areaHeight, scale});
+                         double scale, int32_t x11StageWidth) {
+  screen_.setGeometry({originX, originY, areaX, areaY, areaWidth, areaHeight, scale, x11StageWidth});
 }
 
 class GnomeWindow final : public Window {
