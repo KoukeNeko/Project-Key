@@ -33,6 +33,7 @@ for test in ComposerTest ControllerTest; do
   "$BUILD/$test" "$MCB/Source/Data/data.txt"
 done
 "$BUILD/PoolStressTest" 5
+sh ./test-profile.sh
 ADDON_CXXLIB=$(cxxlib $BUILD/projectkey.so)
 if [ -n "$FCITX_CXXLIB" ] && [ "$ADDON_CXXLIB" != "$FCITX_CXXLIB" ]; then
   echo "warning: Fcitx5 uses $FCITX_CXXLIB but projectkey.so uses $ADDON_CXXLIB: Fcitx5 won't be able to load it" >&2
