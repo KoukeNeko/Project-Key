@@ -236,8 +236,8 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
                       ? sentences
                       : nullptr;
   ++env.models;
-  env.userPhrasesTime.reset();  // the new lexicon has none yet
-  env.excludedPhrasesTime.reset();
+  env.userPhrasesStamp.reset();  // the new lexicon has none yet
+  env.excludedPhrasesStamp.reset();
   std::error_code error;
   for (const auto& entry : std::filesystem::directory_iterator(Path(downloaded), error)) {
     // Best effort: Windows keeps a release open while a composer still maps it; the next start removes it.
@@ -252,17 +252,20 @@ std::string ExcludedPhrasesPath(const Environment& env) {
 
 void ReloadUserPhrases(Environment& env) {
   if (env.userPhrasesPath.empty()) return;
-  auto writtenAt = [](const std::string& utf8Path) {
+  auto stampOf = [](const std::string& utf8Path) -> decltype(env.userPhrasesStamp) {
     std::error_code error;
     auto written = std::filesystem::last_write_time(Path(utf8Path), error);
-    return error ? std::nullopt : std::optional(written);
+    if (error) return std::nullopt;
+    auto size = std::filesystem::file_size(Path(utf8Path), error);
+    if (error) return std::nullopt;
+    return std::pair(written, size);
   };
   std::string excludedPath = ExcludedPhrasesPath(env);
-  auto time = writtenAt(env.userPhrasesPath);
-  auto excludedTime = writtenAt(excludedPath);
-  if (time == env.userPhrasesTime && excludedTime == env.excludedPhrasesTime) return;
-  env.userPhrasesTime = time;
-  env.excludedPhrasesTime = excludedTime;
+  auto stamp = stampOf(env.userPhrasesPath);
+  auto excludedStamp = stampOf(excludedPath);
+  if (stamp == env.userPhrasesStamp && excludedStamp == env.excludedPhrasesStamp) return;
+  env.userPhrasesStamp = stamp;
+  env.excludedPhrasesStamp = excludedStamp;
   env.lm->loadUserPhrases(env.userPhrasesPath, excludedPath);
   env.userPhrasesVersion++;
 }
@@ -753,8 +756,8 @@ bool AppendLine(const std::string& path, const std::string& line) {
 // After a write of ours the files are read again even if their times did not move, as a clock
 // that ticks coarsely (Windows') leaves them the same for a write that follows at once.
 void ReloadAfterEdit(Environment& env) {
-  env.userPhrasesTime.reset();
-  env.excludedPhrasesTime.reset();
+  env.userPhrasesStamp.reset();
+  env.excludedPhrasesStamp.reset();
   ReloadUserPhrases(env);
 }
 }  // namespace

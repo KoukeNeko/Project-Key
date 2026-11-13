@@ -10,6 +10,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Composer.h"
@@ -129,8 +130,9 @@ struct Environment {
   // read again by the next composition after the file changes; empty for none. The words the
   // user never wants offered are in exclude-phrases.txt beside it.
   std::string userPhrasesPath;
-  std::optional<std::filesystem::file_time_type> userPhrasesTime;  // when the loaded files were written,
-  std::optional<std::filesystem::file_time_type> excludedPhrasesTime;  // phrases.txt and exclude-phrases.txt
+  // When the loaded files, phrases.txt and exclude-phrases.txt, were written and how long they were: a
+  // write within one tick of a coarse clock (Windows') changes the length, if not the time.
+  std::optional<std::pair<std::filesystem::file_time_type, std::uintmax_t>> userPhrasesStamp, excludedPhrasesStamp;
   uint64_t userPhrasesVersion = 0;  // changes with each load
   Settings* settings = nullptr;
   // Whether text (letters and spaces) is correctly spelled English.

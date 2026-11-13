@@ -907,6 +907,18 @@ int main(int argc, char** argv) {
   EscapeAll(controller, client);
   std::filesystem::remove(env.userPhrasesPath);
 
+  // A word file written again within one tick of a coarse clock (Windows') keeps its time; it is read again all the same.
+  std::ofstream(env.userPhrasesPath) << "測試 ㄘㄜˋ-ㄕˋ\n";
+  Type(controller, "hk4g4");
+  EscapeAll(controller, client);
+  auto written = std::filesystem::last_write_time(env.userPhrasesPath);
+  std::ofstream(env.userPhrasesPath) << "# 測試\n鍵測 ㄘㄜˋ-ㄕˋ\n";
+  std::filesystem::last_write_time(env.userPhrasesPath, written);
+  Type(controller, "hk4g4");
+  assert(client.marked == "鍵測");
+  EscapeAll(controller, client);
+  std::filesystem::remove(env.userPhrasesPath);
+
   // A file saved by hand ends without a newline: the word goes on a line of its own, and a line
   // that is there already, last and without its newline, is not added again.
   std::ofstream(env.userPhrasesPath) << "測試 ㄘㄜˋ-ㄕˋ";
