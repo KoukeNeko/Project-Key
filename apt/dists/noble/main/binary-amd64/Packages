@@ -1,18 +1,19 @@
 Package: fcitx5-projectkey
-Version: 0.7.0-1~noble
+Version: 0.8.1-1~noble
 Architecture: amd64
 Maintainer: KoukeNeko <noreply@users.noreply.github.com>
-Installed-Size: 1136
+Installed-Size: 1324
 Depends: libadwaita-1-0 (>= 1.5~beta), libc6 (>= 2.38), libcairo2 (>= 1.14.0), libenchant-2-2 (>= 2.2.3), libfcitx5config6 (>= 5.1.7), libfcitx5core7 (>= 5.1.7), libfcitx5utils2 (>= 5.1.7), libgcc-s1 (>= 3.3.1), libglib2.0-0t64 (>= 2.40.0), libgtk-4-1 (>= 4.0.0), libjson-glib-1.0-0 (>= 1.5.2), libpango-1.0-0 (>= 1.22.0), libpangocairo-1.0-0 (>= 1.14.0), libqt6core6t64 (>= 6.4.0), libqt6dbus6t64 (>= 6.4.0), libqt6gui6t64 (>= 6.1.2), libqt6network6t64 (>= 6.1.2), libqt6widgets6t64 (>= 6.1.2), libsoup-3.0-0 (>= 3.0.3), libstdc++6 (>= 13.1), libwayland-client0 (>= 1.20.0), libxcb1, fcitx5, hunspell-en-us, fcitx5-projectkey-data (= 2026.11.09+mcb257da53-1)
 Recommends: fonts-noto-cjk
+Replaces: fcitx5-projectkey-data
 Homepage: https://github.com/KoukeNeko/Project-Key
 Priority: optional
 Section: utils
-Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.7.0-1~noble_amd64.deb
-Size: 453636
-SHA256: b9c704986d9c22da2444f327dbb8e8d90cc81309276bce93300c419c84e22112
-SHA1: 7fdd4726a92ee1d1bd9887b941b7c2f1d86b3a7c
-MD5sum: 600ad9895bd3fcf25c174b399a7ab526
+Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.8.1-1~noble_amd64.deb
+Size: 506608
+SHA256: b7dbc1ea5dec958f3bacc48604a21ce0aa087db0d68c129656d4e96b87ecee4a
+SHA1: b936aa0f2993b5d421e86fb174b7c37eac238e38
+MD5sum: dddd10b5c7f62b742e5a8e85172365ae
 Description: Zhuyin input method for Fcitx5
  Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
  for Fcitx5 on GNOME, KDE and other desktops.
