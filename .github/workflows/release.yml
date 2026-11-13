@@ -180,7 +180,9 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          sparse-checkout: distribution
+          sparse-checkout: |
+            distribution
+            platforms/linux/install.sh
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           merge-multiple: true
@@ -192,11 +194,11 @@ jobs:
           notes="distribution/release-notes/$GITHUB_REF_NAME.md"
           if [ -f "$notes" ]; then from=(--notes-file "$notes"); else from=(--generate-notes); fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS --clobber
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS platforms/linux/install.sh --clobber
             if [ -f "$notes" ]; then gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"; fi
           else
             gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Project Key ${{ needs.version.outputs.version }}" \
-              "${from[@]}" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS
+              "${from[@]}" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS platforms/linux/install.sh
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

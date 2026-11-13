@@ -43,7 +43,7 @@ Fcitx5 預設以左 Shift 暫時切換輸入法。Project Key 使用中且「單
 以一行指令安裝（Debian、Ubuntu、Fedora、Arch 及其衍生版）。以自己的帳號執行，不要加 `sudo`，需要時會詢問密碼：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/install.sh | sh
+curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh
 ```
 
 `install.sh` 依序完成：

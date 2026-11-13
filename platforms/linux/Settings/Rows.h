@@ -24,7 +24,7 @@ constexpr char kEngineUrl[] = "https://github.com/openvanilla/McBopomofo";
 // install.sh, which also updates whatever it or a package installed. It asks for the sudo
 // password, so the settings window copies it for a terminal rather than running it.
 constexpr char kInstallCommand[] =
-    "curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/install.sh | sh";
+    "curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh";
 
 // $XDG_DATA_HOME/projectkey, which the addon (Sources/ProjectKey.cpp) keeps personal.txt and phrases.txt in too; empty without a home.
 inline std::filesystem::path UserData() {

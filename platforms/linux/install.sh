@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs Project Key on Linux, set up and ready to type with:
-#   curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/install.sh | sh
+#   curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh
 # 1. The program, as a package the package manager can remove again: from the apt or dnf
 #    repository where one is built for the system (Debian 13, Ubuntu 24.04 and Fedora 43 on
 #    x86_64); anywhere else built here from the latest release's source (apt, dnf or pacman).
