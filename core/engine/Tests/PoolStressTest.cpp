@@ -1,11 +1,10 @@
 // Stress test for the thread pool in SentenceModel.cpp (class Pool), which runs the sentence
 // model's matrix products. Usage: PoolStressTest [seconds, default 60] [spinning threads, default 0]
 //
-// Not in the build scripts: it is expected to fail while the pool has the race it was written for.
-// Suspected mechanism: work() reads next_, count_ and task_ without the lock, so a worker that is
-// late from one call can take an index of the next call while run() is still setting it up. That
-// runs one task twice, and a task_ of nullptr or a done_ past count_ follows; finished_.wait()
-// then never sees done_ == count_ and run() never returns.
+// Runs of random size back to back, with spinning threads taking cores from the pool's workers so
+// that one is late. A worker late from one call must take an index of the next call only with that
+// call's task, and every block must run exactly once: the test exits 1 when one ran twice or not
+// at all, and 3 when run() does not return for 10 seconds. The build script runs it for a few seconds.
 //
 // SentenceModel.cpp is included whole so that the test exercises the real Pool (it lives in an
 // anonymous namespace), not a copy of it.
@@ -31,89 +30,11 @@ void burn(int rounds) {
   for (int i = 0; i < rounds; i++) x = x * 1.0000001f + 0.5f;
 }
 
-// The same pool with every read of its shared state under the lock. It is here only to show that
-// the race is the cause: the test passes with it ("fixed" on the command line) and hangs without.
-class FixedPool {
- public:
-  static FixedPool& Shared() {
-    static FixedPool pool(std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 0, 7));
-    return pool;
-  }
-  void run(int count, const std::function<void(int)>& task) {
-    if (workers_.empty() || count <= 1) {
-      for (int i = 0; i < count; i++) task(i);
-      return;
-    }
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      task_ = &task;
-      count_ = count;
-      next_ = 0;
-      done_ = 0;
-      generation_++;
-    }
-    wake_.notify_all();
-    work();
-    std::unique_lock<std::mutex> lock(mutex_);
-    finished_.wait(lock, [&] { return done_ == count_; });
-    task_ = nullptr;
-  }
-  ~FixedPool() {
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      stopping_ = true;
-    }
-    wake_.notify_all();
-    for (std::thread& worker : workers_) worker.join();
-  }
-
- private:
-  explicit FixedPool(int threads) {
-    for (int i = 0; i < threads; i++) {
-      workers_.emplace_back([this] {
-        unsigned seen = 0;
-        for (;;) {
-          {
-            std::unique_lock<std::mutex> lock(mutex_);
-            wake_.wait(lock, [&] { return stopping_ || generation_ != seen; });
-            if (stopping_) return;
-            seen = generation_;
-          }
-          work();
-        }
-      });
-    }
-  }
-  void work() {
-    for (;;) {
-      const std::function<void(int)>* task;
-      int i;
-      {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (next_ >= count_) return;
-        i = next_++;
-        task = task_;
-      }
-      (*task)(i);
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (++done_ == count_) finished_.notify_all();
-    }
-  }
-  std::vector<std::thread> workers_;
-  std::mutex mutex_;
-  std::condition_variable wake_, finished_;
-  const std::function<void(int)>* task_ = nullptr;
-  int next_ = 0, count_ = 0, done_ = 0;
-  unsigned generation_ = 0;
-  bool stopping_ = false;
-};
-
 }  // namespace
 
 int main(int argc, char** argv) {
   int seconds = argc > 1 ? std::atoi(argv[1]) : 60;
   int spinners = argc > 2 ? std::atoi(argv[2]) : 0;
-  bool fixed = argc > 3 && std::string(argv[3]) == "fixed";
 
   std::atomic<uint64_t> calls{0}, repeated{0}, missed{0};
   std::atomic<bool> finished{false};
@@ -161,11 +82,7 @@ int main(int argc, char** argv) {
       ran[block]++;
       burn(work);
     };
-    if (fixed) {
-      FixedPool::Shared().run(count, task);
-    } else {
-      ProjectKey::Pool::Shared().run(count, task);
-    }
+    ProjectKey::Pool::Shared().run(count, task);
     for (int i = 0; i < count; i++) {
       int n = ran[i];
       if (n == 1) continue;
@@ -183,8 +100,8 @@ int main(int argc, char** argv) {
   finished = true;
   watchdog.join();
   for (std::thread& hog : hogs) hog.join();
-  std::printf("%s pool: %llu calls in %d s with %d spinning threads: %llu blocks ran twice or more, %llu did not run\n",
-              fixed ? "fixed" : "real", static_cast<unsigned long long>(calls.load()), seconds, spinners, static_cast<unsigned long long>(repeated.load()),
+  std::printf("pool: %llu calls in %d s with %d spinning threads: %llu blocks ran twice or more, %llu did not run\n",
+              static_cast<unsigned long long>(calls.load()), seconds, spinners, static_cast<unsigned long long>(repeated.load()),
               static_cast<unsigned long long>(missed.load()));
   return repeated || missed ? 1 : 0;
 }

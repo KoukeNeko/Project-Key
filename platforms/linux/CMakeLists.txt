@@ -53,6 +53,10 @@ foreach(test ComposerTest ControllerTest)
   add_executable(${test} "${CORE}/Tests/${test}.cpp")
   target_link_libraries(${test} engine)
 endforeach()
+# Includes SentenceModel.cpp whole to test its thread pool, so it does not link the engine.
+add_executable(PoolStressTest "${CORE}/Tests/PoolStressTest.cpp")
+target_include_directories(PoolStressTest PRIVATE "${CORE}")
+target_link_libraries(PoolStressTest Threads::Threads)
 
 set(DATA_DIR "${CMAKE_INSTALL_FULL_DATADIR}/fcitx5/projectkey")
 # The input method popups the candidate window goes into on Wayland (wlroots' protocol, as Fcitx5 uses).
