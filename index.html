@@ -3,8 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Project Key 大千注音輸入法</title>
-<meta name="description" content="大千注音輸入法。整句打完，再一起選字；依上下文排序，標出可能選錯的地方。">
+<title>Project Key：整句選字的注音輸入法｜macOS、Windows、Linux</title>
+<meta name="description" content="免費、開源的注音輸入法，支援 macOS、Windows 與 Linux（Fcitx5）。整句打完再一起選字，依上下文排序並標出可能選錯的詞；支援大千、倚天、許氏等鍵盤排列。">
+<link rel="canonical" href="https://koukeneko.github.io/Project-Key/">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#1d2124">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Project Key">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:url" content="https://koukeneko.github.io/Project-Key/">
+<meta property="og:title" content="Project Key：整句選字的注音輸入法">
+<meta property="og:description" content="免費、開源的注音輸入法，支援 macOS、Windows 與 Linux（Fcitx5）。整句打完再一起選字，依上下文排序並標出可能選錯的詞；支援大千、倚天、許氏等鍵盤排列。">
+<meta property="og:image" content="https://koukeneko.github.io/Project-Key/og.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Project Key 的候選視窗：整句預覽標出可疑的「程式」，下方為候選列">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Project Key",
+  "alternateName": "Project Key 注音輸入法",
+  "description": "免費、開源的注音輸入法，支援 macOS、Windows 與 Linux（Fcitx5）。整句打完再一起選字，依上下文排序並標出可能選錯的詞；支援大千、倚天、許氏等鍵盤排列。",
+  "url": "https://koukeneko.github.io/Project-Key/",
+  "image": "https://koukeneko.github.io/Project-Key/og.png",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "macOS 13+, Windows 11, Linux (Fcitx5)",
+  "inLanguage": "zh-Hant-TW",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" },
+  "downloadUrl": "https://github.com/KoukeNeko/Project-Key/releases/latest",
+  "license": "https://opensource.org/licenses/MIT",
+  "author": { "@type": "Person", "name": "KoukeNeko", "url": "https://github.com/KoukeNeko" },
+  "sameAs": ["https://github.com/KoukeNeko/Project-Key"]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -191,7 +225,7 @@
   /* 功能：按下的鍵 → 得到的字 */
   .features { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: max(56px, 6rem) max(24px, 3rem); align-items: start; }
   .feat { display: grid; gap: 1.1rem; align-content: start; grid-column: span 4; }
-  .feat:nth-child(5) { grid-column: span 8; }
+  .feat:nth-child(7) { grid-column: span 8; }
   .keys { display: flex; gap: 6px; flex-wrap: wrap; }
   .k {
     font-family: "IBM Plex Mono", "Noto Sans TC", monospace; font-size: max(16px, 1.15rem); line-height: 1;
@@ -347,7 +381,7 @@
           <p><span class="nowrap">macOS・Windows</span><br><span class="sep">・</span><span class="nowrap">Linux（Fcitx5）</span></p>
         </div>
         <div class="under" id="heroUnder">
-          <p>大千注音輸入法。依上下文排序，<br>標出可能選錯的地方。</p>
+          <p>開源注音輸入法。依上下文排序，<br>標出可能選錯的地方。</p>
           <div class="window" id="heroWindow" aria-label="候選視窗">
             <div class="proof">我們把舊的<b id="heroProof">程式</b>重構成模組</div>
             <div class="row" id="heroRow">
@@ -422,9 +456,19 @@
           <div><h3>中英互轉</h3><p>英文模式下打成注音、中文模式下打成英文時，按 Tab 轉回來。</p></div>
         </div>
         <div class="feat">
+          <div class="keys"><span class="k">大千</span><span class="k">倚天</span><span class="k">許氏</span><span class="k">IBM</span></div>
+          <div class="result">五種</div>
+          <div><h3>鍵盤排列<span class="tag">設定中切換</span></h3><p>大千、倚天、許氏、倚天 26 鍵與 IBM；許氏與倚天 26 鍵的聲調鍵兼作聲母。</p></div>
+        </div>
+        <div class="feat">
+          <div class="keys"><span class="k">輸入</span><span class="k wide">Enter</span></div>
+          <div class="result">法</div>
+          <div><h3>聯想詞<span class="tag">設定中開啟</span></h3><p>送出後列出常接在後面的詞，按 Shift 加數字鍵選取。</p></div>
+        </div>
+        <div class="feat">
           <div class="keys"><span class="k">小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ</span></div>
           <div class="result">小鍵</div>
-          <div><h3>自訂詞<span class="tag">0.5.0</span></h3><p>在設定裡編輯 phrases.txt，存檔後下一句就用得到。</p></div>
+          <div><h3>自訂詞</h3><p>在設定裡編輯 phrases.txt，存檔後下一句就用得到。</p></div>
         </div>
         <div class="feat">
           <div class="keys"><span class="k">選過一次</span></div>
