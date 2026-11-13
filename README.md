@@ -1,12 +1,75 @@
-# Project Key
+<p align="center">
+  <img src="platforms/linux/fcitx-projectkey.svg" alt="Project Key" width="128">
+</p>
 
-[![CI](https://github.com/KoukeNeko/Project-Key/actions/workflows/ci.yml/badge.svg)](https://github.com/KoukeNeko/Project-Key/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/KoukeNeko/Project-Key)](https://github.com/KoukeNeko/Project-Key/releases/latest)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<h1 align="center">Project Key</h1>
 
-Project Key 為注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共用同一套組字引擎。整句可連續輸入後再一併選字；引擎依上下文排序候選，並標示可能選錯之處。
+<p align="center">
+  <strong>整句輸入、依上下文選字的注音輸入法。</strong><br>
+  整句連續輸入後再一併選字，引擎依上下文排序候選，並標示可能選錯之處。
+  macOS、Windows、Linux（Fcitx5）與 iOS 共用同一套組字引擎。
+</p>
 
-![候選視窗：上方整句預覽標出可疑的「程式」，下方為候選列](.github/assets/candidate-window.png)
+<p align="center">
+  <img alt="macOS 13+" src="https://img.shields.io/badge/MACOS-13%2B-000000?style=for-the-badge&logo=apple&logoColor=white">
+  <img alt="Windows 11" src="https://img.shields.io/badge/WINDOWS-11-0078D4?style=for-the-badge">
+  <img alt="Linux Fcitx5" src="https://img.shields.io/badge/LINUX-FCITX5-FCC624?style=for-the-badge&logo=linux&logoColor=black">
+  <img alt="iOS 17+" src="https://img.shields.io/badge/IOS-17%2B-000000?style=for-the-badge&logo=apple&logoColor=white">
+  <img alt="C++20" src="https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=cplusplus&logoColor=white">
+  <a href="https://github.com/KoukeNeko/Project-Key/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/KoukeNeko/Project-Key?style=for-the-badge&label=RELEASE&color=2196F3"></a>
+  <a href="https://github.com/KoukeNeko/Project-Key/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KoukeNeko/Project-Key/ci.yml?branch=main&style=for-the-badge&label=CI"></a>
+</p>
+
+<p align="center">
+  <a href="#安裝"><strong>安裝</strong></a>
+  · <a href="#功能">功能</a>
+  · <a href="#常用按鍵">常用按鍵</a>
+  · <a href="#更新與移除">更新與移除</a>
+  · <a href="#相容性">相容性</a>
+  · <a href="#從原始碼建置">從原始碼建置</a>
+</p>
+
+<p align="center">
+  <img alt="候選視窗：上方整句預覽標出可疑的「程式」，下方為候選列" src=".github/assets/candidate-window.png" width="780">
+</p>
+
+## 安裝
+
+**macOS 13 以上，Apple 晶片**
+
+```sh
+brew install --cask koukeneko/tap/project-key
+```
+
+**Windows 11，x64**
+
+```sh
+scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket
+scoop install koukeneko/project-key
+```
+
+**Linux（Fcitx5）：Debian、Ubuntu、Fedora、Arch 及其衍生版**
+
+```sh
+curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh
+```
+
+以自己的帳號執行，需要時會詢問 sudo 密碼。指令會安裝套件、將 Fcitx5 設為輸入法框架並加入 Project Key；GNOME 須再登出登入一次。
+
+**iOS 17 以上：** 從原始碼建置，見 [platforms/ios](platforms/ios/README.md)。
+
+安裝完成後開啟歡迎視窗：按「加入」將 Project Key 加入系統輸入法，切換後即可於視窗中試打（Linux 的安裝指令已加入 Project Key，並自動開啟歡迎視窗）。亦可於系統的輸入法設定中自行加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
+
+<details>
+<summary><strong>其他安裝方式</strong></summary>
+
+- **[最新發行版](https://github.com/KoukeNeko/Project-Key/releases/latest)的檔案：** macOS 的 `.pkg` 或 zip、Windows 的 zip（解壓後執行 `install.ps1`）、Arch 的 `.pkg.tar.zst`
+- **Linux 的 apt、dnf 套件庫與 Homebrew：** 見 [platforms/linux](platforms/linux/README.md#建置與安裝)
+- **從原始碼建置：** 見[從原始碼建置](#從原始碼建置)與各平台 README
+
+</details>
+
+發行版附有[上下文模型](#上下文模型)與補充詞彙後的詞庫，選字依上下文排序。這些資料檔另有授權（CC BY-SA 4.0 與 LGPL-2.1-or-later），詳見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 功能
 
@@ -40,19 +103,6 @@ Project Key 為注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共�
 - **還原**：以 `+` 加入或排除後，立即按 Backspace 即撤銷該次變更。
 - **記住選過的字**：相同上下文下優先選取曾選過的字，並自送出的文字學習常用說法；學習結果隨輸入量增加逐步淡化。資料僅存於本機，詳見各平台 README。
 
-## 安裝
-
-| 平台 | 安裝方式 | 說明 |
-|---|---|---|
-| macOS（Apple 晶片） | `brew install --cask koukeneko/tap/project-key` | [platforms/macos](platforms/macos/README.md) |
-| Windows（x64） | `scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket`<br>`scoop install koukeneko/project-key` | [platforms/windows](platforms/windows/README.md) |
-| Linux（Fcitx5） | `curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh \| sh` | 安裝套件並完成設定，適用 Debian、Ubuntu、Fedora、Arch 及其衍生版；GNOME 須再登出登入一次。再次執行即更新；移除、其他安裝方式見 [platforms/linux](platforms/linux/README.md) |
-| iOS 17 以上 | 從原始碼建置 | [platforms/ios](platforms/ios/README.md) |
-
-安裝完成後開啟歡迎視窗：按「加入」將 Project Key 加入系統輸入法，切換後即可於視窗中試打（Linux 的安裝指令已加入 Project Key，並自動開啟歡迎視窗）。亦可於系統的輸入法設定中自行加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
-
-發行版附有[上下文模型](#上下文模型)與補充詞彙後的詞庫，選字依上下文排序。這些資料檔另有授權（CC BY-SA 4.0 與 LGPL-2.1-or-later），詳見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-
 ## 常用按鍵
 
 | 狀態 | 按鍵 | 動作 |
@@ -70,11 +120,30 @@ Project Key 為注音輸入法，macOS、Windows、Linux（Fcitx5）與 iOS 共�
 | | Backspace | 加入或排除後立即按下時撤銷；其餘情況關閉候選 |
 | 送出後 | Shift+1–9 | 開啟聯想詞時，送出常接在後面的詞 |
 | 任何時候 | 單按 Shift | 切換中文與英文 |
+| | Caps Lock | 開啟設定中的「Caps Lock 切換中英」（預設關閉）時，切換中文與英文；未開啟時，大寫鎖定亮起亦不影響中文模式，字母仍為注音 |
 | | Shift+Space | 切換全形與半形 |
 | 候選視窗 | 滑鼠點選候選字 | 選取該字（iOS 為觸控） |
 | | 滑鼠點選列尾的頁碼或箭頭 | 展開或收合候選格線（macOS、Windows、Linux） |
 
 完整按鍵表見各平台 README。
+
+## 更新與移除
+
+| | 更新 | 移除 |
+|---|---|---|
+| macOS | `brew upgrade --cask project-key` | `brew uninstall --cask project-key` |
+| Windows | `scoop update project-key` | `scoop uninstall project-key` |
+| Linux | 再執行一次安裝指令；自套件庫安裝者亦可 `apt upgrade`、`dnf upgrade` | `curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/uninstall.sh \| sh` |
+
+自訂詞、排除詞、選字紀錄與設定於更新與移除後皆保留。新的選字模型可於 macOS、Windows、Linux 設定的「關於 > 選字模型」下載，無須重新安裝。Windows 上正在使用舊版的 App 須重新開啟才會改用新版；Linux 的 GNOME 須重新登入，才會載入新版擴充功能。
+
+## 相容性
+
+- **macOS** 13 以上，Apple 晶片；候選視窗於 macOS 26 以上可採用 Liquid Glass
+- **Windows** 11，x64；設定視窗使用 Windows 11 內建的 Windows App Runtime 2
+- **Linux** 上的 Fcitx5：X11 與 Wayland 的 KDE Plasma、GNOME、COSMIC，以及 sway、Hyprland 等 wlroots 系列合成器；各桌面的候選視窗顯示方式與已測試的環境見 [platforms/linux](platforms/linux/README.md)
+- **iOS** 17 以上的鍵盤擴充，採大千排列；不含整句模型
+- **鍵盤排列**（macOS、Windows、Linux）：大千、倚天、許氏、倚天 26 鍵、IBM
 
 ## 從原始碼建置
 
@@ -204,6 +273,12 @@ python tools/lm-trainer/export.py <模型目錄> tools/bigram-trainer/.cache/sen
 
 以維基百科第一個分片共 8,100 萬字訓練後，評測語料的整句正確數由 224/240 提升至 229/240；另以 2,000 句未參與訓練的維基百科句子評測，由 1,353 句提升至 1,448 句。於 Intel Core i7-12700K 上，每鍵處理時間的 P95 由約 1 毫秒增加至約 20 毫秒，記憶體用量最高約 85 MB。此用量超出 iOS 鍵盤擴充功能的限制，故 iOS 建置不納入此模型。
 
+---
+
 ## 授權
 
 Project Key 以 [MIT](LICENSE) 授權發布。詞庫與選字引擎源自 [McBopomofo](https://github.com/openvanilla/McBopomofo)（MIT）。發行版所附的上下文模型以 CC BY-SA 4.0 授權，補充詞彙後的詞庫以 LGPL-2.1-or-later 授權；上述資料檔、其他第三方內容及訓練文字的授權，詳見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+### 商標
+
+macOS、iOS 為 Apple Inc. 的商標，Windows 為 Microsoft Corporation 的商標，Linux 為 Linus Torvalds 的註冊商標。Project Key 與上述公司無任何關聯，名稱僅用於說明支援的系統。

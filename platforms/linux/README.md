@@ -34,7 +34,9 @@ COSMIC（Pop!_OS）上，支援 text-input-v3 的 App（例如 Firefox）經由�
 
 安裝內容包含 Fcitx5 主題「Project Key」（`theme/`，安裝於 `/usr/share/fcitx5/themes/projectkey`）：半透明深色、圓角，選取的字採用強調色，邊距與候選字窗相同；KWin 等合成器支援時模糊背後的內容（`EnableBlur`）。於 Fcitx5 設定的「附加元件 → 經典使用者介面 → 主題」選取此主題後，使用 Fcitx5 候選面板時的外觀即與其他平台一致（GNOME 上此面板由 App 繪製，同樣讀取 Fcitx5 主題）；此主題亦套用於其他 Fcitx5 輸入法。主題圖片由 `tools/icon/make-icons.ps1` 產生。
 
-Fcitx5 預設以左 Shift 暫時切換輸入法。Project Key 使用中且「單按 Shift 切換中英」開啟時，Shift 由 Project Key 處理，切換的是中／英而非輸入法；關閉此設定後，Shift 交回 Fcitx5 處理。
+Fcitx5 預設以左 Shift 暫時切換輸入法。Project Key 使用中且「單按 Shift 切換中英」開啟時，Shift 由 Project Key 處理，切換的是中／英而非輸入法；關閉此設定後，Shift 交回 Fcitx5 處理。按住 Shift 點擊滑鼠（例如 Shift+點擊選取文字）時，App 會重設輸入法，該次 Shift 不切換中／英。
+
+切換至或離開 Project Key 時，Fcitx5 會於其候選面板顯示切換後的輸入法；Project Key 的視窗可顯示於游標處時（GNOME 上即擴充功能啟用時），改由中／英標記顯示，Fcitx5 的提示不再出現：切換至 Project Key 時顯示「ㄅ半」等模式，離開時顯示 Fcitx5 的提示文字（例如「en」）。Fcitx5 設定中關閉「當切換輸入法時顯示輸入法資訊」時，離開 Project Key 不顯示提示。
 
 自訂詞位於 `$XDG_DATA_HOME/projectkey/phrases.txt`（預設 `~/.local/share/projectkey/phrases.txt`），由設定視窗的「自訂詞」「編輯…」開啟；不再出現的詞列於同一資料夾的 `exclude-phrases.txt`，由「排除詞」開啟；「資料夾」顯示該資料夾。格式與 macOS 相同，見 [自訂詞](../macos/README.md#自訂詞)。
 
