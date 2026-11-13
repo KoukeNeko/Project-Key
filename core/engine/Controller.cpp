@@ -275,9 +275,9 @@ void Controller::learn(const std::string& committed) {
 }
 
 void Controller::deactivate() {
-  SavePersonal(env_, /*force=*/true);
   forgetEnglishRun();
-  commit();
+  commit();  // learns the text, so it is saved after
+  SavePersonal(env_, /*force=*/true);
 }
 
 void Controller::reset() {
