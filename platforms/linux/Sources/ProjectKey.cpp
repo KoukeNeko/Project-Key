@@ -202,6 +202,21 @@ class Spelling {
   EnchantDict* dict_ = nullptr;
 };
 
+// Takes Fcitx5's announcement of the input method switched to out of its panel (the overlay message
+// since 5.1.22, the panel's top line before) and returns its text.
+template <typename InputPanel>
+std::string TakeAnnouncement(InputPanel& panel) {
+  if constexpr (requires { panel.setOverlayMessage(fcitx::Text()); }) {
+    std::string text = panel.overlayMessage().toString();
+    panel.setOverlayMessage(fcitx::Text());
+    return text;
+  } else {
+    std::string text = panel.auxUp().toString();
+    panel.setAuxUp(fcitx::Text());
+    return text;
+  }
+}
+
 }  // namespace
 
 class Session;
@@ -579,6 +594,33 @@ class Engine : public fcitx::InputMethodEngineV2 {
           fcitx::InputContext* ic = static_cast<fcitx::InputContextEvent&>(e).inputContext();
           if (instance_->inputMethodEngine(ic) == this) ic->propertyFor(&factory_)->caretMoved();
         });
+    // Fcitx5 announces the input method switched to in its own panel, which its theme draws away from
+    // the caret on GNOME. Switching to or from Project Key where its window reaches, the announcement
+    // is taken out before that panel is drawn (Fcitx5 sets it after this phase, in the same dispatch,
+    // and draws later): the 中／英 badge shows Project Key (activate), and shows the text of any other.
+    switchWatcher_ = instance_->watchEvent(
+        fcitx::EventType::InputContextSwitchInputMethod, fcitx::EventWatcherPhase::PostInputMethod, [this](fcitx::Event& e) {
+          auto& event = static_cast<fcitx::InputContextSwitchInputMethodEvent&>(e);
+          fcitx::InputContext* ic = event.inputContext();
+          bool to = instance_->inputMethodEngine(ic) == this;
+          if ((!to && event.oldInputMethod() != SettingsRows::kInputMethod) || !panel_.shows(*ic)) return;
+          announcing_ = ic;
+          leaving_ = !to;
+          announced_ = instance_->eventLoop().addDeferEvent([this](fcitx::EventSource*) {
+            announcing_ = nullptr;
+            announced_.reset();
+            return true;
+          });
+        });
+    announcementWatcher_ = instance_->watchEvent(
+        fcitx::EventType::InputContextUpdateUI, fcitx::EventWatcherPhase::PreInputMethod, [this](fcitx::Event& e) {
+          auto& event = static_cast<fcitx::InputContextUpdateUIEvent&>(e);
+          fcitx::InputContext* ic = event.inputContext();
+          if (ic != announcing_ || event.component() != fcitx::UserInterfaceComponent::InputPanel) return;
+          announcing_ = nullptr;
+          std::string text = TakeAnnouncement(ic->inputPanel());
+          if (leaving_ && !text.empty()) ic->propertyFor(&factory_)->showIndicator(text);
+        });
   }
 
   void keyEvent(const fcitx::InputMethodEntry&, fcitx::KeyEvent& event) override {
@@ -734,7 +776,10 @@ class Engine : public fcitx::InputMethodEngineV2 {
   Panel panel_;  // before the sessions that show it
   Environment environment_;
   fcitx::FactoryFor<Session> factory_;
-  std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> shiftWatcher_, caretWatcher_;
+  std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>> shiftWatcher_, caretWatcher_, switchWatcher_, announcementWatcher_;
+  fcitx::InputContext* announcing_ = nullptr;  // switched to or from Project Key, until Fcitx5 announces it
+  bool leaving_ = false;                        // from it
+  std::unique_ptr<fcitx::EventSource> announced_;
   fcitx::SimpleAction settingsAction_, checkAction_;
   SettingsObject settingsObject_{environment_, config_};
 };
