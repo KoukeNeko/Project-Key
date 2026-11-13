@@ -499,7 +499,7 @@
     </section>
 
     <section class="block" id="download">
-      <h2>Project Key <span class="mono" data-version>0.6.2</span></h2>
+      <h2>Project Key <span class="mono" data-version>0.9.0</span></h2>
       <div class="download">
         <div>
           <div class="seg" role="tablist" aria-label="平台" id="seg">
@@ -538,7 +538,7 @@
   <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
   <script>
   // 版本：頁面內建的，或本機記住的較新版本；載入後再向 GitHub 查最新版，查不到時沿用這個。
-  const BUILT_IN_VERSION = '0.6.2', VERSION_KEY = 'project-key-latest-version';
+  const BUILT_IN_VERSION = '0.9.0', VERSION_KEY = 'project-key-latest-version';
   const isVersion = v => /^\d+\.\d+\.\d+$/.test(v);
   let cachedVersion = null;
   try { cachedVersion = localStorage.getItem(VERSION_KEY); } catch (_) { /* 瀏覽器不讓用儲存空間時，只用內建版本 */ }
@@ -577,12 +577,12 @@
   const PLATFORMS = {
     mac: { req: 'Apple 晶片，macOS 13 以上；以 Homebrew 安裝', cmds: ['brew install --cask koukeneko/tap/project-key'],
            note: '安裝後的歡迎視窗裡按「加入」，就能開始使用。' },
-    win: { req: 'Windows x64；以 Scoop 安裝', cmds: ['scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket', 'scoop install koukeneko/project-key'],
+    win: { req: 'Windows 11 x64；以 Scoop 安裝', cmds: ['scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket', 'scoop install koukeneko/project-key'],
            alt: () => `沒有 Scoop：<a class="btn" href="https://github.com/KoukeNeko/Project-Key/releases/download/v${version}/ProjectKey-${version}-windows-x64.zip">下載 ProjectKey-${version}-windows-x64.zip</a>解壓縮後在該資料夾的 PowerShell 執行：`,
            altCmd: 'powershell -ExecutionPolicy Bypass -File .\\install.ps1 -Source .',
            note: '安裝時會請求一次系統管理員權限。裝好後的歡迎視窗裡按「加入」，切換過去就能開始打字；開始功能表裡有 Project Key 的設定。' },
-    linux: { req: 'Fcitx5；以 Homebrew 從原始碼建置', cmds: ['brew install koukeneko/tap/fcitx5-projectkey', 'projectkey-link'],
-             note: '重新啟動 Fcitx5 後執行 projectkey-settings --welcome，按「加入」。' },
+    linux: { req: 'Fcitx5；Debian、Ubuntu、Fedora、Arch 及其衍生版', cmds: ['curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh'],
+             note: '以自己的帳號執行，需要時會詢問系統管理員密碼。指令會安裝套件、設定 Fcitx5 並加入 Project Key，裝好後開啟歡迎視窗試打；GNOME 須再登出登入一次。再執行一次即更新。' },
   };
   const seg = document.getElementById('seg'), slide = seg.querySelector('.slide'), panel = document.getElementById('platform');
   const toast = document.getElementById('toast');
