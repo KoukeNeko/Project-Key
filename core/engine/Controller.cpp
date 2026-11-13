@@ -281,6 +281,7 @@ void Controller::deactivate() {
 }
 
 void Controller::reset() {
+  shiftAlone_ = false;  // a click is no key, so a Shift held through it is not a lone Shift
   composer_->clear();
   choosing_ = false;
   zhuyinKeys_.clear();

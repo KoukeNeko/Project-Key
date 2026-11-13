@@ -486,6 +486,12 @@ int main(int argc, char** argv) {
   assert(!controller.englishMode());
   EscapeAll(controller, client);
 
+  // Shift held through a click (the app resets the input method) is not a lone Shift.
+  controller.handleShift(true);
+  controller.reset();
+  controller.handleShift(false);
+  assert(!controller.englishMode());
+
   // Zhuyin typed in English mode: Tab turns the whole syllables at
   // the end (ji3cl3, 我好) into a composition and leaves the English alone.
   TapShift(controller);
