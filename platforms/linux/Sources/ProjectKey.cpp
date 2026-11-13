@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <cctype>
 #include <memory>
 #include <optional>
@@ -42,6 +43,7 @@
 
 #include "Controller.h"
 #include "Panel.h"
+#include "../Settings/Rows.h"
 
 namespace ProjectKey {
 
@@ -62,17 +64,9 @@ FCITX_CONFIG_ENUM_NAME_WITH_I18N(CandidatePosition, N_("游標後"), N_("游標�
 enum class Appearance { Dark, Blur, Light, Auto };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(Appearance, N_("深色"), N_("模糊"), N_("淺色"), N_("自動"));
 
-// $XDG_DATA_HOME/projectkey, where personal.txt and the models the settings windows download go
-// (Settings/Rows.h); empty without a home.
-std::string UserData() {
-  if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) return std::string(data) + "/projectkey";
-  if (const char* home = std::getenv("HOME")) return std::string(home) + "/.local/share/projectkey";
-  return "";
-}
-
 // Switches to the newest of the installed models and those the settings windows downloaded.
 bool UseNewestModels(Environment& env) {
-  return UseNewestModels(env, PROJECTKEY_DATA_DIR, UserData().empty() ? "" : UserData() + "/models");
+  return UseNewestModels(env, PROJECTKEY_DATA_DIR, SettingsRows::DownloadedModels().string());
 }
 
 bool DefaultFlag(Setting setting) {
@@ -532,9 +526,9 @@ class Engine : public fcitx::InputMethodEngineV2 {
     if (!UseNewestModels(environment_)) FCITX_ERROR() << "Project Key: cannot load " << PROJECTKEY_DATA_DIR << "/data.txt";
     environment_.userModel = NewUserModel();
     // What the user typed, learned on this computer only.
-    if (!UserData().empty()) {
-      environment_.personalPath = UserData() + "/personal.txt";
-      environment_.userPhrasesPath = UserData() + "/phrases.txt";  // edited from the settings windows
+    if (std::filesystem::path data = SettingsRows::UserData(); !data.empty()) {
+      environment_.personalPath = (data / "personal.txt").string();
+      environment_.userPhrasesPath = (data / "phrases.txt").string();  // edited from the settings windows
     }
     environment_.personal = std::make_shared<PersonalModel>();
     if (!environment_.personalPath.empty()) environment_.personal->load(environment_.personalPath);

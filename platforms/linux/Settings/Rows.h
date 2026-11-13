@@ -26,7 +26,7 @@ constexpr char kEngineUrl[] = "https://github.com/openvanilla/McBopomofo";
 constexpr char kInstallCommand[] =
     "curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/install.sh | sh";
 
-// UserData() in Sources/ProjectKey.cpp; empty without a home.
+// $XDG_DATA_HOME/projectkey, which the addon (Sources/ProjectKey.cpp) keeps personal.txt and phrases.txt in too; empty without a home.
 inline std::filesystem::path UserData() {
   if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data) return std::filesystem::path(data) / "projectkey";
   if (const char* home = std::getenv("HOME")) return std::filesystem::path(home) / ".local/share/projectkey";
