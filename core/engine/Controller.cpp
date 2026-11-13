@@ -341,11 +341,8 @@ bool Controller::typeFullWidth(char c) {
 
 void Controller::handleCapsLock() {
   // Each Caps Lock press switches 中/英, like the system's own Caps Lock switch.
-  if (!env_.settings->flag(Setting::kCapsLockToggle)) {
-    shiftAlone_ = false;
-    return;
-  }
   shiftAlone_ = false;
+  if (!env_.settings->flag(Setting::kCapsLockToggle)) return;
   commit();
   forgetEnglishRun();
   switchMode(!env_.englishMode);
