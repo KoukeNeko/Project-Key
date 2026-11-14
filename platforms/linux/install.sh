@@ -15,7 +15,7 @@ REPO=KoukeNeko/Project-Key
 PAGES=https://koukeneko.github.io/Project-Key
 UUID=project-key@koukeneko.github.io
 
-if [ -t 1 ]; then bold=$(printf '\033[1m'); plain=$(printf '\033[0m'); else bold= plain=; fi
+if [ -t 1 ]; then bold=$(printf '\033[1m'); dim=$(printf '\033[2m'); plain=$(printf '\033[0m'); else bold= dim= plain=; fi
 step() { printf '%s==> %s%s\n' "$bold" "$*" "$plain"; }
 note() { printf '    %s\n' "$*"; }
 die() { printf '錯誤：%s\n' "$*" >&2; exit 1; }
@@ -316,14 +316,27 @@ case ":$desktop:$gnome_shell" in
     ;;
 esac
 
-step "完成"
+# The summary: what is left to do, then where the rest is. Bordered on the left only, so the
+# double-width Han characters cannot misalign a right edge.
+version=$(dpkg-query -W -f '${Version}' fcitx5-projectkey 2>/dev/null || rpm -q --qf '%{VERSION}' fcitx5-projectkey 2>/dev/null ||
+  pacman -Q fcitx5-projectkey 2>/dev/null | cut -d' ' -f2) || version=
+version=${version%%-*}  # without the package revision
+line() { printf '  %s│%s %s\n' "$dim" "$plain" "$*"; }
+row() { printf '  %s│%s   %s%s%s  %s\n' "$dim" "$plain" "$dim" "$1" "$plain" "$2"; }
+printf '\n  %s╭─%s %sProject Key%s%s 已安裝\n' "$dim" "$plain" "$bold" "${version:+ $version}" "$plain"
+line
+line "${bold}接下來${plain}"
+n=1
 if [ "$relogin" = true ]; then
-  note "請登出再登入一次，讓 GNOME 載入擴充功能（第一次安裝與每次更新後都需要）。"
+  row "$n." "登出再登入，GNOME 才會載入擴充功能（每次更新後都需要）"
+  n=$((n + 1))
 fi
-note "在輸入欄位按 Ctrl+Space 切換到 Project Key（ㄅ）。"
-note "設定：應用程式選單的「Project Key 設定」，或執行 projectkey-settings。"
-note "更新：再執行一次這個安裝指令。移除："
-note "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/platforms/linux/uninstall.sh | sh"
+row "$n." "在輸入欄位按 Ctrl+Space 切換到 Project Key（ㄅ）"
+line
+row "設定" "應用程式選單的「Project Key 設定」，或執行 projectkey-settings"
+row "更新" "curl -fsSL https://github.com/$REPO/releases/latest/download/install.sh | sh"
+row "移除" "curl -fsSL https://raw.githubusercontent.com/$REPO/main/platforms/linux/uninstall.sh | sh"
+printf '  %s╰─%s\n\n' "$dim" "$plain"
 if [ "$graphical" = true ] && command -v projectkey-settings >/dev/null; then
   # The welcome window: shows the input method added and lets the user try typing.
   nohup projectkey-settings --welcome >/dev/null 2>&1 &
