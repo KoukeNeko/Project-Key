@@ -25,8 +25,15 @@ sentence.bin
   Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard), by
   Wikipedia contributors, under CC BY-SA 4.0
   (https://creativecommons.org/licenses/by-sa/4.0/), converted to Taiwan
-  Traditional Chinese with OpenCC; no text is included. This file is licensed
-  under CC BY-SA 4.0.
+  Traditional Chinese with OpenCC, then fine-tuned to rank the composer's
+  candidate sentences as Gemma 4 E2B (google/gemma-4-E2B, by Google DeepMind,
+  under the Apache License 2.0) does. The candidates were typed from:
+  - the Wikipedia text above;
+  - the 立法院公報 text above;
+  - that text rewritten as everyday speech by Breeze-7B-Instruct-v1_0
+    (MediaTek-Research/Breeze-7B-Instruct-v1_0, by MediaTek Research, under
+    the Apache License 2.0).
+  No text is included. This file is licensed under CC BY-SA 4.0.
 
 data.txt
   McBopomofo's dictionary (MIT License, see McBopomofo-LICENSE.txt), with
@@ -66,7 +73,13 @@ bigram.bin、chars.bin
 sentence.bin
   由 tools/lm-trainer 訓練的字元級 GPT-2 權重，訓練文字為中文維基百科
   （wikimedia/wikipedia 20231101.zh 第一個分片），維基百科貢獻者，CC BY-SA 4.0
-  （https://creativecommons.org/licenses/by-sa/4.0/），經 OpenCC 轉為臺灣正體，
+  （https://creativecommons.org/licenses/by-sa/4.0/），經 OpenCC 轉為臺灣正體；
+  再微調，使它排序組字候選句的方式接近 Gemma 4 E2B（google/gemma-4-E2B，Google
+  DeepMind，Apache License 2.0）。候選句打自：
+  - 上述維基百科文字；
+  - 上述立法院公報文字；
+  - 由 Breeze-7B-Instruct-v1_0（MediaTek-Research/Breeze-7B-Instruct-v1_0，
+    聯發創新基地，Apache License 2.0）改寫為日常口語的上述公報文字。
   不含原文。這個檔案以 CC BY-SA 4.0 授權。
 
 data.txt

@@ -17,7 +17,7 @@
 #    and commit both.
 set -eu
 cd "$(dirname "$0")"
-TAG=models-2026-11-09
+TAG=models-2026-11-14
 URL=https://github.com/KoukeNeko/Project-Key/releases/download/$TAG
 mkdir -p .cache
 for file in data.txt bigram.bin chars.bin sentence.bin; do  # sentence.bin: tools/lm-trainer

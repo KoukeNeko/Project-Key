@@ -47,7 +47,7 @@ SOFTWARE.
 
 程式在執行時讀取這些檔案，可以直接替換或移除；沒有它們時改用 McBopomofo 的詞庫與排序。
 
-自 models-2026-11-09 起，模型另附 `sentence.bin`：`tools/lm-trainer` 訓練的整句模型（字元級 GPT-2 的權重），以[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）經 OpenCC 轉為臺灣正體後訓練，不含原文，以 CC BY-SA 4.0 授權。此檔案為選用；未提供時，引擎不重新排序整句候選。
+自 models-2026-11-09 起，模型另附 `sentence.bin`：`tools/lm-trainer` 訓練的整句模型（字元級 GPT-2 的權重），以[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）經 OpenCC 轉為臺灣正體後訓練，不含原文，以 CC BY-SA 4.0 授權。自 models-2026-11-14 起，它再經微調，使排序候選句的方式接近 [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B)（Google DeepMind，Apache License 2.0），候選句打自上述維基百科、立法院公報，以及由 [Breeze-7B-Instruct-v1_0](https://huggingface.co/MediaTek-Research/Breeze-7B-Instruct-v1_0)（聯發創新基地，Apache License 2.0）改寫為口語的公報文字。此檔案為選用；未提供時，引擎不重新排序整句候選。
 
 ### 進階模型與 llama.cpp
 
