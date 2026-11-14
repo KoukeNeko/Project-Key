@@ -6,8 +6,9 @@
 #    x86_64); anywhere else built here from the latest release's source (apt, dnf or pacman).
 # 2. What a package cannot do for the user: Fcitx5 as the input method and started at login,
 #    Project Key in Fcitx5's input methods, and on GNOME the extension turned on.
-# Run it as yourself, not with sudo: it asks for the password where it needs one. Running it
-# again updates Project Key and repairs the setup.
+# Run it as yourself, not with sudo: it asks for the password where it needs one, through sudo
+# in a terminal and through pkexec's dialog without one. Running it again updates Project Key and
+# repairs the setup.
 # PROJECTKEY_SOURCE=<checkout> builds from that checkout instead of the latest release.
 set -eu
 
@@ -22,7 +23,24 @@ die() { printf '錯誤：%s\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" != 0 ] || die "請以自己的帳號執行，不要加 sudo：需要時會詢問密碼。"
 [ "$(uname -s)" = Linux ] || die "這個指令只適用於 Linux；macOS 與 Windows 的安裝方式見 https://github.com/$REPO#安裝"
-command -v sudo >/dev/null || die "需要 sudo 才能安裝套件。"
+# Commands that need root go through as_root: sudo in a terminal; without one (started from the
+# desktop), pkexec, which asks for the password in a dialog of the desktop's. pkexec asks on every
+# call, so each step runs its root commands as one script, $1, given the rest as its arguments.
+if (: </dev/tty) 2>/dev/null; then terminal=true; else terminal=false; fi
+if [ "$terminal" = true ]; then
+  command -v sudo >/dev/null || die "需要 sudo 才能安裝套件。"
+else
+  command -v pkexec >/dev/null || die "沒有終端機時需要 pkexec 詢問密碼；請在終端機執行這個指令。"
+fi
+as_root() {
+  script=$1
+  shift
+  if [ "$terminal" = true ]; then
+    sudo /bin/sh -ec "$script" sh "$@"
+  else
+    pkexec /bin/sh -ec "$script" sh "$@"
+  fi
+}
 command -v curl >/dev/null || die "需要 curl。"
 [ -r /etc/os-release ] || die "讀不到 /etc/os-release，無法判斷發行版。"
 # shellcheck disable=SC1091
@@ -32,9 +50,9 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/projectkey.XXXXXX")
 chmod 755 "$work"  # apt reads the downloaded package as its own user
 trap 'rm -rf "$work"' EXIT
 
-# Asks once for the password, before the long steps, rather than in the middle of them.
-step "安裝 Project Key（需要 sudo 密碼）"
-sudo -v
+step "安裝 Project Key（需要系統管理員密碼）"
+# In a terminal, asks once for the password, before the long steps, rather than in the middle of them.
+[ "$terminal" = false ] || sudo -v
 
 # ---- 1. The program ----
 
@@ -75,36 +93,28 @@ fetch_data_package() {  # $1: the key file, $2: deb or rpm
 }
 
 install_from_apt_repository() {
-  step "加入 Project Key 的 apt 套件庫（$suite）"
-  command -v gpg >/dev/null || sudo apt-get install -y gpg
-  sudo mkdir -p /etc/apt/keyrings
-  curl -fsSL "$PAGES/apt/key.asc" | sudo tee /etc/apt/keyrings/projectkey.asc >/dev/null
-  echo "deb [signed-by=/etc/apt/keyrings/projectkey.asc] $PAGES/apt $suite main" |
-    sudo tee /etc/apt/sources.list.d/projectkey.list >/dev/null
-  sudo apt-get update
+  command -v gpg >/dev/null || as_root 'apt-get install -y gpg'
+  curl -fsSL "$PAGES/apt/key.asc" -o "$work/key.asc"
   step "下載並驗證詞庫與選字模型（約 100 MB）"
-  fetch_data_package /etc/apt/keyrings/projectkey.asc deb
-  step "安裝套件"
-  sudo apt-get install -y "$data_package" fcitx5-projectkey
+  fetch_data_package "$work/key.asc" deb
+  step "加入 Project Key 的 apt 套件庫（$suite）並安裝套件"
+  as_root '
+    install -D -m 644 "$1" /etc/apt/keyrings/projectkey.asc
+    echo "deb [signed-by=/etc/apt/keyrings/projectkey.asc] $2/apt $3 main" >/etc/apt/sources.list.d/projectkey.list
+    apt-get update
+    apt-get install -y "$4" fcitx5-projectkey' "$work/key.asc" "$PAGES" "$suite" "$data_package"
 }
 
 install_from_dnf_repository() {
-  step "加入 Project Key 的 dnf 套件庫"
-  sudo tee /etc/yum.repos.d/projectkey.repo >/dev/null <<EOF
-[projectkey]
-name=Project Key
-baseurl=$PAGES/rpm
-enabled=1
-gpgcheck=0
-repo_gpgcheck=1
-gpgkey=$PAGES/rpm/key.asc
-EOF
-  command -v gpg >/dev/null || sudo dnf install -y gnupg2
+  command -v gpg >/dev/null || as_root 'dnf install -y gnupg2'
   curl -fsSL "$PAGES/rpm/key.asc" -o "$work/key.asc"
   step "下載並驗證詞庫與選字模型（約 100 MB）"
   fetch_data_package "$work/key.asc" rpm
-  step "安裝套件"
-  sudo dnf install -y "$data_package" fcitx5-projectkey
+  step "加入 Project Key 的 dnf 套件庫並安裝套件"
+  as_root '
+    printf "%s\n" "[projectkey]" "name=Project Key" "baseurl=$1/rpm" "enabled=1" "gpgcheck=0" "repo_gpgcheck=1" \
+      "gpgkey=$1/rpm/key.asc" >/etc/yum.repos.d/projectkey.repo
+    dnf install -y "$2" fcitx5-projectkey' "$PAGES" "$data_package"
 }
 
 # The source to build: the latest release, or PROJECTKEY_SOURCE.
@@ -128,37 +138,44 @@ fetch_source() {
 # The build-dependency lists are release.yml's, which builds the published packages the same way.
 build_deb() {
   step "安裝建置所需的套件"
-  sudo apt-get update
-  sudo apt-get install -y --no-install-recommends ca-certificates git curl make build-essential dpkg-dev debhelper \
-    fakeroot cmake ninja-build g++ python3 pkg-config libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
-    fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev libwayland-dev qt6-base-dev \
-    libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev
+  as_root '
+    apt-get update
+    apt-get install -y --no-install-recommends ca-certificates git curl make build-essential dpkg-dev debhelper \
+      fakeroot cmake ninja-build g++ python3 pkg-config libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
+      fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev libwayland-dev qt6-base-dev \
+      libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev'
   fetch_source
   step "建置套件（下載詞庫與模型，需要數分鐘）"
   sh "$src/platforms/linux/package-deb.sh" >"$work/build.log" 2>&1 || { tail -30 "$work/build.log" >&2; die "建置失敗。"; }
   step "安裝套件"
-  sudo apt-get install -y --reinstall "$src"/platforms/linux/dist/*.deb
+  as_root 'apt-get install -y --reinstall "$@"' "$src"/platforms/linux/dist/*.deb
 }
 
 build_rpm() {
   step "安裝建置所需的套件"
-  sudo dnf install -y rpm-build make tar gzip findutils git curl cmake ninja-build gcc-c++ python3 pkgconf-pkg-config \
-    fcitx5-devel enchant2-devel libxcb-devel cairo-devel pango-devel wayland-devel qt6-qtbase-devel libadwaita-devel \
-    libsoup3-devel json-glib-devel
+  as_root '
+    dnf install -y rpm-build make tar gzip findutils git curl cmake ninja-build gcc-c++ python3 pkgconf-pkg-config \
+      fcitx5-devel enchant2-devel libxcb-devel cairo-devel pango-devel wayland-devel qt6-qtbase-devel libadwaita-devel \
+      libsoup3-devel json-glib-devel'
   fetch_source
   step "建置套件（下載詞庫與模型，需要數分鐘）"
   sh "$src/platforms/linux/package-rpm.sh" >"$work/build.log" 2>&1 || { tail -30 "$work/build.log" >&2; die "建置失敗。"; }
   step "安裝套件"
-  sudo dnf install -y "$src"/platforms/linux/dist/*.rpm
+  as_root 'dnf install -y "$@"' "$src"/platforms/linux/dist/*.rpm
 }
 
 build_arch() {
   step "安裝建置所需的套件"
-  sudo pacman -S --noconfirm --needed base-devel git cmake ninja python curl fcitx5 enchant hunspell-en_us libxcb cairo \
-    pango wayland qt6-base libadwaita libsoup3 json-glib
+  as_root '
+    pacman -S --noconfirm --needed base-devel git cmake ninja python curl fcitx5 enchant hunspell-en_us libxcb cairo \
+      pango wayland qt6-base libadwaita libsoup3 json-glib'
   fetch_source
-  step "建置並安裝套件（下載詞庫與模型，需要數分鐘）"
-  (cd "$src/platforms/linux/arch" && makepkg --noconfirm -sif)
+  step "建置套件（下載詞庫與模型，需要數分鐘）"
+  # Built without -s and -i, which would run sudo themselves: the dependencies are in place, and
+  # the package is installed through as_root.
+  (cd "$src/platforms/linux/arch" && makepkg --noconfirm -f) >"$work/build.log" 2>&1 || { tail -30 "$work/build.log" >&2; die "建置失敗。"; }
+  step "安裝套件"
+  as_root 'pacman -U --noconfirm "$@"' "$src"/platforms/linux/arch/*.pkg.tar.zst
 }
 
 # The repositories have x86_64 packages for these releases; Ubuntu's derivatives (Pop!_OS, Mint)

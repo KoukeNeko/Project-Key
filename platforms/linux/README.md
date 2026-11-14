@@ -42,7 +42,7 @@ Fcitx5 預設以左 Shift 暫時切換輸入法。Project Key 使用中且「單
 
 ## 建置與安裝
 
-以一行指令安裝（Debian、Ubuntu、Fedora、Arch 及其衍生版）。以自己的帳號執行，不要加 `sudo`，需要時會詢問密碼：
+以一行指令安裝（Debian、Ubuntu、Fedora、Arch 及其衍生版）。以自己的帳號執行，不要加 `sudo`。需要時會詢問密碼：於終端機中由 `sudo` 詢問；無終端機時（例如自桌面啟動）改以 `pkexec` 顯示桌面的密碼視窗，每個安裝步驟詢問一次：
 
 ```sh
 curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh

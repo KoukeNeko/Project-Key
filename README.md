@@ -54,7 +54,7 @@ scoop install koukeneko/project-key
 curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh
 ```
 
-以自己的帳號執行，需要時會詢問 sudo 密碼。指令會安裝套件、將 Fcitx5 設為輸入法框架並加入 Project Key；GNOME 須再登出登入一次。
+以自己的帳號執行，需要時會詢問密碼（於終端機中由 sudo 詢問，無終端機時以 pkexec 顯示密碼視窗）。指令會安裝套件、將 Fcitx5 設為輸入法框架並加入 Project Key；GNOME 須再登出登入一次。
 
 **iOS 17 以上：** 從原始碼建置，見 [platforms/ios](platforms/ios/README.md)。
 
