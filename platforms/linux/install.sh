@@ -12,6 +12,11 @@
 # PROJECTKEY_SOURCE=<checkout> builds from that checkout instead of the latest release.
 set -eu
 
+# Run as `curl ... | sh`, the script is read from standard input, which a command it runs (apt's
+# debconf, for one) may read from too and cut the script short. The shell reads a function whole
+# before running it, so all of it is in main, called at the end.
+main() {
+
 REPO=KoukeNeko/Project-Key
 PAGES=https://koukeneko.github.io/Project-Key
 UUID=project-key@koukeneko.github.io
@@ -369,3 +374,6 @@ if [ "$graphical" = true ] && command -v projectkey-settings >/dev/null; then
   # The welcome window: shows the input method added and lets the user try typing.
   nohup projectkey-settings --welcome >/dev/null 2>&1 &
 fi
+}
+
+main "$@"
