@@ -18,6 +18,7 @@
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -152,22 +153,27 @@ void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
   });
 }
 
-// A models download in progress, one file after another; it lives as long as the label.
+// A models or, on the 進階模型 row, advanced model download in progress, one file after another;
+// it lives as long as the label. done runs when it is complete.
 struct ModelsDownload : QObject {
-  ModelsDownload(QNetworkAccessManager& network, QLabel* label, NewerModels models, std::filesystem::path partial)
-      : QObject(label), network(network), label(label), models(std::move(models)), partial(std::move(partial)) {}
+  ModelsDownload(QNetworkAccessManager& network, QLabel* label, NewerModels models, std::filesystem::path partial, bool advanced,
+                 std::function<void()> finished)
+      : QObject(label), network(network), label(label), models(std::move(models)), partial(std::move(partial)), advanced(advanced),
+        finished(std::move(finished)) {}
+  std::filesystem::path folder() const { return advanced ? DownloadedAdvanced() : DownloadedModels(); }
 
   void fail() {
-    AbandonModels(models.date);
+    AbandonModels(models.date, folder());
     label->setText("無法下載");
     deleteLater();
   }
 
   void next() {
     if (index == models.files.size()) {
-      if (!FinishModels(models.date)) return fail();
+      if (!FinishModels(models.date, folder())) return fail();
       QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ReloadModels");
-      label->setText(QString::fromStdString(InstalledModelsText()));
+      label->setText(QString::fromStdString(advanced ? InstalledAdvancedText() : InstalledModelsText()));
+      if (finished) finished();
       deleteLater();
       return;
     }
@@ -206,16 +212,19 @@ struct ModelsDownload : QObject {
   QLabel* label;
   NewerModels models;
   std::filesystem::path partial;
+  bool advanced;
+  std::function<void()> finished;
   size_t index = 0;
   long long done = 0;
 };
 
-// Offers the newest models release (Rows.h) as a link that downloads it.
-void CheckForModels(QNetworkAccessManager& network, QLabel* label) {
+// Offers the newest models release, or with advanced the advanced model's (Rows.h), as a link that
+// downloads it; finished runs once it is downloaded.
+void CheckForModels(QNetworkAccessManager& network, QLabel* label, bool advanced = false, std::function<void()> finished = nullptr) {
   QNetworkRequest request{QUrl(kAllReleases)};
   request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");
   QNetworkReply* reply = network.get(request);
-  QObject::connect(reply, &QNetworkReply::finished, label, [&network, reply, label] {
+  QObject::connect(reply, &QNetworkReply::finished, label, [&network, reply, label, advanced, finished] {
     reply->deleteLater();
     std::vector<ModelsRelease> releases;
     for (const QJsonValue& value : QJsonDocument::fromJson(reply->readAll()).array()) {
@@ -230,15 +239,15 @@ void CheckForModels(QNetworkAccessManager& network, QLabel* label) {
       }
       releases.push_back(std::move(parsed));
     }
-    NewerModels newer = FindNewerModels(releases);
+    NewerModels newer = advanced ? FindNewerAdvanced(releases) : FindNewerModels(releases);
     if (newer.date.empty()) return;  // the 更新 row already says when GitHub cannot be reached
     label->setText(QString("<a href=\"#\">下載 %1（%2 MB）</a>").arg(QString::fromStdString(newer.date)).arg(newer.bytes() / 1000000));
-    QObject::connect(label, &QLabel::linkActivated, label, [&network, label, newer] {
+    QObject::connect(label, &QLabel::linkActivated, label, [&network, label, newer, advanced, finished] {
       QObject::disconnect(label, &QLabel::linkActivated, nullptr, nullptr);
-      std::filesystem::path partial = StartModels(newer.date);
+      std::filesystem::path partial = StartModels(newer.date, advanced ? DownloadedAdvanced() : DownloadedModels());
       if (partial.empty()) return label->setText("無法下載");
       label->setText("下載中 0%");
-      (new ModelsDownload(network, label, newer, partial))->next();
+      (new ModelsDownload(network, label, newer, partial, advanced, finished))->next();
     });
   });
 }
@@ -601,6 +610,19 @@ int main(int argc, char** argv) {
   about->addRow("更新：", update);
   auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
   about->addRow("選字模型：", models);
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  // 進階模型: its version or a link that downloads a newer one, and 移除 once one is downloaded.
+  auto* advanced = new QWidget;
+  auto* advancedLayout = new QHBoxLayout(advanced);
+  advancedLayout->setContentsMargins(0, 0, 0, 0);
+  auto* advancedText = new QLabel(QString::fromStdString(InstalledAdvancedText()));
+  auto* remove = new QPushButton("移除");
+  remove->setVisible(!AdvancedVersion().empty());
+  advancedLayout->addWidget(advancedText);
+  advancedLayout->addWidget(remove);
+  advancedLayout->addStretch();
+  about->addRow("進階模型：", advanced);
+#endif
   about->addRow("授權：", new QLabel("MIT"));
   auto* engine = new QLabel(QString("<a href=\"%1\">McBopomofo</a>").arg(kEngineUrl));
   engine->setOpenExternalLinks(true);
@@ -609,6 +631,27 @@ int main(int argc, char** argv) {
   QNetworkAccessManager network;
   CheckForUpdate(network, update);
   CheckForModels(network, models);
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  auto offerAdvanced = [&network, advancedText, remove] {
+    QObject::disconnect(advancedText, &QLabel::linkActivated, nullptr, nullptr);  // an offer from before a removal
+    CheckForModels(network, advancedText, true, [remove] { remove->setVisible(true); });
+  };
+  offerAdvanced();
+  QObject::connect(remove, &QPushButton::clicked, [remove, advancedText, offerAdvanced] {
+    QMessageBox question(QMessageBox::Question, "Project Key 設定", kRemoveAdvancedTitle, QMessageBox::NoButton, remove->window());
+    question.setInformativeText(kRemoveAdvancedBody);
+    QPushButton* removeButton = question.addButton("移除", QMessageBox::DestructiveRole);
+    question.setDefaultButton(question.addButton("取消", QMessageBox::RejectRole));
+    question.exec();
+    if (question.clickedButton() != removeButton) return;
+    bool removed = RemoveAdvanced();
+    QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ReloadModels");
+    if (!removed) return advancedText->setText("無法移除");
+    remove->setVisible(false);
+    advancedText->setText(QString::fromStdString(InstalledAdvancedText()));
+    offerAdvanced();
+  });
+#endif
   window.setWidget(content);
   content->setMinimumWidth(460);
   QSize size = content->sizeHint();

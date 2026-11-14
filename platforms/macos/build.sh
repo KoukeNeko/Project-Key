@@ -23,6 +23,21 @@ LIBS="$MCB/build/libMcBopomofoLMLib.a $MCB/build/Mandarin/libMandarinLib.a $MCB/
 cmake -S "$MCB/Source/Engine" -B "$MCB/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 >/dev/null
 cmake --build "$MCB/build" --target McBopomofoLMLib MandarinLib gramambular2_lib >/dev/null
 
+# PROJECTKEY_LLAMA, a llama.cpp checkout (MIT), builds in the advanced model (core/engine/AdvancedModel.h):
+# one static CPU backend, as on Linux and Windows, for any Mac rather than the build machine's own.
+if [ -n "${PROJECTKEY_LLAMA:-}" ]; then
+  X86=""
+  [ "$(uname -m)" = x86_64 ] && X86="-DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON"
+  # shellcheck disable=SC2086
+  cmake -S "$PROJECTKEY_LLAMA" -B "$BUILD/llama" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DBUILD_SHARED_LIBS=OFF \
+    -DGGML_NATIVE=OFF -DGGML_METAL=OFF -DGGML_BLAS=OFF -DGGML_ACCELERATE=OFF -DGGML_OPENMP=OFF $X86 \
+    -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF >/dev/null
+  cmake --build "$BUILD/llama" --target llama >/dev/null
+  ENGINE="$ENGINE $CORE/AdvancedModel.cpp"
+  CXXFLAGS="$CXXFLAGS -DPROJECTKEY_ADVANCED_MODEL -I$PROJECTKEY_LLAMA/include -I$PROJECTKEY_LLAMA/ggml/include"
+  LIBS="$LIBS $BUILD/llama/src/libllama.a $BUILD/llama/ggml/src/libggml.a $BUILD/llama/ggml/src/libggml-cpu.a $BUILD/llama/ggml/src/libggml-base.a"
+fi
+
 # The settings and welcome forms are SwiftUI; they expose ProjectKey-Swift.h to Objective-C.
 xcrun swiftc -c -O -wmo -parse-as-library -module-name ProjectKey -target "$(uname -m)-apple-macos13.0" \
   -import-objc-header Sources/SettingsWindow.h -emit-objc-header-path $BUILD/ProjectKey-Swift.h \

@@ -8,8 +8,13 @@
 #include <spellcheck.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <deque>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <system_error>
@@ -18,7 +23,11 @@
 #include "Common/Layout.h"
 #include "Common/Protocol.h"
 #include "Common/Win.h"
+#ifdef PROJECTKEY_ADVANCED_MODEL
+#include "AdvancedModel.h"
+#endif
 #include "Controller.h"
+#include "Models.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace ProjectKey;
@@ -132,6 +141,95 @@ bool UseNewestModels() {
   return UseNewestModels(gEnvironment, Narrow(ModuleDirectory(nullptr)), UserData().empty() ? "" : Narrow(UserData() + L"models"));
 }
 
+// The advanced model (core/engine/AdvancedModel.h) the settings app downloads: loaded and run on a
+// thread of its own, so no request waits for it (Request::kPause, kRanked). Built without llama.cpp,
+// there is never one to load.
+class AdvancedRanker {
+ public:
+  // A connection's question; scores is set once it is answered.
+  struct Job {
+    Composer::RankingRequest request;
+    std::mutex lock;
+    std::optional<std::vector<double>> scores;
+  };
+  static AdvancedRanker& Shared() {
+    static AdvancedRanker* ranker = new AdvancedRanker();  // its thread runs as long as the process
+    return *ranker;
+  }
+  // Loads the newest download, or drops the model when there is none; gEnvironment says which once done.
+  void reload() {
+    std::lock_guard lock(mutex_);
+    reload_ = true;
+    wake_.notify_all();
+  }
+  // Answers the job unless its connection has dropped it (asked again, or gone) by then.
+  void ask(const std::shared_ptr<Job>& job) {
+    std::lock_guard lock(mutex_);
+    jobs_.push_back(job);
+    wake_.notify_all();
+  }
+
+ private:
+  AdvancedRanker() { std::thread([this] { run(); }).detach(); }
+  void run() {
+    for (;;) {
+      std::unique_lock lock(mutex_);
+      wake_.wait(lock, [&] { return reload_ || !jobs_.empty(); });
+      if (reload_) {
+        reload_ = false;
+        lock.unlock();
+        bool loaded = load();
+        std::lock_guard environment(gLock);
+        gEnvironment.advancedRanking = loaded;
+        continue;
+      }
+      std::shared_ptr<Job> job = jobs_.front().lock();
+      jobs_.pop_front();
+      lock.unlock();
+      if (!job) continue;
+      std::vector<double> scores(job->request.sentences.size(), NAN);
+#ifdef PROJECTKEY_ADVANCED_MODEL
+      if (model_) scores = model_->log10Probabilities(job->request.sentences);
+#endif
+      std::lock_guard answered(job->lock);
+      job->scores = std::move(scores);
+    }
+  }
+  bool load() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    model_.reset();  // a removed download's memory goes before a new one loads
+    if (UserData().empty()) return false;
+    std::filesystem::path folder = UserData() + L"advanced";
+    std::filesystem::path dir = NewestDownload(folder);
+    if (dir.empty()) return false;
+    auto model = std::make_unique<AdvancedModel>();
+    // All but one core: it runs only while the typing pauses.
+    int threads = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 1, 8);
+    if (!model->load(Narrow((dir / AdvancedModel::kFileName).wstring()), threads)) {
+      Log(L"cannot load the advanced model in " + dir.wstring());
+      return false;
+    }
+    model_ = std::move(model);
+    // Older ones are left by an update, as UseNewestModels leaves older models; not one downloading.
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator(folder, error)) {
+      if (entry.path() != dir && entry.path().extension() != L".partial") std::filesystem::remove_all(entry.path(), error);
+    }
+    return true;
+#else
+    return false;
+#endif
+  }
+
+  std::mutex mutex_;
+  std::condition_variable wake_;
+  bool reload_ = false;
+  std::deque<std::weak_ptr<Job>> jobs_;
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  std::unique_ptr<AdvancedModel> model_;  // only the thread touches it
+#endif
+};
+
 // Whether the other end of the pipe is the installed settings window. Apps in a
 // sandbox can connect too, but cannot pose as it.
 bool FromSettings(HANDLE pipe) {
@@ -172,6 +270,7 @@ void Serve(HANDLE pipe) {
     std::lock_guard lock(gLock);
     controller = std::make_unique<Controller>(gEnvironment, recorder, personal);
   }
+  std::shared_ptr<AdvancedRanker::Job> ranking;  // the advanced model's question for this connection
   std::string bytes;
   while (ReadMessage(pipe, bytes)) {
     Protocol::Message message;
@@ -193,8 +292,32 @@ void Serve(HANDLE pipe) {
           if (FromSettings(pipe)) ClearChoices(gEnvironment);
           break;
         case Protocol::Request::kReloadModels:
-          if (FromSettings(pipe) && !UseNewestModels()) {
-            Log(L"cannot load the downloaded models");
+          if (!FromSettings(pipe)) break;
+          if (!UseNewestModels()) Log(L"cannot load the downloaded models");
+          AdvancedRanker::Shared().reload();  // after the advanced model was downloaded or removed too
+          break;
+        case Protocol::Request::kPause:
+          ranking.reset();
+          if (std::optional<Composer::RankingRequest> request = controller->rankingRequest()) {
+            ranking = std::make_shared<AdvancedRanker::Job>();
+            ranking->request = std::move(*request);
+            AdvancedRanker::Shared().ask(ranking);
+            recorder.reply.handled = true;
+          }
+          break;
+        case Protocol::Request::kRanked:
+          if (ranking) {
+            std::optional<std::vector<double>> scores;
+            {
+              std::lock_guard answered(ranking->lock);
+              scores = ranking->scores;
+            }
+            if (scores) {
+              controller->applyRanking(ranking->request, *scores);  // dropped when a key came since
+              ranking.reset();
+            } else {
+              recorder.reply.handled = true;
+            }
           }
           break;
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
@@ -261,6 +384,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     Log(L"cannot load data.txt");
     return 1;
   }
+  AdvancedRanker::Shared().reload();
   gEnvironment.userModel = NewUserModel();
   // What the user typed, learned on this PC only, beside other per-user app data.
   if (!UserData().empty()) {

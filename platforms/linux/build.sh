@@ -27,7 +27,9 @@ fi
 
 ../../tools/fetch-mcbopomofo.sh "$MCB"
 
-cmake -S . -B $BUILD -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DMCBOPOMOFO="$PWD/$MCB" >/dev/null
+# PROJECTKEY_LLAMA, a llama.cpp checkout, builds in the advanced model (CMakeLists.txt).
+cmake -S . -B $BUILD -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DMCBOPOMOFO="$PWD/$MCB" \
+  ${PROJECTKEY_LLAMA:+-DPROJECTKEY_LLAMA="$PROJECTKEY_LLAMA"} >/dev/null
 cmake --build $BUILD
 for test in ComposerTest ControllerTest; do
   "$BUILD/$test" "$MCB/Source/Data/data.txt"

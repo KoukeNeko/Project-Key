@@ -32,6 +32,12 @@ FOUNDATION_EXPORT NSString *const PKKeyboardLayoutKey;     // 0 大千, 1 倚天
 @property(readonly) BOOL loaded;              // bigram.bin and chars.bin are in use
 @property(readonly, copy) NSURL *downloads;
 - (BOOL)reload;  // switches to the newest release in downloads; NO when it cannot be loaded
+// The advanced model (core/engine/AdvancedModel.h), downloaded apart from them into its own
+// folder as they are; nothing bundles it.
+@property(readonly) BOOL advancedSupported;           // this input method was built to run it
+@property(readonly, copy) NSString *advancedVersion;  // the newest one downloaded; empty when there is none
+@property(readonly, copy) NSURL *advancedDownloads;
+- (void)reloadAdvanced;  // after a download or a removal: loads the newest, or drops it
 @end
 
 // The input method's bundle identifier (Resources/Info.plist). The settings app
@@ -39,7 +45,7 @@ FOUNDATION_EXPORT NSString *const PKKeyboardLayoutKey;     // 0 大千, 1 倚天
 FOUNDATION_EXPORT NSString *const PKInputMethodBundleID;
 // What the settings app posts to the input method, as distributed notifications.
 FOUNDATION_EXPORT NSString *const PKClearChoicesNotification;  // after removing personal.txt
-FOUNDATION_EXPORT NSString *const PKReloadModelsNotification;  // after downloading models
+FOUNDATION_EXPORT NSString *const PKReloadModelsNotification;  // after downloading models, or the advanced model or removing it
 // The input method's defaults: the standard ones in the input method, its domain in the settings app.
 FOUNDATION_EXPORT NSUserDefaults *PKDefaults(void);
 // The input method's bundle: this one, or the installed one in the settings app (nil when not installed).

@@ -40,6 +40,13 @@ inline std::filesystem::path DownloadedModels() {
   return data.empty() ? data : data / "models";
 }
 
+// Where the advanced model (core/engine/AdvancedModel.h) goes, a release per folder as for the
+// models; the addon uses the newest (NewestDownload). Nothing is bundled.
+inline std::filesystem::path DownloadedAdvanced() {
+  std::filesystem::path data = UserData();
+  return data.empty() ? data : data / "advanced";
+}
+
 // The user's own words, phrases.txt (core/engine Lexicon::loadUserPhrases), or the words never
 // offered, exclude-phrases.txt, which the addon reads again on the next composition after a
 // save; made first when missing. Empty when it cannot be made.
@@ -100,39 +107,75 @@ struct NewerModels {
   }
 };
 
-// The newest models-YYYY-MM-DD release fetch-models.sh published with all three files, when newer
-// than the models in use.
-inline NewerModels FindNewerModels(const std::vector<ModelsRelease>& releases) {
+// The newest <prefix>YYYY-MM-DD release with all the files named, when newer than inUse.
+inline NewerModels FindNewer(const std::vector<ModelsRelease>& releases, const std::string& prefix,
+                             const std::vector<std::string>& required, const std::string& inUse) {
   NewerModels newest;
   std::string newestTag;
   for (const ModelsRelease& release : releases) {
-    auto has = [&](const char* name) {
+    auto has = [&](const std::string& name) {
       return std::any_of(release.files.begin(), release.files.end(), [&](const ModelsFile& file) { return file.name == name; });
     };
-    if (release.tag.rfind("models-", 0) != 0 || release.draft || release.tag <= newestTag) continue;
-    if (!has("data.txt") || !has("bigram.bin") || !has("chars.bin")) continue;
+    if (release.tag.rfind(prefix, 0) != 0 || release.draft || release.tag <= newestTag) continue;
+    if (!std::all_of(required.begin(), required.end(), has)) continue;
     newestTag = release.tag;
     newest.files = release.files;
   }
-  newest.date = newestTag.empty() ? "" : newestTag.substr(7);
-  if (newest.date <= ProjectKey::ModelsVersion(ModelsInUse())) return {};
+  newest.date = newestTag.empty() ? "" : newestTag.substr(prefix.size());
+  if (newest.date <= inUse) return {};
   return newest;
 }
 
-// An empty DownloadedModels()/<date>.partial to download into, after removing any download cut
-// short before; empty on failure.
-inline std::filesystem::path StartModels(const std::string& date) {
+// The newest models-YYYY-MM-DD release fetch-models.sh published with all three files, when newer
+// than the models in use.
+inline NewerModels FindNewerModels(const std::vector<ModelsRelease>& releases) {
+  return FindNewer(releases, "models-", {"data.txt", "bigram.bin", "chars.bin"}, ProjectKey::ModelsVersion(ModelsInUse()));
+}
+
+// The advanced model's version, empty when none is downloaded.
+inline std::string AdvancedVersion() {
+  std::filesystem::path dir = ProjectKey::NewestDownload(DownloadedAdvanced());
+  return dir.empty() ? "" : ProjectKey::ModelsVersion(dir);
+}
+
+// The 進階模型 row while nothing newer is offered.
+inline std::string InstalledAdvancedText() {
+  std::string version = AdvancedVersion();
+  return version.empty() ? "未安裝" : version;
+}
+
+// The newest advanced-YYYY-MM-DD release, published with its one file (core/engine/AdvancedModel.h),
+// when newer than the one downloaded.
+constexpr char kAdvancedFile[] = "advanced.gguf";
+inline NewerModels FindNewerAdvanced(const std::vector<ModelsRelease>& releases) {
+  return FindNewer(releases, "advanced-", {kAdvancedFile}, AdvancedVersion());
+}
+
+// 移除's question on the 進階模型 row, as on macOS and Windows.
+constexpr char kRemoveAdvancedTitle[] = "移除進階模型？";
+constexpr char kRemoveAdvancedBody[] = "打字停頓時，不再用進階模型重選整句。";
+
+// Removes every advanced model downloaded; false when one could not be removed.
+inline bool RemoveAdvanced() {
   std::error_code error;
-  for (const auto& entry : std::filesystem::directory_iterator(DownloadedModels(), error)) {
+  std::filesystem::remove_all(DownloadedAdvanced(), error);
+  return !error;
+}
+
+// An empty <folder>/<date>.partial to download into, after removing any download cut short
+// before; empty on failure.
+inline std::filesystem::path StartModels(const std::string& date, const std::filesystem::path& folder = DownloadedModels()) {
+  std::error_code error;
+  for (const auto& entry : std::filesystem::directory_iterator(folder, error)) {
     if (entry.path().extension() == ".partial") std::filesystem::remove_all(entry.path(), error);
   }
-  std::filesystem::path partial = DownloadedModels() / (date + ".partial");
+  std::filesystem::path partial = folder / (date + ".partial");
   return std::filesystem::create_directories(partial, error) ? partial : std::filesystem::path();
 }
 
 // Completes the download: models-version.txt last, then the folder named after it (Models.h).
-inline bool FinishModels(const std::string& date) {
-  std::filesystem::path partial = DownloadedModels() / (date + ".partial"), done = DownloadedModels() / date;
+inline bool FinishModels(const std::string& date, const std::filesystem::path& folder = DownloadedModels()) {
+  std::filesystem::path partial = folder / (date + ".partial"), done = folder / date;
   if (!(std::ofstream(partial / "models-version.txt") << date << "\n")) return false;
   std::error_code error;
   std::filesystem::remove_all(done, error);
@@ -140,9 +183,9 @@ inline bool FinishModels(const std::string& date) {
   return !error;
 }
 
-inline void AbandonModels(const std::string& date) {
+inline void AbandonModels(const std::string& date, const std::filesystem::path& folder = DownloadedModels()) {
   std::error_code error;
-  std::filesystem::remove_all(DownloadedModels() / (date + ".partial"), error);
+  std::filesystem::remove_all(folder / (date + ".partial"), error);
 }
 
 // Homebrew's prefix when this program runs from its fcitx5-projectkey keg, which updates with

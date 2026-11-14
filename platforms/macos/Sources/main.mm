@@ -25,6 +25,17 @@
 - (BOOL)reload {
   return NO;
 }
+- (BOOL)advancedSupported {
+  return NO;
+}
+- (NSString *)advancedVersion {
+  return @"";
+}
+- (NSURL *)advancedDownloads {
+  return [NSURL fileURLWithPath:NSTemporaryDirectory()];
+}
+- (void)reloadAdvanced {
+}
 @end
 
 // Opening the running input method again (from Spotlight or Finder) shows the settings, which

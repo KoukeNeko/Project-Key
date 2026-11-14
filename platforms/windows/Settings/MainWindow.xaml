@@ -127,6 +127,8 @@
         <TextBlock Text="檢查中…" />
       </tk:SettingsCard>
       <tk:SettingsCard x:Name="Models" Header="選字模型" />
+      <!-- Shown when build.ps1 built the server with llama.cpp (ADVANCED_MODEL). -->
+      <tk:SettingsCard x:Name="Advanced" Header="進階模型" Visibility="Collapsed" />
       <tk:SettingsCard Header="授權">
         <TextBlock Text="MIT" />
       </tk:SettingsCard>

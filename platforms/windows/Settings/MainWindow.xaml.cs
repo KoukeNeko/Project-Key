@@ -57,7 +57,11 @@ public sealed partial class MainWindow : Window {
     Bind(KeyboardLayout, "KeyboardLayout", 0);
     // The text service's version (ProjectKey.rc); build.ps1 puts this app in Settings\ beside it.
     Version.Text = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "..", "ProjectKey.dll")).ProductVersion ?? "";
-    CheckForModels();
+    CheckForReleases(ModelsReleases);
+#if ADVANCED_MODEL
+    Advanced.Visibility = Visibility.Visible;
+    CheckForReleases(AdvancedReleases);
+#endif
     CheckForUpdate();
 
     WindowFit.Follow(this, Root, Width);
@@ -100,12 +104,80 @@ public sealed partial class MainWindow : Window {
     return new TextBlock { Text = !installed ? "未安裝" : version != "" ? version : "已安裝" };
   }
 
+  // The advanced model (core/engine/AdvancedModel.h), which nothing installs: the newest release this
+  // window downloaded, chosen as for the models; empty when there is none.
+  private static readonly string DownloadedAdvanced =
+      Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key", "advanced");
+
+  private static string AdvancedVersion() {
+    string newest = "";
+    foreach (string dir in Directory.Exists(DownloadedAdvanced) ? Directory.GetDirectories(DownloadedAdvanced) : []) {
+      string version = ModelsVersion(dir);
+      if (version != "" && version == Path.GetFileName(dir) && string.CompareOrdinal(version, newest) > 0) newest = version;
+    }
+    return newest;
+  }
+
   private record ModelsFile(string Name, long Size, string Digest, string Url);
 
-  // The newest models-YYYY-MM-DD release fetch-models.sh published, offered when newer than the
-  // models in use. GitHub gives each file's SHA-256.
-  private async void CheckForModels() {
-    Models.Content = InstalledModelsText();
+  // A card offering downloads from GitHub releases named <prefix>YYYY-MM-DD with all the required files:
+  // the models, or the advanced model. Around puts what the card shows beside the rest of it.
+  private sealed record Releases(CommunityToolkit.WinUI.Controls.SettingsCard Card, string Prefix, string[] Required, string Folder, Func<string> InUse,
+                                 Func<UIElement> Installed, Func<UIElement, UIElement> Around);
+
+  private Releases ModelsReleases => new(Models, "models-", ["data.txt", "bigram.bin", "chars.bin"], DownloadedModels,
+                                         () => ModelsVersion(ModelsInUse()), InstalledModelsText, shown => shown);
+
+  // Its version or the newer one offered, and 移除 once one is downloaded.
+  private Releases AdvancedReleases => new(Advanced, "advanced-", ["advanced.gguf"], DownloadedAdvanced, AdvancedVersion,
+                                           () => new TextBlock { Text = AdvancedVersion() is "" ? "未安裝" : AdvancedVersion() }, WithRemove);
+
+  private UIElement WithRemove(UIElement shown) {
+    if (AdvancedVersion() == "") return shown;
+    var remove = new Button { Content = "移除" };
+    remove.Click += (_, _) => RemoveAdvanced();
+    var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+    row.Children.Add(shown);
+    row.Children.Add(remove);
+    return row;
+  }
+
+  // Removes every advanced model downloaded and has the server drop it, then offers the newest again.
+  private async void RemoveAdvanced() {
+    var dialog = new ContentDialog {
+      XamlRoot = Content.XamlRoot,
+      Title = "移除進階模型？",
+      Content = "打字停頓時，不再用進階模型重選整句。",
+      PrimaryButtonText = "移除",
+      CloseButtonText = "取消",
+      DefaultButton = ContentDialogButton.Close,
+    };
+    if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+    try {
+      // The server keeps the model's file open. Without its version file a folder is no longer one to
+      // load (core/engine/Models.h), so the server lets go of it on Request::kReloadModels, and then it can go.
+      foreach (string dir in Directory.Exists(DownloadedAdvanced) ? Directory.GetDirectories(DownloadedAdvanced) : []) {
+        File.Delete(Path.Combine(dir, "models-version.txt"));
+      }
+      SendToServer(11);  // Protocol.h: Request::kReloadModels, which reloads the advanced model too
+      for (int attempt = 0; ; attempt++) {
+        try {
+          if (Directory.Exists(DownloadedAdvanced)) Directory.Delete(DownloadedAdvanced, true);
+          break;
+        } catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < 20) {
+          await Task.Delay(250);  // the server unloads it on a thread of its own
+        }
+      }
+    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+      Advanced.Content = new TextBlock { Text = "無法移除" };
+      return;
+    }
+    CheckForReleases(AdvancedReleases);
+  }
+
+  // The newest such release, offered when newer than the one in use. GitHub gives each file's SHA-256.
+  private async void CheckForReleases(Releases releasesOf) {
+    releasesOf.Card.Content = releasesOf.Around(releasesOf.Installed());
     try {
       using var client = new HttpClient();
       client.DefaultRequestHeaders.UserAgent.ParseAdd("ProjectKey");
@@ -115,7 +187,7 @@ public sealed partial class MainWindow : Window {
       List<ModelsFile> newestFiles = [];
       foreach (JsonElement release in releases.RootElement.EnumerateArray()) {
         string tag = release.GetProperty("tag_name").GetString()!;
-        if (!tag.StartsWith("models-") || release.GetProperty("draft").GetBoolean() || string.CompareOrdinal(tag, newestTag) <= 0) continue;
+        if (!tag.StartsWith(releasesOf.Prefix) || release.GetProperty("draft").GetBoolean() || string.CompareOrdinal(tag, newestTag) <= 0) continue;
         var files = new List<ModelsFile>();
         foreach (JsonElement asset in release.GetProperty("assets").EnumerateArray()) {
           if (asset.TryGetProperty("digest", out JsonElement digest) && digest.ValueKind == JsonValueKind.String) {
@@ -123,44 +195,44 @@ public sealed partial class MainWindow : Window {
                                      asset.GetProperty("browser_download_url").GetString()!));
           }
         }
-        if (new[] { "data.txt", "bigram.bin", "chars.bin" }.All(name => files.Any(file => file.Name == name))) {
+        if (releasesOf.Required.All(name => files.Any(file => file.Name == name))) {
           newestTag = tag;
           newestFiles = files;
         }
       }
-      string date = newestTag.Length > 0 ? newestTag["models-".Length..] : "";
-      if (string.CompareOrdinal(date, ModelsVersion(ModelsInUse())) <= 0) return;
+      string date = newestTag.Length > 0 ? newestTag[releasesOf.Prefix.Length..] : "";
+      if (string.CompareOrdinal(date, releasesOf.InUse()) <= 0) return;
       var button = new Button { Content = $"下載 {date}（{newestFiles.Sum(file => file.Size) / 1_000_000} MB）" };
-      button.Click += (_, _) => DownloadModels(date, newestFiles);
-      Models.Content = button;
+      button.Click += (_, _) => DownloadRelease(releasesOf, date, newestFiles);
+      releasesOf.Card.Content = releasesOf.Around(button);
     } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException
                                     or KeyNotFoundException or InvalidOperationException) {
       // The 更新 row already says when GitHub cannot be reached.
     }
   }
 
-  private async void DownloadModels(string date, List<ModelsFile> files) {
+  private async void DownloadRelease(Releases releasesOf, string date, List<ModelsFile> files) {
     var status = new TextBlock { Text = "下載中 0%" };
-    Models.Content = status;
+    releasesOf.Card.Content = status;
     long total = files.Sum(file => file.Size);
     var progress = new Progress<long>(done => status.Text = $"下載中 {done * 100 / total}%");
-    string partial = Path.Combine(DownloadedModels, date + ".partial");
+    string partial = Path.Combine(releasesOf.Folder, date + ".partial");
     try {
-      Directory.CreateDirectory(DownloadedModels);
-      foreach (string left in Directory.GetDirectories(DownloadedModels, "*.partial")) Directory.Delete(left, true);  // cut short before
+      Directory.CreateDirectory(releasesOf.Folder);
+      foreach (string left in Directory.GetDirectories(releasesOf.Folder, "*.partial")) Directory.Delete(left, true);  // cut short before
       // Off the UI thread: a continuation there for every read slows the download to a crawl.
       await Task.Run(() => Download(files, partial, progress));
       // Written last: a folder with it is complete.
       File.WriteAllText(Path.Combine(partial, "models-version.txt"), date + "\n");
-      string folder = Path.Combine(DownloadedModels, date);
+      string folder = Path.Combine(releasesOf.Folder, date);
       if (Directory.Exists(folder)) Directory.Delete(folder, true);
       Directory.Move(partial, folder);
       SendToServer(11);  // Protocol.h: Request::kReloadModels
-      Models.Content = InstalledModelsText();
+      releasesOf.Card.Content = releasesOf.Around(releasesOf.Installed());
     } catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException
                                     or UnauthorizedAccessException or InvalidDataException) {
       try { Directory.Delete(partial, true); } catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException) { }
-      Models.Content = new TextBlock { Text = "無法下載" };
+      releasesOf.Card.Content = new TextBlock { Text = "無法下載" };
     }
   }
 

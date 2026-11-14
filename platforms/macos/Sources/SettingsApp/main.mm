@@ -41,6 +41,23 @@ void Post(NSString *name) {
   Post(PKReloadModelsNotification);
   return YES;
 }
+- (BOOL)advancedSupported {
+#ifdef PROJECTKEY_ADVANCED_MODEL  // build.sh builds the input method and this app alike
+  return YES;
+#else
+  return NO;
+#endif
+}
+- (NSString *)advancedVersion {
+  std::filesystem::path dir = ProjectKey::NewestDownload(self.advancedDownloads.fileSystemRepresentation);
+  return dir.empty() ? @"" : @(ProjectKey::ModelsVersion(dir).c_str());
+}
+- (NSURL *)advancedDownloads {
+  return [PKSupportDirectory() URLByAppendingPathComponent:@"advanced" isDirectory:YES];
+}
+- (void)reloadAdvanced {
+  Post(PKReloadModelsNotification);  // the input method reloads both
+}
 @end
 
 void PKShowSettings(void) {

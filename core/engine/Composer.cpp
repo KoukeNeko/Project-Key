@@ -624,11 +624,41 @@ void Composer::setSentenceModel(std::shared_ptr<const SentenceModel> sentences) 
   walk();
 }
 
+std::optional<Composer::RankingRequest> Composer::rankingRequest() const {
+  if (rankable_.size() < 2 || !ranked_.empty()) return std::nullopt;
+  RankingRequest request{{}, {}, version_};
+  for (const auto& [text, walkScore] : rankable_) {
+    request.sentences.push_back(text);
+    request.walkScores.push_back(walkScore);
+  }
+  return request;
+}
+
+bool Composer::applyRanking(const RankingRequest& request, const std::vector<double>& log10Probabilities) {
+  if (request.version != version_ || !ranked_.empty() || log10Probabilities.size() != request.sentences.size()) return false;
+  std::optional<size_t> best;
+  for (size_t i = 0; i < request.sentences.size(); i++) {
+    if (std::isnan(log10Probabilities[i])) continue;
+    double total = request.walkScores[i] + kAdvancedWeight * log10Probabilities[i];
+    if (!best || total > request.walkScores[*best] + kAdvancedWeight * log10Probabilities[*best]) best = i;
+  }
+  if (!best) return false;
+  std::string before = text();
+  ranked_ = request.sentences[*best];
+  rewalking_ = true;
+  walk();
+  rewalking_ = false;
+  return text() != before;
+}
+
 void Composer::clear() {
   hanBefore_.clear();
   endReading();
   grid_.clear();
   segments_.clear();
+  rankable_.clear();
+  ranked_.clear();
+  version_++;
   static_cast<TonelessModel&>(*dictionary_).forgetMacros();
 }
 
@@ -671,6 +701,11 @@ void Composer::walk() {
   };
   // Backspaced away, the composition ends as clear() ends it.
   if (grid_.length() == 0) static_cast<TonelessModel&>(*dictionary_).forgetMacros();
+  if (!rewalking_) {
+    version_++;
+    ranked_.clear();
+  }
+  rankable_.clear();
   const std::vector<ReadingGrid::Span>& spans = grid_.spans();
   const size_t n = spans.size();
   const uint32_t boundary = bigram_ ? bigram_->id(Bigram::kBoundary).value_or(kNoWord) : kNoWord;
@@ -814,7 +849,7 @@ void Composer::walk() {
   // the best kSentencePaths of them are reranked by how each reads as a whole: the walk sees only
   // two words back, so a rare pair can win (網液態 for 網頁太). A sentence with a character outside
   // the model's vocabulary keeps its walk score only when it is the walk's own.
-  if (sentences_ && n > 1) {  // one syllable has no sentence to read
+  if ((sentences_ || advancedRanking_) && n > 1) {  // one syllable has no sentence to read
     std::vector<int> slot(choices.size());  // a choice's index in endingAt[its end]: its state in each successor
     for (size_t e = 0; e <= n; e++) {
       for (size_t j = 0; j < endingAt[e].size(); j++) slot[endingAt[e][j]] = static_cast<int>(j);
@@ -875,29 +910,41 @@ void Composer::walk() {
     paths.erase(std::unique(paths.begin(), paths.end(), [](const auto& a, const auto& b) { return a.second == b.second; }),
                 paths.end());
     if (paths.size() > kSentencePaths) paths.resize(kSentencePaths);
-    std::vector<std::vector<uint32_t>> encoded;
-    std::vector<size_t> scored;  // index into paths
-    for (size_t i = 0; i < paths.size(); i++) {
-      std::vector<uint32_t> codePoints;
-      for (int at : paths[i].second) {
-        for (uint32_t c : CharModel::CodePoints(choices[at].value)) codePoints.push_back(c);
-      }
-      std::optional<std::vector<uint32_t>> tokens = sentences_->encode(codePoints);
-      if (!tokens) {
-        if (paths[i].second == path) break;  // the walk's own: no sentence to compare it with
-        continue;
-      }
-      encoded.push_back(std::move(*tokens));
-      scored.push_back(i);
+    std::vector<std::string> texts;
+    for (const auto& [total, through] : paths) {
+      std::string text;
+      for (int at : through) text += choices[at].value;
+      texts.push_back(text);
+      if (advancedRanking_) rankable_.emplace_back(text, total);
     }
-    bool walkScored = std::any_of(scored.begin(), scored.end(), [&](size_t i) { return paths[i].second == path; });
-    if (walkScored && scored.size() > 1) {
-      std::vector<double> lm = sentences_->log10Probabilities(encoded, sentenceCache_);
-      size_t best = 0;
-      for (size_t j = 1; j < scored.size(); j++) {
-        if (paths[scored[j]].first + kSentenceWeight * lm[j] > paths[scored[best]].first + kSentenceWeight * lm[best]) best = j;
+    auto chosen = std::find(texts.begin(), texts.end(), ranked_);
+    if (!ranked_.empty() && chosen != texts.end()) {
+      path = paths[chosen - texts.begin()].second;
+    } else if (sentences_) {
+      std::vector<std::vector<uint32_t>> encoded;
+      std::vector<size_t> scored;  // index into paths
+      for (size_t i = 0; i < paths.size(); i++) {
+        std::vector<uint32_t> codePoints;
+        for (int at : paths[i].second) {
+          for (uint32_t c : CharModel::CodePoints(choices[at].value)) codePoints.push_back(c);
+        }
+        std::optional<std::vector<uint32_t>> tokens = sentences_->encode(codePoints);
+        if (!tokens) {
+          if (paths[i].second == path) break;  // the walk's own: no sentence to compare it with
+          continue;
+        }
+        encoded.push_back(std::move(*tokens));
+        scored.push_back(i);
       }
-      path = paths[scored[best]].second;
+      bool walkScored = std::any_of(scored.begin(), scored.end(), [&](size_t i) { return paths[i].second == path; });
+      if (walkScored && scored.size() > 1) {
+        std::vector<double> lm = sentences_->log10Probabilities(encoded, sentenceCache_);
+        size_t best = 0;
+        for (size_t j = 1; j < scored.size(); j++) {
+          if (paths[scored[j]].first + kSentenceWeight * lm[j] > paths[scored[best]].first + kSentenceWeight * lm[best]) best = j;
+        }
+        path = paths[scored[best]].second;
+      }
     }
   }
 

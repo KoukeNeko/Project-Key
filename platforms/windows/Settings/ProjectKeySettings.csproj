@@ -16,6 +16,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <SatelliteResourceLanguages>zh-Hant;en</SatelliteResourceLanguages>
   </PropertyGroup>
+  <!-- build.ps1 -Llama: the engine server runs the advanced model, so the window offers it. -->
+  <PropertyGroup Condition="'$(AdvancedModel)' == 'true'">
+    <DefineConstants>$(DefineConstants);ADVANCED_MODEL</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2957" />

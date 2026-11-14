@@ -760,6 +760,9 @@ int main(int argc, char** argv) {
     fs::remove_all(downloaded / "2026-04-01");
     release(downloaded / "2026-02-01", "2026-02-01", true);
     assert(ModelsDirectory(bundled, downloaded) == downloaded / "2026-02-01");
+    // The advanced model has no bundled copy: the newest complete release, or none.
+    assert(NewestDownload(downloaded) == downloaded / "2026-02-01");
+    assert(NewestDownload(root / "none").empty());
     assert(UseNewestModels(env, bundled.string(), downloaded.string()));
     assert(env.lm != before && env.models == loads + 1 && env.lm->isAssociatedPhrasesV2Loaded());
     // The new lexicon has the dates and times, which the tests below do without, as above.

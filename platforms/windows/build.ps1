@@ -3,8 +3,9 @@
 # uv (for the Python that generates McBopomofo's dictionary). The McBopomofo
 # engine and dictionary (MIT) are fetched at a pinned commit into build\. With
 # -RequireModels it stops unless the trained models (tools/bigram-trainer/fetch-models.sh)
-# are there, as releases need them.
-param([switch]$RequireModels)
+# are there, as releases need them. With -Llama, a llama.cpp checkout (MIT; PROJECTKEY_LLAMA by
+# default), the engine server runs the advanced model the settings window downloads.
+param([switch]$RequireModels, [string]$Llama = $env:PROJECTKEY_LLAMA)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 $Trained = "$PSScriptRoot\..\..\tools\bigram-trainer\.cache"
@@ -89,6 +90,20 @@ $CxxFlags = @('/nologo', '/Brepro', '/std:c++20', '/utf-8', '/EHsc', '/O2', '/MT
   '/D_CRT_SECURE_NO_WARNINGS', '/DUNICODE', '/D_UNICODE', '/DNOMINMAX', '/DWIN32_LEAN_AND_MEAN',
   "/I$PSScriptRoot\compat", "/I$Engine", "/I$Core", "/I$PSScriptRoot\Sources")
 
+# llama.cpp for the advanced model (core/engine/AdvancedModel.h): one static CPU backend for x86-64-v3
+# (AVX2 and FMA), as on Linux, with the static runtime the rest is built with.
+$LlamaLibs = @()
+if ($Llama) {
+  $LlamaBuild = Join-Path $Build 'llama'
+  Invoke-Native cmake -S $Llama -B $LlamaBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF `
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON `
+    -DGGML_OPENMP=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF
+  Invoke-Native cmake --build $LlamaBuild --target llama
+  $CxxFlags += '/DPROJECTKEY_ADVANCED_MODEL', "/I$Llama\include", "/I$Llama\ggml\include"
+  $LlamaLibs = @("$LlamaBuild\src\llama.lib", "$LlamaBuild\ggml\src\ggml.lib", "$LlamaBuild\ggml\src\ggml-cpu.lib",
+    "$LlamaBuild\ggml\src\ggml-base.lib")
+}
+
 # Same sources, same bytes: Smart App Control judges each new binary, so unchanged ones keep their verdict.
 $LinkFlags = @('/nologo', '/DEBUG', '/INCREMENTAL:NO', '/Brepro')
 
@@ -106,7 +121,9 @@ $engineSources = @('AssociatedPhrasesV2', 'ByteBlockBackedDictionary', 'McBopomo
   ForEach-Object { "$Engine\$_.cpp" }
 $engineSources += "$Engine\gramambular2\reading_grid.cpp", "$Engine\Mandarin\Mandarin.cpp"
 $engineObjects = @(Compile 'mcbopomofo' $engineSources @('/W0'))
-$engineObjects += Compile 'engine' @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\SentenceModel.cpp", "$Core\PersonalModel.cpp", "$Core\Controller.cpp", "$Core\InputMacro.cpp")
+$coreSources = @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\SentenceModel.cpp", "$Core\PersonalModel.cpp", "$Core\Controller.cpp", "$Core\InputMacro.cpp")
+if ($Llama) { $coreSources += "$Core\AdvancedModel.cpp" }
+$engineObjects += Compile 'engine' $coreSources
 Invoke-Native lib.exe /nologo "/OUT:$Obj\engine.lib" @engineObjects
 
 # Tests: the engine tests shared with macOS, and the pipe protocol.
@@ -124,7 +141,7 @@ $SystemLibs = @('ole32.lib', 'oleaut32.lib', 'uuid.lib', 'advapi32.lib', 'user32
 
 # The engine server.
 $serverObjects = @(Compile 'server' @("$PSScriptRoot\Sources\Server\Server.cpp"))
-Invoke-Native link.exe @LinkFlags /SUBSYSTEM:WINDOWS /MANIFEST:EMBED "/MANIFESTINPUT:$PSScriptRoot\Sources\Server\ProjectKeyServer.manifest" "/OUT:$Out\ProjectKeyServer.exe" @serverObjects @commonObjects "$Obj\engine.lib" @SystemLibs
+Invoke-Native link.exe @LinkFlags /SUBSYSTEM:WINDOWS /MANIFEST:EMBED "/MANIFESTINPUT:$PSScriptRoot\Sources\Server\ProjectKeyServer.manifest" "/OUT:$Out\ProjectKeyServer.exe" @serverObjects @commonObjects "$Obj\engine.lib" @LlamaLibs @SystemLibs
 
 # The text service DLL, with the icon the input switcher shows: ㄅ on the accent color.
 $Icon = Join-Path $Obj 'ProjectKey.ico'
@@ -174,7 +191,9 @@ if (-not $dotnet) { $dotnet = "$env:ProgramFiles\dotnet\dotnet.exe" }
 if (-not (Test-Path $dotnet)) { throw 'the .NET SDK is required for the settings window' }
 # build, not publish: publish leaves out the compiled XAML (.xbf) and resources.pri an unpackaged app loads.
 # The icon goes in the program for its Start menu shortcut, and beside it for the windows (AppWindow.SetIcon).
-Invoke-Native $dotnet build "$PSScriptRoot\Settings\ProjectKeySettings.csproj" -c Release -nologo -v q -o "$Out\Settings" "-p:ApplicationIcon=$Icon"
+# AdvancedModel shows the 進階模型 card only where the server can run what it downloads.
+Invoke-Native $dotnet build "$PSScriptRoot\Settings\ProjectKeySettings.csproj" -c Release -nologo -v q -o "$Out\Settings" "-p:ApplicationIcon=$Icon" `
+  "-p:AdvancedModel=$([bool]$Llama)"
 Copy-Item $Icon "$Out\Settings"
 
 # The dictionary, McBopomofo's license, and from tools/bigram-trainer if it was

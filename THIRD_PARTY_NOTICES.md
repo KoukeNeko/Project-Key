@@ -49,6 +49,10 @@ SOFTWARE.
 
 自 models-2026-11-09 起，模型另附 `sentence.bin`：`tools/lm-trainer` 訓練的整句模型（字元級 GPT-2 的權重），以[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）經 OpenCC 轉為臺灣正體後訓練，不含原文，以 CC BY-SA 4.0 授權。此檔案為選用；未提供時，引擎不重新排序整句候選。
 
+### 進階模型與 llama.cpp
+
+設定視窗可另外下載進階模型（`advanced-YYYY-MM-DD` release 的 `advanced.gguf`）：[Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B)（Google DeepMind，Apache License 2.0）刪去中文用不到的詞表、量化為 4 位元的 GGUF，release 附 Apache License 2.0 條文。打字停頓時，引擎用它從同一批整句候選中重選。以 `PROJECTKEY_LLAMA`（Windows 亦可用 `build.ps1 -Llama`）指向 [llama.cpp](https://github.com/ggml-org/llama.cpp)（MIT）原始碼建置時，各平台把它連結進去以執行這個模型。
+
 ### 表情符號
 
 `core/data/emoji.txt` 由 `tools/emoji/build-emoji.py` 從 [Unicode CLDR](https://cldr.unicode.org) 的繁體中文表情符號註解（`common/annotations/zh_Hant.xml`）與 Unicode 的 `emoji-test.txt` 產生，以 Unicode License v3（Unicode-3.0）授權。各平台與 `emoji.txt` 一同安裝其條文 [`EMOJI-NOTICE.txt`](core/data/EMOJI-NOTICE.txt)。

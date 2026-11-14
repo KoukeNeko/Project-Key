@@ -26,7 +26,10 @@ struct SettingsForm: View {
   @State private var restoring = false
   @State private var removeFailed = false
   @State private var update = UpdateState.checking
+  @State private var removingAdvanced = false
+  @State private var advancedRemoveFailed = false
   @ObservedObject var models: ModelsUpdater
+  @ObservedObject var advanced: ModelsUpdater
   let clearChoices: () -> Void
 
   var body: some View {
@@ -168,6 +171,25 @@ struct SettingsForm: View {
           case .failed: Text("無法下載")
           }
         }
+        if advanced.supported {
+          LabeledContent("進階模型") {
+            HStack {
+              switch advanced.state {
+              case .current: Text(advancedRemoveFailed ? "無法移除" : advanced.installed)
+              case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { advanced.download(release) }
+              case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
+              case .failed: Text("無法下載")
+              }
+              if advanced.removable { Button("移除") { removingAdvanced = true } }
+            }
+          }
+          .alert("移除進階模型？", isPresented: $removingAdvanced) {
+            Button("移除", role: .destructive) { Task { advancedRemoveFailed = !(await advanced.remove()) } }
+            Button("取消", role: .cancel) {}
+          } message: {
+            Text("打字停頓時，不再用進階模型重選整句。")
+          }
+        }
         LabeledContent("歡迎視窗") {
           Button("開啟") { WelcomeWindow.show() }
         }
@@ -183,6 +205,7 @@ struct SettingsForm: View {
     .fixedSize(horizontal: false, vertical: true)
     .task { update = await checkForUpdate() }
     .task { await models.check() }
+    .task { if advanced.supported { await advanced.check() } }
   }
 }
 
@@ -271,8 +294,10 @@ private func run(_ program: String, _ arguments: [String]) async throws {
 }
 
 // Models (tools/bigram-trainer) newer than the ones in use, from the GitHub releases
-// fetch-models.sh publishes as models-YYYY-MM-DD, downloaded when the user asks. GitHub gives
-// each file's SHA-256. One for all settings forms, so a download outlives the window.
+// fetch-models.sh publishes as models-YYYY-MM-DD, downloaded when the user asks; with advanced, the
+// advanced model (core/engine/AdvancedModel.h) from advanced-YYYY-MM-DD releases, which can also be
+// removed. GitHub gives each file's SHA-256. One of each for all settings forms, so a download
+// outlives the window.
 @MainActor
 final class ModelsUpdater: ObservableObject {
   struct Release {
@@ -291,13 +316,32 @@ final class ModelsUpdater: ObservableObject {
   }
 
   static var shared: ModelsUpdater?
+  static var sharedAdvanced: ModelsUpdater?
   @Published private(set) var state = State.current
   private let models: PKModels
+  private let advanced: Bool
 
-  init(models: PKModels) { self.models = models }
+  init(models: PKModels, advanced: Bool = false) {
+    self.models = models
+    self.advanced = advanced
+  }
+
+  private var prefix: String { advanced ? "advanced-" : "models-" }
+  private var required: [String] { advanced ? ["advanced.gguf"] : ["data.txt", "bigram.bin", "chars.bin"] }
+  private var version: String { advanced ? models.advancedVersion : models.version }
+  private var downloads: URL { advanced ? models.advancedDownloads : models.downloads }
+  // The advanced model's row is shown only where the input method can run what it downloads.
+  var supported: Bool { !advanced || models.advancedSupported }
+  var removable: Bool {
+    if case .downloading(_) = state { return false }
+    return advanced && !models.advancedVersion.isEmpty
+  }
 
   // What the row says while nothing newer is offered.
-  var installed: String { models.loaded ? (models.version.isEmpty ? "已安裝" : models.version) : "未安裝" }
+  var installed: String {
+    if advanced { return models.advancedVersion.isEmpty ? "未安裝" : models.advancedVersion }
+    return models.loaded ? (models.version.isEmpty ? "已安裝" : models.version) : "未安裝"
+  }
 
   func check() async {
     switch state {
@@ -316,21 +360,33 @@ final class ModelsUpdater: ObservableObject {
       return  // the 更新 row already says when GitHub cannot be reached
     }
     let complete = releases.filter { release in
-      release.tag_name.hasPrefix("models-") && !release.draft
-          && ["data.txt", "bigram.bin", "chars.bin"].allSatisfy { name in release.assets.contains { $0.name == name && $0.digest != nil } }
+      release.tag_name.hasPrefix(prefix) && !release.draft
+          && required.allSatisfy { name in release.assets.contains { $0.name == name && $0.digest != nil } }
     }
     guard let newest = complete.max(by: { $0.tag_name < $1.tag_name }) else { return }
-    let date = String(newest.tag_name.dropFirst("models-".count))
-    state = date > models.version ? .available(Release(date: date, files: newest.assets)) : .current
+    let date = String(newest.tag_name.dropFirst(prefix.count))
+    state = date > version ? .available(Release(date: date, files: newest.assets)) : .current
+  }
+
+  // Removes every advanced model downloaded and has the input method drop it, then offers the
+  // newest again; false when one could not be removed.
+  func remove() async -> Bool {
+    let fileManager = FileManager.default
+    let removed = (try? fileManager.removeItem(at: downloads)) != nil || !fileManager.fileExists(atPath: downloads.path)
+    models.reloadAdvanced()
+    objectWillChange.send()  // removable and installed read the folder
+    state = .current
+    await check()
+    return removed
   }
 
   func download(_ release: Release) {
     state = .downloading(0)
     Task {
       let fileManager = FileManager.default
-      let partial = models.downloads.appendingPathComponent(release.date + ".partial", isDirectory: true)
+      let partial = downloads.appendingPathComponent(release.date + ".partial", isDirectory: true)
       do {
-        for left in (try? fileManager.contentsOfDirectory(at: models.downloads, includingPropertiesForKeys: nil)) ?? []
+        for left in (try? fileManager.contentsOfDirectory(at: downloads, includingPropertiesForKeys: nil)) ?? []
         where left.pathExtension == "partial" {
           try fileManager.removeItem(at: left)  // a download cut short
         }
@@ -351,10 +407,15 @@ final class ModelsUpdater: ObservableObject {
         }
         // Written last: a folder with it is complete (core/engine/Models.h).
         try Data((release.date + "\n").utf8).write(to: partial.appendingPathComponent("models-version.txt"))
-        let target = models.downloads.appendingPathComponent(release.date, isDirectory: true)
+        let target = downloads.appendingPathComponent(release.date, isDirectory: true)
         try? fileManager.removeItem(at: target)
         try fileManager.moveItem(at: partial, to: target)
-        state = models.reload() ? .current : .failed
+        if advanced {
+          models.reloadAdvanced()  // it loads in the background; a file it cannot load leaves the walk's choices
+          state = .current
+        } else {
+          state = models.reload() ? .current : .failed
+        }
       } catch {
         try? fileManager.removeItem(at: partial)
         state = .failed
@@ -407,6 +468,8 @@ final class SettingsFormFactory: NSObject {
   @MainActor @objc static func makeView(clearChoices: @escaping () -> Void, models: PKModels) -> NSView {
     let updater = ModelsUpdater.shared ?? ModelsUpdater(models: models)
     ModelsUpdater.shared = updater
-    return NSHostingView(rootView: SettingsForm(models: updater, clearChoices: clearChoices).defaultAppStorage(PKDefaults()))
+    let advanced = ModelsUpdater.sharedAdvanced ?? ModelsUpdater(models: models, advanced: true)
+    ModelsUpdater.sharedAdvanced = advanced
+    return NSHostingView(rootView: SettingsForm(models: updater, advanced: advanced, clearChoices: clearChoices).defaultAppStorage(PKDefaults()))
   }
 }

@@ -105,6 +105,14 @@ class TextService : public ITfTextInputProcessorEx,
   void keyUp(ITfContext* context, WPARAM wParam);
   void candidateClicked(const Metrics::PanelHit& hit);
   void updateLangBar();
+  // The advanced model (Protocol::Request::kPause, kRanked): after each key the pause starts again;
+  // once it lasts, the server starts the model, and is asked for its choice until it has one.
+  void waitForPause();
+  void startPauseTimer(UINT milliseconds);
+  static void CALLBACK OnPauseTimer(HWND, UINT, UINT_PTR, DWORD);
+  static thread_local TextService* pausedService_;  // the one whose timer runs on this thread
+  UINT_PTR pauseTimer_ = 0;
+  bool ranking_ = false;  // the server answered that the model is choosing
 
   LONG refs_ = 1;
   ITfThreadMgr* threadMgr_ = nullptr;

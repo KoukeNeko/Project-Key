@@ -32,6 +32,12 @@ enum class Request : uint8_t {
   kClickCandidate = 12,  // row, index
   kToggleGrid = 13,      // a click on the chevron
   kShowMode = 14,        // a field took focus: show the current mode
+  // The advanced model (core/engine/AdvancedModel.h), which takes a few hundred milliseconds: once the
+  // typing pauses the server starts it and answers at once, handled when it has started; then each
+  // kRanked brings its choice once it has one, and is handled while it is still choosing. A server
+  // without them answers neither as handled, so a text service stops asking.
+  kPause = 15,
+  kRanked = 16,
 };
 
 // What the text service does with the document and windows, in order.

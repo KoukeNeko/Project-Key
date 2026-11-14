@@ -93,7 +93,7 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 - 候選視窗外觀：自動（預設，依 App 的淺色或深色模式，每次顯示時讀取）、淺色、深色，或 Acrylic、Mica、Mica Alt 三種材質；材質亦依 App 的模式採用淺色或深色。
 - 輸入時與選字時的整句預覽：永遠／有可疑字時／關閉，預設為有可疑字時。
 - 恢復原廠設定：「恢復設定」將所有設定改回預設值，保留自訂詞、排除詞與選字紀錄；「一併刪除資料」另刪除這些資料（`phrases.txt`、`exclude-phrases.txt`、`personal.txt`）並清除引擎伺服器記憶體中的選字紀錄。兩者皆保留下載的選字模型。
-- 「關於」：版本取自 `ProjectKey.dll`，並查詢 GitHub 最新發行版有無新版。有新版時按「更新到」，即下載發行版的 zip、核對 GitHub 列出的 SHA-256，再執行其中的 `install.ps1 -Update`，經一次系統管理員確認後安裝並重新開啟設定；已開啟的 App 須重新開啟才會改用新版的文字服務。「選字模型」顯示模型日期，有新模型時可直接下載，存放於 `%LOCALAPPDATA%\Project Key`，核對 SHA-256 後無須重新安裝即生效。
+- 「關於」：版本取自 `ProjectKey.dll`，並查詢 GitHub 最新發行版有無新版。有新版時按「更新到」，即下載發行版的 zip、核對 GitHub 列出的 SHA-256，再執行其中的 `install.ps1 -Update`，經一次系統管理員確認後安裝並重新開啟設定；已開啟的 App 須重新開啟才會改用新版的文字服務。「選字模型」顯示模型日期，有新模型時可直接下載，存放於 `%LOCALAPPDATA%\Project Key`，核對 SHA-256 後無須重新安裝即生效。以 `-Llama`（或環境變數 `PROJECTKEY_LLAMA`）指向 llama.cpp 原始碼建置時，另有「進階模型」：下載 `advanced-YYYY-MM-DD` release 的 `advanced.gguf`（刪去詞表的 Gemma 4 E2B，約 1.3 GB）至 `%LOCALAPPDATA%\Project Key\advanced`，由引擎伺服器在打字停頓 0.3 秒後重選整句（在 CPU 上執行，文字服務於停頓後詢問結果，不等待）；有新版時可下載更新，「移除」先通知伺服器釋放檔案再刪除。
 
 變更立即寫入 `HKCU\Software\ProjectKey`（DWORD，名稱與 macOS 的 NSUserDefaults 鍵相同），於下一次組字時生效。設計文件記載的是 `ApplicationData.LocalSettings`，但該 API 僅限封裝（MSIX）的 App 使用。
 

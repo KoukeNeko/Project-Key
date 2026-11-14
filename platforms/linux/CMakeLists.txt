@@ -48,6 +48,23 @@ add_library(engine STATIC "${CORE}/Composer.cpp" "${CORE}/Bigram.cpp" "${CORE}/C
 target_include_directories(engine PUBLIC "${CORE}" "${MCBOPOMOFO}/Source/Engine")
 find_package(Threads REQUIRED)  # SentenceModel's matrix products
 target_link_libraries(engine PUBLIC McBopomofoLMLib MandarinLib gramambular2_lib Threads::Threads)
+# The advanced model the settings windows download (core/engine/AdvancedModel.h) runs on llama.cpp
+# (MIT), built in from a checkout when one is given; without it the addon never asks for one.
+set(PROJECTKEY_LLAMA "" CACHE PATH "llama.cpp checkout, for the advanced model (optional)")
+if(PROJECTKEY_LLAMA)
+  set(BUILD_SHARED_LIBS OFF)
+  # One static CPU backend for x86-64-v3 (AVX2 and FMA, since 2013 and 2015), not the build machine's own.
+  foreach(option GGML_NATIVE GGML_OPENMP LLAMA_BUILD_TESTS LLAMA_BUILD_EXAMPLES LLAMA_BUILD_TOOLS LLAMA_BUILD_SERVER LLAMA_CURL)
+    set(${option} OFF CACHE BOOL "" FORCE)
+  endforeach()
+  foreach(option GGML_AVX GGML_AVX2 GGML_FMA GGML_F16C GGML_BMI2)
+    set(${option} ON CACHE BOOL "" FORCE)
+  endforeach()
+  add_subdirectory("${PROJECTKEY_LLAMA}" llama EXCLUDE_FROM_ALL)
+  target_sources(engine PRIVATE "${CORE}/AdvancedModel.cpp")
+  target_compile_definitions(engine PUBLIC PROJECTKEY_ADVANCED_MODEL)
+  target_link_libraries(engine PUBLIC llama)
+endif()
 
 foreach(test ComposerTest ControllerTest)
   add_executable(${test} "${CORE}/Tests/${test}.cpp")
@@ -97,6 +114,13 @@ if(ADWAITA_FOUND)
   install(TARGETS projectkey-settings-gtk DESTINATION "${CMAKE_INSTALL_BINDIR}")
 else()
   message(STATUS "libadwaita, libsoup 3 or json-glib missing: building only the Qt settings window")
+endif()
+# The 進階模型 row, only where the addon can use what it downloads.
+if(PROJECTKEY_LLAMA)
+  target_compile_definitions(projectkey-settings-qt PRIVATE PROJECTKEY_ADVANCED_MODEL)
+  if(ADWAITA_FOUND)
+    target_compile_definitions(projectkey-settings-gtk PRIVATE PROJECTKEY_ADVANCED_MODEL)
+  endif()
 endif()
 
 install(TARGETS projectkey DESTINATION "${FCITX_INSTALL_LIBDIR}/fcitx5")

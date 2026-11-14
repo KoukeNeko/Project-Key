@@ -352,6 +352,30 @@ int main(int argc, char** argv) {
   assert(reranked.text() == "候選字");
   reranked.setSentenceModel(nullptr);
   assert(reranked.text() == "候選字");
+  // The advanced model's ranking: the request lists the best paths, the walk's own first. Scores
+  // for 候選自 put it in until a key changes the composition; a request from before a key, or
+  // with no sentence scored, changes nothing.
+  Composer advanced(lm, contextModel);
+  assert(!advanced.rankingRequest());
+  advanced.setAdvancedRanking(true);
+  type(advanced, "c.4vm03");
+  std::optional<Composer::RankingRequest> stale = advanced.rankingRequest();
+  assert(stale);
+  type(advanced, "y4");
+  std::optional<Composer::RankingRequest> request = advanced.rankingRequest();
+  assert(request && request->sentences.size() > 1 && request->sentences[0] == "候選字");
+  auto scoresFavoring = [](const Composer::RankingRequest& r, const std::string& text) {
+    std::vector<double> scores;
+    for (const std::string& sentence : r.sentences) scores.push_back(sentence == text ? 0.0 : -100.0);
+    return scores;
+  };
+  assert(!advanced.applyRanking(*stale, scoresFavoring(*stale, "候選")));
+  assert(!advanced.applyRanking(*request, std::vector<double>(request->sentences.size(), NAN)));
+  assert(advanced.applyRanking(*request, scoresFavoring(*request, "候選自")));
+  assert(advanced.text() == "候選自");
+  assert(!advanced.rankingRequest());  // ranked already
+  assert(advanced.backspace() && advanced.text() == "候選");
+  assert(advanced.rankingRequest());
   std::remove(sentencePath.c_str());
   std::remove(contextPath.c_str());
 

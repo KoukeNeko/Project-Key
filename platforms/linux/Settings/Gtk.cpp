@@ -206,7 +206,13 @@ void CheckForUpdate(GtkLabel* label) {
   g_object_unref(message);
 }
 
-// A models download in progress, one file after another.
+// The 進階模型 row's label, whose downloads go to DownloadedAdvanced() (Rows.h); the 選字模型 row's
+// go to DownloadedModels().
+bool IsAdvanced(GtkLabel* label) { return g_object_get_data(G_OBJECT(label), "advanced") != nullptr; }
+std::filesystem::path FolderOf(GtkLabel* label) { return IsAdvanced(label) ? DownloadedAdvanced() : DownloadedModels(); }
+std::string InstalledText(GtkLabel* label) { return IsAdvanced(label) ? InstalledAdvancedText() : InstalledModelsText(); }
+
+// A models or advanced model download in progress, one file after another.
 struct ModelsDownload {
   GtkLabel* label;
   SoupSession* session;
@@ -221,8 +227,12 @@ struct ModelsDownload {
 };
 
 void EndModelsDownload(ModelsDownload* download, bool done) {
-  if (!done) AbandonModels(download->models.date);
-  gtk_label_set_text(download->label, done ? InstalledModelsText().c_str() : "無法下載");
+  if (!done) AbandonModels(download->models.date, FolderOf(download->label));
+  gtk_label_set_text(download->label, done ? InstalledText(download->label).c_str() : "無法下載");
+  // The 進階模型 row's 移除, now that there is one to remove.
+  if (auto* remove = static_cast<GtkWidget*>(g_object_get_data(G_OBJECT(download->label), "remove")); remove && done) {
+    gtk_widget_set_visible(remove, true);
+  }
   if (download->in) g_object_unref(download->in);
   if (download->hash) g_checksum_free(download->hash);
   g_object_unref(download->label);
@@ -263,7 +273,7 @@ void ReadModelsFile(ModelsDownload* download) {
 
 void NextModelsFile(ModelsDownload* download) {
   if (download->index == download->models.files.size()) {
-    bool done = FinishModels(download->models.date);
+    bool done = FinishModels(download->models.date, FolderOf(download->label));
     if (done) {
       g_dbus_connection_call(Bus(), kFcitx, "/projectkey", "org.projectkey.Engine", "ReloadModels", nullptr, nullptr,
                              G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
@@ -296,7 +306,7 @@ void NextModelsFile(ModelsDownload* download) {
 void StartModelsDownload(GtkLabel* label) {
   auto* newer = static_cast<NewerModels*>(g_object_get_data(G_OBJECT(label), "models"));
   if (!newer) return;  // already started
-  std::filesystem::path partial = StartModels(newer->date);
+  std::filesystem::path partial = StartModels(newer->date, FolderOf(label));
   if (partial.empty()) return gtk_label_set_text(label, "無法下載");
   gtk_label_set_text(label, "下載中 0%");  // no link left to follow again
   g_object_ref(label);
@@ -304,7 +314,7 @@ void StartModelsDownload(GtkLabel* label) {
   g_object_set_data(G_OBJECT(label), "models", nullptr);
 }
 
-// Offers the newest models release (Rows.h) as a link that downloads it.
+// Offers the newest models release, or the advanced model's on its row (Rows.h), as a link that downloads it.
 void CheckForModels(GtkLabel* label) {
   SoupSession* session = soup_session_new_with_options("user-agent", "ProjectKey", nullptr);
   SoupMessage* message = soup_message_new("GET", kAllReleases);
@@ -342,7 +352,7 @@ void CheckForModels(GtkLabel* label) {
           g_object_unref(parser);
         }
         // Without a newer release, or without GitHub (the 更新 row says so), the row stays as it is.
-        NewerModels newer = FindNewerModels(releases);
+        NewerModels newer = IsAdvanced(label) ? FindNewerAdvanced(releases) : FindNewerModels(releases);
         if (!newer.date.empty()) {
           char* markup = g_markup_printf_escaped("<a href=\"#\">下載 %s（%lld MB）</a>", newer.date.c_str(), newer.bytes() / 1000000);
           gtk_label_set_markup(label, markup);
@@ -369,6 +379,52 @@ GtkWidget* InfoRow(const char* title, GtkWidget** value, const char* text) {
   adw_action_row_add_suffix(ADW_ACTION_ROW(row), *value);
   return row;
 }
+
+#ifdef PROJECTKEY_ADVANCED_MODEL
+// 進階模型: its version, or a link that downloads a newer one (CheckForModels), and 移除 once one is
+// downloaded. The addon loads it, and drops it after a removal, when told to reload its models.
+GtkWidget* AdvancedRow() {
+  GtkWidget* value = nullptr;
+  GtkWidget* row = InfoRow("進階模型", &value, InstalledAdvancedText().c_str());
+  gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
+  g_object_set_data(G_OBJECT(value), "advanced", GINT_TO_POINTER(1));
+  GtkWidget* remove = gtk_button_new_with_label("移除");
+  gtk_widget_set_valign(remove, GTK_ALIGN_CENTER);
+  gtk_widget_set_visible(remove, !AdvancedVersion().empty());
+  g_object_set_data(G_OBJECT(value), "remove", remove);
+  g_object_set_data(G_OBJECT(remove), "label", value);
+  g_signal_connect(remove, "clicked", G_CALLBACK((+[](GtkButton* button, gpointer) {
+                     AdwDialog* dialog = adw_alert_dialog_new(kRemoveAdvancedTitle, kRemoveAdvancedBody);
+                     adw_alert_dialog_add_responses(ADW_ALERT_DIALOG(dialog), "cancel", "取消", "remove", "移除", nullptr);
+                     adw_alert_dialog_set_response_appearance(ADW_ALERT_DIALOG(dialog), "remove", ADW_RESPONSE_DESTRUCTIVE);
+                     adw_alert_dialog_set_default_response(ADW_ALERT_DIALOG(dialog), "cancel");
+                     adw_alert_dialog_set_close_response(ADW_ALERT_DIALOG(dialog), "cancel");
+                     g_signal_connect(dialog, "response", G_CALLBACK((+[](AdwAlertDialog*, const char* response, gpointer data) {
+                                        if (std::strcmp(response, "remove") != 0) return;
+                                        auto* button = GTK_WIDGET(data);
+                                        auto* label = GTK_LABEL(g_object_get_data(G_OBJECT(button), "label"));
+                                        bool removed = RemoveAdvanced();
+                                        g_dbus_connection_call(Bus(), kFcitx, "/projectkey", "org.projectkey.Engine", "ReloadModels", nullptr,
+                                                               nullptr, G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
+                                        if (!removed) {
+                                          AdwDialog* failed = adw_alert_dialog_new("無法移除", "進階模型的檔案仍在資料夾中。");
+                                          adw_alert_dialog_add_response(ADW_ALERT_DIALOG(failed), "close", "好");
+                                          adw_dialog_present(failed, button);
+                                          return;
+                                        }
+                                        gtk_widget_set_visible(button, false);
+                                        gtk_label_set_text(label, InstalledAdvancedText().c_str());
+                                        CheckForModels(label);  // offers it again
+                                      })),
+                                      button);
+                     adw_dialog_present(dialog, GTK_WIDGET(button));
+                   })),
+                   nullptr);
+  adw_action_row_add_suffix(ADW_ACTION_ROW(row), remove);
+  CheckForModels(GTK_LABEL(value));
+  return row;
+}
+#endif
 
 void Activate(GtkApplication* app);
 
@@ -526,6 +582,9 @@ void Activate(GtkApplication* app) {
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("選字模型", &value, InstalledModelsText().c_str()));
   gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
   CheckForModels(GTK_LABEL(value));
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), AdvancedRow());
+#endif
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("授權", &value, "MIT"));
   GtkWidget* engine = adw_action_row_new();
   adw_preferences_row_set_title(ADW_PREFERENCES_ROW(engine), "引擎與詞庫");

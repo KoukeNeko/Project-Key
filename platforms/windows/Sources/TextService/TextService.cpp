@@ -185,6 +185,9 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
 }
 
 STDMETHODIMP TextService::Deactivate() {
+  if (pauseTimer_) KillTimer(nullptr, pauseTimer_);
+  pauseTimer_ = 0;
+  if (pausedService_ == this) pausedService_ = nullptr;
   if (composition_) request(compositionContext_, {Protocol::Request::kDeactivate});
   candidates_.hide();
   hint_.hide();
@@ -406,6 +409,7 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
     std::erase_if(reply->operations, [](const Protocol::Operation& o) { return o.op == Protocol::Op::kShowPanel && !o.panel.keyHint.empty(); });
   }
   *eaten = reply->handled;
+  if (reply->handled) waitForPause();
   if (reply->handled && testing) {
     // TSF calls OnKeyDown next; the document is changed there.
     pending_ = std::move(reply);
@@ -443,6 +447,38 @@ void TextService::toggleMode() {
     updateLangBar();
   }
   SafeRelease(context);
+}
+
+// MARK: The advanced model
+
+namespace {
+constexpr UINT kPauseMs = 300;  // how long the typing pauses before the model chooses
+constexpr UINT kPollMs = 100;   // how often the server is asked for its choice meanwhile
+}  // namespace
+
+thread_local TextService* TextService::pausedService_ = nullptr;
+
+void TextService::waitForPause() {
+  ranking_ = false;  // the server drops a choice made for the composition before this key
+  startPauseTimer(kPauseMs);
+}
+
+void TextService::startPauseTimer(UINT milliseconds) {
+  if (pauseTimer_) KillTimer(nullptr, pauseTimer_);
+  pausedService_ = this;
+  pauseTimer_ = SetTimer(nullptr, 0, milliseconds, &TextService::OnPauseTimer);
+}
+
+void CALLBACK TextService::OnPauseTimer(HWND, UINT, UINT_PTR, DWORD) {
+  TextService* self = pausedService_;
+  if (!self) return;
+  KillTimer(nullptr, self->pauseTimer_);
+  self->pauseTimer_ = 0;
+  if (!self->compositionContext_) return;
+  std::optional<Protocol::Reply> reply =
+      self->request(self->compositionContext_, {self->ranking_ ? Protocol::Request::kRanked : Protocol::Request::kPause});
+  self->ranking_ = reply && reply->handled;
+  if (self->ranking_) self->startPauseTimer(kPollMs);
 }
 
 // MARK: Applying replies

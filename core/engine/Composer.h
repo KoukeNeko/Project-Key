@@ -144,6 +144,24 @@ class Composer {
   // 2000 held-out Wikipedia sentences instead of 1353 (20 paths do no better, 5 slightly worse).
   static constexpr double kSentenceWeight = 0.5;
   static constexpr size_t kSentencePaths = 10;
+  // The advanced model (AdvancedModel.h) is too slow for every key, so it chooses among the same
+  // best paths once the typing pauses: the platform takes a request, has the model score its
+  // sentences on any thread, and gives the scores to applyRanking on the thread that types keys.
+  // Its choice holds until a key changes the composition. Off, there is no request.
+  void setAdvancedRanking(bool on) { advancedRanking_ = on; }
+  struct RankingRequest {
+    std::vector<std::string> sentences;  // the best paths' text, best walk score first
+    std::vector<double> walkScores;
+    uint64_t version;  // of the composition, to see that no key has changed it since
+  };
+  // None when there is nothing to choose among, or the model has chosen already.
+  std::optional<RankingRequest> rankingRequest() const;
+  // Puts in the sentence with the best walk score + kAdvancedWeight * log10 P (NaN for one that
+  // could not be scored), and says whether it changed anything: not when the composition has
+  // changed since the request.
+  bool applyRanking(const RankingRequest& request, const std::vector<double>& log10Probabilities);
+  // As the distillation's teacher has it (tools/lm-trainer): the walk plus Gemma's log10 P.
+  static constexpr double kAdvancedWeight = 1.0;
 
   const std::vector<Segment>& segments() const { return segments_; }
   // The open syllable's symbols while they are not in the text as a word.
@@ -204,6 +222,13 @@ class Composer {
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel_;
   std::shared_ptr<const SentenceModel> sentences_;
   SentenceModel::Cache sentenceCache_;  // states for the sentences of the keys before
+  bool advancedRanking_ = false;
+  // The last walk's best paths as text with their walk scores, the composition's version (each
+  // walk after a change counts one), and the advanced model's choice for that version, if any.
+  std::vector<std::pair<std::string, double>> rankable_;
+  uint64_t version_ = 0;
+  std::string ranked_;
+  bool rewalking_ = false;  // walk() for applyRanking: the same composition
   bool abbreviated_;
   bool omitTones_;
   bool fuzzy_;

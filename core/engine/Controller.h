@@ -117,6 +117,9 @@ struct Environment {
   std::shared_ptr<const Bigram> bigram;
   std::shared_ptr<const CharModel> chars;
   std::shared_ptr<const SentenceModel> sentences;  // reranks whole sentences (Composer::setSentenceModel)
+  // The platform has the advanced model (AdvancedModel.h) loaded and asks it when the typing
+  // pauses (Controller::rankingRequest); controllers make a new composer when it changes.
+  bool advancedRanking = false;
   unsigned models = 0;  // counts UseNewestModels loads; controllers make a new composer when it changes
   std::shared_ptr<McBopomofo::UserOverrideModel> userModel;  // replaced by value to clear it
   // What the user typed, learned while choices are remembered (Setting::kRememberChoices) and
@@ -208,6 +211,13 @@ class Controller {
   void showMode() { client_.showIndicator(ModeLabel(env_)); }
   // The app ended the composition itself: forget it without committing.
   void reset();
+
+  // For the advanced model (Composer::rankingRequest): when the typing pauses, the platform takes
+  // a request, has the model score it on any thread and gives the scores to applyRanking on the
+  // thread that types keys. They are dropped when a key changed the composition since, or the
+  // user is choosing a candidate.
+  std::optional<Composer::RankingRequest> rankingRequest() const;
+  void applyRanking(const Composer::RankingRequest& request, const std::vector<double>& log10Probabilities);
 
   bool isComposing() const { return !composer_->isEmpty(); }
   // A syllable is still being typed: Space gives it tone 1.
@@ -337,6 +347,7 @@ class Controller {
   bool abbreviated_ = false, omitTones_ = false, fuzzy_ = false, rememberChoices_ = false;  // the settings composer_ was made with
   int keyboardLayout_ = 0;
   unsigned models_ = 0;                                // and Environment::models
+  bool advancedRanking_ = false;                       // and Environment::advancedRanking
   uint64_t userPhrasesVersion_ = 0;                    // and Environment::userPhrasesVersion
   // What English mode let through since the last other key, so Tab
   // can turn Zhuyin typed in the wrong mode back into a composition.
