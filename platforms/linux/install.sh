@@ -38,9 +38,20 @@ sudo -v
 
 # ---- 1. The program ----
 
-# The latest release's description from GitHub's API, asked for once.
+# The latest release's description from GitHub's API, asked for once. The API allows 60 requests
+# an hour from an address without a token; past that (403), the same fields come from github.com:
+# the tag from where releases/latest leads, and the files' URLs from the release's list of them.
 latest_release() {
-  [ -s "$work/release.json" ] || curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" >"$work/release.json"
+  if [ ! -s "$work/release.json" ] && ! curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" >"$work/release.json" 2>/dev/null; then
+    latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest") || latest=
+    tag=${latest##*/tag/}
+    case "$latest" in */tag/*) ;; *) tag= ;; esac
+    {
+      printf '"tag_name": "%s"\n' "$tag"
+      [ -z "$tag" ] || curl -fsSL "https://github.com/$REPO/releases/expanded_assets/$tag" |
+        grep -o 'href="/[^"]*/releases/download/[^"]*"' | sed 's|^href="|"https://github.com|'
+    } >"$work/release.json"
+  fi
   cat "$work/release.json"
 }
 
