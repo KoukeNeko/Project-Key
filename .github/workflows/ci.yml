@@ -14,12 +14,8 @@ jobs:
     runs-on: macos-26  # NSGlassEffectView needs the macOS 26 SDK
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      # llama.cpp for the advanced model (core/engine/AdvancedModel.h), at the release it was checked with.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: ggml-org/llama.cpp
-          ref: b12283
-          path: llama.cpp
+      # llama.cpp for the advanced model (core/engine/AdvancedModel.h), at LLAMA_RELEASE.
+      - run: tools/fetch-llama.sh llama.cpp
       - run: platforms/macos/build.sh
         env:
           PROJECTKEY_LLAMA: ${{ github.workspace }}/llama.cpp
@@ -40,12 +36,9 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 10.0.x
-      # llama.cpp for the advanced model (core/engine/AdvancedModel.h), at the release it was checked with.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: ggml-org/llama.cpp
-          ref: b12283
-          path: llama.cpp
+      # llama.cpp for the advanced model (core/engine/AdvancedModel.h), at LLAMA_RELEASE.
+      - run: tools/fetch-llama.sh llama.cpp
+        shell: bash
       - run: platforms/windows/build.ps1
         shell: pwsh
         env:
@@ -57,12 +50,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev
-      # llama.cpp for the advanced model (core/engine/AdvancedModel.h), at the release it was checked with.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: ggml-org/llama.cpp
-          ref: b12283
-          path: llama.cpp
+      # llama.cpp for the advanced model (core/engine/AdvancedModel.h), at LLAMA_RELEASE.
+      - run: tools/fetch-llama.sh llama.cpp
       - run: platforms/linux/build.sh
         env:
           PROJECTKEY_LLAMA: ${{ github.workspace }}/llama.cpp

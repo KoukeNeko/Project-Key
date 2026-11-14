@@ -51,7 +51,7 @@ SOFTWARE.
 
 ### 進階模型與 llama.cpp
 
-設定視窗可另外下載進階模型（`advanced-YYYY-MM-DD` release 的 `advanced.gguf`）：[Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B)（Google DeepMind，Apache License 2.0）刪去中文用不到的詞表、量化為 4 位元的 GGUF，release 附 Apache License 2.0 條文。打字停頓時，引擎用它從同一批整句候選中重選。以 `PROJECTKEY_LLAMA`（Windows 亦可用 `build.ps1 -Llama`）指向 [llama.cpp](https://github.com/ggml-org/llama.cpp)（MIT）原始碼建置時，各平台把它連結進去以執行這個模型。
+設定視窗可另外下載進階模型（`advanced-YYYY-MM-DD` release 的 `advanced.gguf`）：[Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B)（Google DeepMind，Apache License 2.0）刪去中文用不到的詞表、量化為 4 位元的 GGUF，release 附 Apache License 2.0 條文。打字停頓時，引擎用它從同一批整句候選中重選。[llama.cpp](https://github.com/ggml-org/llama.cpp)（MIT）執行這個模型：發行版與 Linux 套件以 [LLAMA_RELEASE](LLAMA_RELEASE) 指定的版本建置並連結進去；自行建置時以 `PROJECTKEY_LLAMA`（Windows 亦可用 `build.ps1 -Llama`）指向其原始碼。
 
 ### 表情符號
 

@@ -4,7 +4,7 @@ Release:        1%{?dist}
 Summary:        Zhuyin input method for Fcitx5
 License:        MIT AND Unicode-3.0
 URL:            https://github.com/KoukeNeko/Project-Key
-# Made by package-rpm.sh, which also puts McBopomofo and the models in it.
+# Made by package-rpm.sh, which also puts McBopomofo, llama.cpp and the models in it.
 Source0:        pk.tar.gz
 
 BuildRequires:  cmake, ninja-build, gcc-c++, python3, git, curl, pkgconf-pkg-config
@@ -38,7 +38,8 @@ The McBopomofo dictionary and the trained sentence models.
 
 %build
 cmake -S platforms/linux -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-  -DMCBOPOMOFO=$PWD/platforms/linux/build/mcbopomofo -DREQUIRE_MODELS=ON
+  -DMCBOPOMOFO=$PWD/platforms/linux/build/mcbopomofo -DREQUIRE_MODELS=ON \
+  -DPROJECTKEY_LLAMA=$PWD/platforms/linux/build/llama.cpp
 cmake --build build
 
 %check

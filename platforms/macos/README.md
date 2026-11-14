@@ -71,7 +71,7 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 - 開關：選完跳到下一個可疑處、簡拼、近似音（預設關閉）、聯想詞（預設關閉）、數字鍵盤選字（預設關閉）、記住選過的字、⇪ 切換中英（預設關閉）、單按 ⇧ 切換中英、⇧ Space 切換全形（預設開啟），以及 ⇥ 的英文轉注音與注音轉英文（預設開啟）。
 - 記住選過的字：可清除紀錄。開啟時亦自送出的文字學習常用說法，次數存於 `~/Library/Application Support/ProjectKey/personal.txt`；每學習十萬個字串即將所有次數減半，久未使用的說法逐漸淡出；清除紀錄時一併清空。
 - 恢復原廠設定：「恢復設定」將所有設定改回預設值，保留自訂詞、排除詞與選字紀錄；「一併刪除資料」另刪除這些資料（`phrases.txt`、`exclude-phrases.txt`、`personal.txt`）並清除記憶體中的選字紀錄。兩者皆保留下載的選字模型。
-- 「關於」：版本、有無新版（查詢 GitHub 最新發行版；按「更新到」即下載發行版的 zip、核對 SHA-256、取代 `~/Library/Input Methods/ProjectKey.app` 並重新開啟輸入法，與 Homebrew cask 的安裝方式相同）、選字模型的日期（有新模型時可直接下載，核對 SHA-256 後無須重新安裝即生效），以及授權與引擎、詞庫的來源。以 `PROJECTKEY_LLAMA` 指向 llama.cpp 原始碼建置時（`PROJECTKEY_LLAMA=… platforms/macos/build.sh`），另有「進階模型」：下載 `advanced-YYYY-MM-DD` release 的 `advanced.gguf`（刪去詞表的 Gemma 4 E2B，約 1.3 GB）至 `~/Library/Application Support/ProjectKey/advanced`，打字停頓 0.3 秒後由它重選整句（在 CPU 上執行）；有新版時可下載更新，「移除」刪除檔案並通知輸入法卸載。
+- 「關於」：版本、有無新版（查詢 GitHub 最新發行版；按「更新到」即下載發行版的 zip、核對 SHA-256、取代 `~/Library/Input Methods/ProjectKey.app` 並重新開啟輸入法，與 Homebrew cask 的安裝方式相同）、選字模型的日期（有新模型時可直接下載，核對 SHA-256 後無須重新安裝即生效），以及授權與引擎、詞庫的來源。發行版（以 [LLAMA_RELEASE](../../LLAMA_RELEASE) 指定版本的 llama.cpp 建置），或自行以 `PROJECTKEY_LLAMA` 指向 llama.cpp 原始碼建置時（`PROJECTKEY_LLAMA=… platforms/macos/build.sh`），另有「進階模型」：下載 `advanced-YYYY-MM-DD` release 的 `advanced.gguf`（刪去詞表的 Gemma 4 E2B，約 1.3 GB）至 `~/Library/Application Support/ProjectKey/advanced`，打字停頓 0.3 秒後由它重選整句（在 CPU 上執行）；有新版時可下載更新，「移除」刪除檔案並通知輸入法卸載。
 
 設定於下一次組字時生效。
 

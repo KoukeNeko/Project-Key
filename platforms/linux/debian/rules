@@ -8,8 +8,10 @@ DATA_VERSION := $(shell echo $$(tr - . < tools/bigram-trainer/.cache/models-vers
 %:
 	dh $@ --buildsystem=cmake+ninja --sourcedirectory=platforms/linux
 
+# PROJECTKEY_LLAMA, a llama.cpp checkout, builds in the advanced model (CMakeLists.txt).
 override_dh_auto_configure:
-	dh_auto_configure -- -DMCBOPOMOFO=$(CURDIR)/platforms/linux/build/mcbopomofo -DREQUIRE_MODELS=ON
+	dh_auto_configure -- -DMCBOPOMOFO=$(CURDIR)/platforms/linux/build/mcbopomofo -DREQUIRE_MODELS=ON \
+	  $(if $(PROJECTKEY_LLAMA),-DPROJECTKEY_LLAMA=$(PROJECTKEY_LLAMA))
 
 override_dh_auto_test:
 	for t in ComposerTest ControllerTest; do obj-*/$$t platforms/linux/build/mcbopomofo/Source/Data/data.txt || exit 1; done

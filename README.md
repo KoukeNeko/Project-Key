@@ -101,6 +101,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 - **自訂詞**：選字時按 `+`，將反白的候選加入 `phrases.txt`；近似音的字不可加入。組字時以 Shift+←、Shift+→ 選取兩個以上已有聲調的音節，按 Enter 即將其加入為詞。
 - **排除詞**：選字時按兩次 Delete（無 Delete 鍵的鍵盤可按 Shift+Backspace），將反白的候選寫入 `exclude-phrases.txt`，此後不再列出。
 - **還原**：以 `+` 加入或排除後，立即按 Backspace 即撤銷該次變更。
+- **進階模型**（選用；macOS、Windows、Linux）：於設定的「關於」下載進階模型（刪去詞表的 Gemma 4 E2B，約 1.3 GB）後，打字停頓 0.3 秒時由它重選整句，於本機的 CPU 執行；不下載時選字與先前相同。
 - **記住選過的字**：相同上下文下優先選取曾選過的字，並自送出的文字學習常用說法；學習結果隨輸入量增加逐步淡化。資料僅存於本機，詳見各平台 README。
 
 ## 常用按鍵

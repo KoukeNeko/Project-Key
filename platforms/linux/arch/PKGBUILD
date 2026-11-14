@@ -1,8 +1,9 @@
 # Maintainer: KoukeNeko
 # Builds Project Key from this checkout (platforms/linux/arch/ inside the repository):
 #   cd platforms/linux/arch && makepkg -si
-# McBopomofo (pinned by MCBOPOMOFO_COMMIT) and the trained models (fetch-models.sh, checked
-# against models.sha256) are downloaded while building, so the build needs network access.
+# McBopomofo (pinned by MCBOPOMOFO_COMMIT), llama.cpp (LLAMA_RELEASE) and the trained models
+# (fetch-models.sh, checked against models.sha256) are downloaded while building, so the build
+# needs network access.
 _root=$(cd "$startdir/../../.." && pwd)
 pkgname=fcitx5-projectkey
 pkgver=$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' "$_root/platforms/linux/CMakeLists.txt")
@@ -22,11 +23,13 @@ prepare() {
   pk/tools/bigram-trainer/fetch-models.sh
   mcb=pk/platforms/linux/build/mcbopomofo
   pk/tools/fetch-mcbopomofo.sh "$mcb"
+  pk/tools/fetch-llama.sh pk/platforms/linux/build/llama.cpp  # the advanced model's
 }
 
 build() {
   cmake -S pk/platforms/linux -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-    -DMCBOPOMOFO="$srcdir/pk/platforms/linux/build/mcbopomofo" -DREQUIRE_MODELS=ON
+    -DMCBOPOMOFO="$srcdir/pk/platforms/linux/build/mcbopomofo" -DREQUIRE_MODELS=ON \
+    -DPROJECTKEY_LLAMA="$srcdir/pk/platforms/linux/build/llama.cpp"
   cmake --build build
 }
 

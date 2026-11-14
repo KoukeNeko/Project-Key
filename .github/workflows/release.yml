@@ -40,7 +40,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # The trained dictionary and context models (tools/bigram-trainer/MODELS-NOTICE.txt).
       - run: tools/bigram-trainer/fetch-models.sh
+      # llama.cpp for the advanced model (core/engine/AdvancedModel.h), at LLAMA_RELEASE.
+      - run: tools/fetch-llama.sh llama.cpp
       - run: platforms/macos/build.sh --require-models
+        env:
+          PROJECTKEY_LLAMA: ${{ github.workspace }}/llama.cpp
       - run: ditto -c -k --keepParent platforms/macos/build/ProjectKey.app "ProjectKey-${{ needs.version.outputs.version }}-macos.zip"
       - run: platforms/macos/package.sh && mv platforms/macos/build/ProjectKey-*-macos.pkg .
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -61,8 +65,12 @@ jobs:
           dotnet-version: 10.0.x
       - run: tools/bigram-trainer/fetch-models.sh
         shell: bash
+      - run: tools/fetch-llama.sh llama.cpp
+        shell: bash
       - run: platforms/windows/build.ps1 -RequireModels
         shell: pwsh
+        env:
+          PROJECTKEY_LLAMA: ${{ github.workspace }}\llama.cpp
       # The Scoop package runs install.ps1 -Source from the unpacked files.
       - shell: pwsh
         run: |

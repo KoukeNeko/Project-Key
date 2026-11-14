@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds fcitx5-projectkey-<version>-1.<dist>.<arch>.rpm into platforms/linux/dist/ from this checkout.
 # Needs rpm-build and the BuildRequires in rpm/fcitx5-projectkey.spec (Fedora); downloads
-# McBopomofo and the trained models while building.
+# McBopomofo, llama.cpp and the trained models while building.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
@@ -14,6 +14,7 @@ cd "$work/pk"
 tools/bigram-trainer/fetch-models.sh
 mcb=platforms/linux/build/mcbopomofo
 tools/fetch-mcbopomofo.sh "$mcb"
+tools/fetch-llama.sh platforms/linux/build/llama.cpp  # the advanced model's, which the spec builds in
 cd "$work"
 mkdir -p rpmbuild/SOURCES
 tar czf rpmbuild/SOURCES/pk.tar.gz pk
