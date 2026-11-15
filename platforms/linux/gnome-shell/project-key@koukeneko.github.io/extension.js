@@ -107,7 +107,9 @@ export default class ProjectKeyExtension extends Extension {
         const content = St.ImageContent.new_with_preferred_size(width / scale, height / scale);
         let bytes;
         try {
-            bytes = new GLib.Bytes(GLib.file_get_contents(pixels)[1]);
+            // GLib.Bytes straight from the file, not a JS array copied into one: each frame is
+            // megabytes, and on the JS heap every one of them pushes gjs toward a garbage collection.
+            [bytes] = Gio.File.new_for_path(pixels).load_bytes(null);
         } catch {
             return;  // gone already: a newer frame is on its way
         }
