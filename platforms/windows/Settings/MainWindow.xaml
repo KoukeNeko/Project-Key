@@ -12,129 +12,137 @@
     <Grid x:Name="TitleBar" Height="48">
       <TextBlock Margin="16,0,0,0" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Text="Project Key 設定" />
     </Grid>
-    <StackPanel Padding="24,0,24,24" Spacing="4">
-      <TextBlock Margin="0,0,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="選字" />
-      <tk:SettingsCard Header="選字位置">
-        <ComboBox x:Name="CandidatePosition" MinWidth="160">
-          <x:String>游標後（Windows）</x:String>
-          <x:String>游標前（macOS）</x:String>
-        </ComboBox>
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="每列欄數">
-        <ComboBox x:Name="GridColumns" MinWidth="160">
-          <x:String>6</x:String>
-          <x:String>7</x:String>
-          <x:String>8</x:String>
-          <x:String>9</x:String>
-        </ComboBox>
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="選完跳到下一個可疑處">
-        <ToggleSwitch x:Name="NextDoubtful" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="省略聲調" Description="開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ">
-        <ToggleSwitch x:Name="OmitTones" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="簡拼" Description="開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音">
-        <ToggleSwitch x:Name="Abbreviated" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="近似音" Description="開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後">
-        <ToggleSwitch x:Name="FuzzySounds" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="聯想詞" Description="開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」，按 Shift+數字鍵選取">
-        <ToggleSwitch x:Name="AssociatedPhrases" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="數字鍵盤選字" Description="開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音">
-        <ToggleSwitch x:Name="KeypadPicks" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="記住選過的字">
-        <ToggleSwitch x:Name="RememberChoices" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="選字紀錄">
-        <Button x:Name="ClearChoices" Click="OnClearChoices" Content="清除" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="自訂詞" Description="每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ">
-        <Button x:Name="EditPhrases" Click="OnEditPhrases" Content="編輯…" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="排除詞" Description="不再出現的詞，格式同自訂詞；選字時按 Delete 也會加入">
-        <Button x:Name="EditExcluded" Click="OnEditExcluded" Content="編輯…" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="資料夾" Description="自訂詞、排除詞與學到的字串，複製檔案即可備份">
-        <Button x:Name="ShowFolder" Click="OnShowFolder" Content="顯示" />
-      </tk:SettingsCard>
+    <!-- The sections as pages, switched between as on the other platforms. -->
+    <SelectorBar x:Name="Pages" Margin="16,0,16,8" SelectionChanged="OnPage">
+      <SelectorBarItem IsSelected="True" Text="選字" />
+      <SelectorBarItem Text="外觀" />
+      <SelectorBarItem Text="按鍵" />
+      <SelectorBarItem Text="關於" />
+    </SelectorBar>
+    <Grid Padding="24,0,24,24">
+      <StackPanel x:Name="ChoosePage" Spacing="4">
+        <tk:SettingsCard Header="選字位置">
+          <ComboBox x:Name="CandidatePosition" MinWidth="160">
+            <x:String>游標後（Windows）</x:String>
+            <x:String>游標前（macOS）</x:String>
+          </ComboBox>
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="每列欄數">
+          <ComboBox x:Name="GridColumns" MinWidth="160">
+            <x:String>6</x:String>
+            <x:String>7</x:String>
+            <x:String>8</x:String>
+            <x:String>9</x:String>
+          </ComboBox>
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="選完跳到下一個可疑處">
+          <ToggleSwitch x:Name="NextDoubtful" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="省略聲調" Description="開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ">
+          <ToggleSwitch x:Name="OmitTones" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="簡拼" Description="開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音">
+          <ToggleSwitch x:Name="Abbreviated" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="近似音" Description="開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後">
+          <ToggleSwitch x:Name="FuzzySounds" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="聯想詞" Description="開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」，按 Shift+數字鍵選取">
+          <ToggleSwitch x:Name="AssociatedPhrases" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="數字鍵盤選字" Description="開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音">
+          <ToggleSwitch x:Name="KeypadPicks" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="記住選過的字">
+          <ToggleSwitch x:Name="RememberChoices" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="選字紀錄">
+          <Button x:Name="ClearChoices" Click="OnClearChoices" Content="清除" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="自訂詞" Description="每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ">
+          <Button x:Name="EditPhrases" Click="OnEditPhrases" Content="編輯…" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="排除詞" Description="不再出現的詞，格式同自訂詞；選字時按 Delete 也會加入">
+          <Button x:Name="EditExcluded" Click="OnEditExcluded" Content="編輯…" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="資料夾" Description="自訂詞、排除詞與學到的字串，複製檔案即可備份">
+          <Button x:Name="ShowFolder" Click="OnShowFolder" Content="顯示" />
+        </tk:SettingsCard>
+      </StackPanel>
+      <StackPanel x:Name="AppearancePage" Spacing="4" Visibility="Collapsed">
+        <tk:SettingsCard Header="候選視窗">
+          <ComboBox x:Name="Appearance" MinWidth="160">
+            <x:String>自動</x:String>
+            <x:String>淺色</x:String>
+            <x:String>深色</x:String>
+            <x:String>Acrylic</x:String>
+            <x:String>Mica</x:String>
+            <x:String>Mica Alt</x:String>
+          </ComboBox>
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="輸入時的整句預覽">
+          <ComboBox x:Name="ProofPreview" MinWidth="160">
+            <x:String>永遠</x:String>
+            <x:String>有可疑字時</x:String>
+            <x:String>關閉</x:String>
+          </ComboBox>
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="選字時的整句預覽">
+          <ComboBox x:Name="ChoosingProof" MinWidth="160">
+            <x:String>永遠</x:String>
+            <x:String>有可疑字時</x:String>
+            <x:String>關閉</x:String>
+          </ComboBox>
+        </tk:SettingsCard>
+      </StackPanel>
+      <StackPanel x:Name="KeysPage" Spacing="4" Visibility="Collapsed">
+        <tk:SettingsCard Header="鍵盤排列">
+          <ComboBox x:Name="KeyboardLayout" MinWidth="160">
+            <x:String>大千</x:String>
+            <x:String>倚天</x:String>
+            <x:String>許氏</x:String>
+            <x:String>倚天 26 鍵</x:String>
+            <x:String>IBM</x:String>
+          </ComboBox>
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="Caps Lock 切換中英" Description="開啟時大寫用 Shift；關閉時 Caps Lock 鎖定大寫">
+          <ToggleSwitch x:Name="CapsLockToggle" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="單按 Shift 切換中英">
+          <ToggleSwitch x:Name="ShiftToggle" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="Shift+Space 切換全形">
+          <ToggleSwitch x:Name="FullWidthToggle" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="Tab 英文轉注音">
+          <ToggleSwitch x:Name="EnglishToZhuyin" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="Tab 注音轉英文">
+          <ToggleSwitch x:Name="ZhuyinToEnglish" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+      </StackPanel>
+      <StackPanel x:Name="AboutPage" Spacing="4" Visibility="Collapsed">
+        <tk:SettingsCard Header="版本">
+          <TextBlock x:Name="Version" IsTextSelectionEnabled="True" />
+        </tk:SettingsCard>
+        <tk:SettingsCard x:Name="Update" Header="更新">
+          <TextBlock Text="檢查中…" />
+        </tk:SettingsCard>
+        <tk:SettingsCard x:Name="Models" Header="選字模型" />
+        <!-- Shown when build.ps1 built the server with llama.cpp (ADVANCED_MODEL). -->
+        <tk:SettingsCard x:Name="Advanced" Header="進階模型" Visibility="Collapsed" />
+        <tk:SettingsCard Header="授權">
+          <TextBlock Text="MIT" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="引擎與詞庫">
+          <HyperlinkButton Content="McBopomofo" NavigateUri="https://github.com/openvanilla/McBopomofo" />
+        </tk:SettingsCard>
 
-      <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="外觀" />
-      <tk:SettingsCard Header="候選視窗">
-        <ComboBox x:Name="Appearance" MinWidth="160">
-          <x:String>自動</x:String>
-          <x:String>淺色</x:String>
-          <x:String>深色</x:String>
-          <x:String>Acrylic</x:String>
-          <x:String>Mica</x:String>
-          <x:String>Mica Alt</x:String>
-        </ComboBox>
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="輸入時的整句預覽">
-        <ComboBox x:Name="ProofPreview" MinWidth="160">
-          <x:String>永遠</x:String>
-          <x:String>有可疑字時</x:String>
-          <x:String>關閉</x:String>
-        </ComboBox>
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="選字時的整句預覽">
-        <ComboBox x:Name="ChoosingProof" MinWidth="160">
-          <x:String>永遠</x:String>
-          <x:String>有可疑字時</x:String>
-          <x:String>關閉</x:String>
-        </ComboBox>
-      </tk:SettingsCard>
-
-      <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="按鍵" />
-      <tk:SettingsCard Header="鍵盤排列">
-        <ComboBox x:Name="KeyboardLayout" MinWidth="160">
-          <x:String>大千</x:String>
-          <x:String>倚天</x:String>
-          <x:String>許氏</x:String>
-          <x:String>倚天 26 鍵</x:String>
-          <x:String>IBM</x:String>
-        </ComboBox>
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="Caps Lock 切換中英" Description="開啟時大寫用 Shift；關閉時 Caps Lock 鎖定大寫">
-        <ToggleSwitch x:Name="CapsLockToggle" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="單按 Shift 切換中英">
-        <ToggleSwitch x:Name="ShiftToggle" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="Shift+Space 切換全形">
-        <ToggleSwitch x:Name="FullWidthToggle" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="Tab 英文轉注音">
-        <ToggleSwitch x:Name="EnglishToZhuyin" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="Tab 注音轉英文">
-        <ToggleSwitch x:Name="ZhuyinToEnglish" OffContent="關閉" OnContent="開啟" />
-      </tk:SettingsCard>
-
-      <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="重設" />
-      <tk:SettingsCard Header="恢復原廠設定">
-        <Button x:Name="Restore" Click="OnRestore" Content="恢復…" />
-      </tk:SettingsCard>
-
-      <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="關於" />
-      <tk:SettingsCard Header="版本">
-        <TextBlock x:Name="Version" IsTextSelectionEnabled="True" />
-      </tk:SettingsCard>
-      <tk:SettingsCard x:Name="Update" Header="更新">
-        <TextBlock Text="檢查中…" />
-      </tk:SettingsCard>
-      <tk:SettingsCard x:Name="Models" Header="選字模型" />
-      <!-- Shown when build.ps1 built the server with llama.cpp (ADVANCED_MODEL). -->
-      <tk:SettingsCard x:Name="Advanced" Header="進階模型" Visibility="Collapsed" />
-      <tk:SettingsCard Header="授權">
-        <TextBlock Text="MIT" />
-      </tk:SettingsCard>
-      <tk:SettingsCard Header="引擎與詞庫">
-        <HyperlinkButton Content="McBopomofo" NavigateUri="https://github.com/openvanilla/McBopomofo" />
-      </tk:SettingsCard>
-    </StackPanel>
+        <TextBlock Margin="0,26,0,2" Style="{StaticResource BodyStrongTextBlockStyle}" Text="重設" />
+        <tk:SettingsCard Header="恢復原廠設定">
+          <Button x:Name="Restore" Click="OnRestore" Content="恢復…" />
+        </tk:SettingsCard>
+      </StackPanel>
+    </Grid>
   </StackPanel>
 </Window>

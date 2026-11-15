@@ -67,6 +67,13 @@ public sealed partial class MainWindow : Window {
     WindowFit.Follow(this, Root, Width);
   }
 
+  // Shows the page the selector bar's item names, in the order of the items.
+  private void OnPage(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) {
+    int selected = sender.Items.IndexOf(sender.SelectedItem);
+    StackPanel[] pages = [ChoosePage, AppearancePage, KeysPage, AboutPage];
+    for (int i = 0; i < pages.Length; i++) pages[i].Visibility = i == selected ? Visibility.Visible : Visibility.Collapsed;
+  }
+
   private static int Read(string name, int fallback) =>
       Registry.CurrentUser.OpenSubKey(Key)?.GetValue(name) is int value ? value : fallback;
 

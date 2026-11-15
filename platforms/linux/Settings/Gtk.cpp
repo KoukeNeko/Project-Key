@@ -470,15 +470,12 @@ void Activate(GtkApplication* app) {
     return it == config.end() ? std::string() : it->second;
   };
 
-  GtkWidget* page = adw_preferences_page_new();
-  if (!available) {
-    GtkWidget* missing = adw_preferences_group_new();
-    adw_preferences_group_set_description(ADW_PREFERENCES_GROUP(missing), "讀不到設定：Fcitx5 沒有在執行，或沒有安裝 Project Key。");
-    adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(missing));
-  }
+  // A page for each section, as the other platforms' windows switch between them; the page's name
+  // in the switcher is the section's title.
+  GtkWidget* stack = adw_view_stack_new();
+  GtkWidget* reset = nullptr;  // 重設, which goes under 關於
   for (const Group& section : Groups()) {
     GtkWidget* group = adw_preferences_group_new();
-    adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group), section.title);
     gtk_widget_set_sensitive(group, available);
     for (const Row& row : section.rows) {
       GtkWidget* widget = nullptr;
@@ -569,11 +566,17 @@ void Activate(GtkApplication* app) {
       if (row.detail) adw_action_row_set_subtitle(ADW_ACTION_ROW(widget), row.detail);
       adw_preferences_group_add(ADW_PREFERENCES_GROUP(group), widget);
     }
+    if (section.rows.front().kind == Row::kRestore) {
+      adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group), section.title);
+      reset = group;
+      continue;
+    }
+    GtkWidget* page = adw_preferences_page_new();
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(group));
+    adw_view_stack_add_titled(ADW_VIEW_STACK(stack), page, section.title, section.title);
   }
 
   GtkWidget* about = adw_preferences_group_new();
-  adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(about), "關於");
   GtkWidget* value = nullptr;
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("版本", &value, PROJECTKEY_VERSION));
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("更新", &value, "檢查中…"));
@@ -592,15 +595,52 @@ void Activate(GtkApplication* app) {
   gtk_widget_set_valign(link, GTK_ALIGN_CENTER);
   adw_action_row_add_suffix(ADW_ACTION_ROW(engine), link);
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), engine);
+  GtkWidget* page = adw_preferences_page_new();
   adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(about));
+  if (reset) adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), ADW_PREFERENCES_GROUP(reset));
+  adw_view_stack_add_titled(ADW_VIEW_STACK(stack), page, "關於", "關於");
 
   GtkWidget* view = adw_toolbar_view_new();
-  adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(view), adw_header_bar_new());
-  adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(view), page);
+  GtkWidget* bar = adw_header_bar_new();
+  adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(view), bar);
+  if (!available) {
+    GtkWidget* missing = adw_banner_new("讀不到設定：Fcitx5 沒有在執行，或沒有安裝 Project Key。");
+    adw_banner_set_revealed(ADW_BANNER(missing), true);
+    adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(view), missing);
+  }
+#if ADW_CHECK_VERSION(1, 7, 0)
+  GtkWidget* switcher = adw_inline_view_switcher_new();
+  adw_inline_view_switcher_set_stack(ADW_INLINE_VIEW_SWITCHER(switcher), ADW_VIEW_STACK(stack));
+  gtk_widget_set_halign(switcher, GTK_ALIGN_CENTER);
+  for (auto margin : {gtk_widget_set_margin_top, gtk_widget_set_margin_bottom}) margin(switcher, 6);
+  GtkWidget* content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_box_append(GTK_BOX(content), switcher);
+  gtk_widget_set_vexpand(stack, true);
+  gtk_box_append(GTK_BOX(content), stack);
+  adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(view), content);
+#else
+  // AdwInlineViewSwitcher came in libadwaita 1.7, after Ubuntu 24.04's 1.5: the header bar's switcher there.
+  GtkWidget* switcher = adw_view_switcher_new();
+  adw_view_switcher_set_policy(ADW_VIEW_SWITCHER(switcher), ADW_VIEW_SWITCHER_POLICY_WIDE);
+  adw_view_switcher_set_stack(ADW_VIEW_SWITCHER(switcher), ADW_VIEW_STACK(stack));
+  adw_header_bar_set_title_widget(ADW_HEADER_BAR(bar), switcher);
+  adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(view), stack);
+#endif
   GtkWidget* window = adw_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "Project Key 設定");
   gtk_window_set_icon_name(GTK_WINDOW(window), "fcitx-projectkey");
-  gtk_window_set_default_size(GTK_WINDOW(window), 520, 640);  // fits a 768-pixel screen; the page scrolls
+  // As tall as the tallest page and the bars, but no taller than the screen (a 768-pixel laptop
+  // with GNOME's top bar): then the page scrolls.
+  int height = 0;
+  gtk_widget_measure(view, GTK_ORIENTATION_VERTICAL, 520, nullptr, &height, nullptr, nullptr);
+  GListModel* monitors = gdk_display_get_monitors(gdk_display_get_default());
+  if (auto* monitor = static_cast<GdkMonitor*>(g_list_model_get_item(monitors, 0))) {
+    GdkRectangle area;
+    gdk_monitor_get_geometry(monitor, &area);
+    height = std::min(height, area.height - 100);
+    g_object_unref(monitor);
+  }
+  gtk_window_set_default_size(GTK_WINDOW(window), 520, height);
   adw_application_window_set_content(ADW_APPLICATION_WINDOW(window), view);
   gtk_window_present(GTK_WINDOW(window));
 }

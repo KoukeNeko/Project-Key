@@ -34,6 +34,7 @@
 #include <QSettings>
 #include <QMessageBox>
 #include <QSignalBlocker>
+#include <QTabWidget>
 #include <QStandardPaths>
 #include <QProcess>
 #include <QTimer>
@@ -455,41 +456,38 @@ int main(int argc, char** argv) {
   const QVariantMap config = ReadConfig(controller);
   const bool available = !config.isEmpty();
 
-  // As tall as the rows, like the other platforms' windows, but no taller than
-  // the screen (a 768-pixel laptop with GNOME's larger font): then it scrolls.
-  QScrollArea window;
+  // A tab for each section, as the other platforms' windows switch between them.
+  QWidget window;
   window.setWindowTitle("Project Key 設定");
-  window.setFrameShape(QFrame::NoFrame);
-  window.setWidgetResizable(true);
-  window.setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  auto* content = new QWidget;
-  auto* layout = new QVBoxLayout(content);
+  auto* layout = new QVBoxLayout(&window);
   if (!available) {
     auto* message = new QLabel("讀不到設定：Fcitx5 沒有在執行，或沒有安裝 Project Key。");
     message->setWordWrap(true);
     layout->addWidget(message);
   }
-
-  // One form, as KDE's own settings pages lay theirs out: labels ending in 「：」 to the
-  // left of their controls, check boxes in the controls' column, a bold heading over
-  // each section and a line between sections.
-  auto* form = new QFormLayout;
-  form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
-  form->setFormAlignment(Qt::AlignHCenter | Qt::AlignTop);
-  layout->addLayout(form);
-  layout->addStretch();
-  auto group = [form](const QString& title) {
-    if (form->rowCount() > 0) {
-      auto* line = new QFrame;
-      line->setFrameShape(QFrame::HLine);
-      line->setFrameShadow(QFrame::Sunken);
-      form->addRow(line);
-    }
-    auto* heading = new QLabel(title);
-    QFont font = heading->font();
-    font.setBold(true);
-    heading->setFont(font);
-    form->addRow(heading);
+  auto* tabs = new QTabWidget;
+  layout->addWidget(tabs);
+  std::vector<QScrollArea*> pages;
+  auto page = [tabs, &pages](const QString& title) {
+    auto* scroll = new QScrollArea;
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* content = new QWidget;
+    auto* column = new QVBoxLayout(content);
+    column->setAlignment(Qt::AlignTop);
+    scroll->setWidget(content);
+    tabs->addTab(scroll, title);
+    pages.push_back(scroll);
+    return column;
+  };
+  // A form on each tab, as KDE's own settings pages lay theirs out: labels ending in 「：」 to
+  // the left of their controls and check boxes in the controls' column.
+  auto newForm = [](QVBoxLayout* column) {
+    auto* form = new QFormLayout;
+    form->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
+    form->setFormAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    column->addLayout(form);
     return form;
   };
   auto label = [](const char* title) { return QString(title) + "："; };
@@ -501,8 +499,26 @@ int main(int argc, char** argv) {
   // Each setting's control shows the config again, after 恢復原廠設定.
   std::vector<std::function<void(const QVariantMap&)>> showConfig;
   QPushButton* clearChoices = nullptr;
+  QFormLayout* form = nullptr;
+  QFormLayout* about = nullptr;
   for (const Group& section : Groups()) {
-    group(section.title);
+    if (section.rows.front().kind == Row::kRestore) {
+      // 重設 goes under 關於, below a line and a bold heading.
+      QVBoxLayout* column = page("關於");
+      about = newForm(column);
+      auto* line = new QFrame;
+      line->setFrameShape(QFrame::HLine);
+      line->setFrameShadow(QFrame::Sunken);
+      column->addWidget(line);
+      form = newForm(column);
+      auto* heading = new QLabel(section.title);
+      QFont font = heading->font();
+      font.setBold(true);
+      heading->setFont(font);
+      form->addRow(heading);
+    } else {
+      form = newForm(page(section.title));
+    }
     for (const Row& row : section.rows) {
       QString key = row.key;
       if (row.kind == Row::kToggle) {
@@ -601,7 +617,6 @@ int main(int argc, char** argv) {
       if (row.detail) form->addRow(QString(), note(row.detail));
     }
   }
-  QFormLayout* about = group("關於");
   auto* version = new QLabel(PROJECTKEY_VERSION);
   version->setTextInteractionFlags(Qt::TextSelectableByMouse);
   about->addRow("版本：", version);
@@ -652,12 +667,16 @@ int main(int argc, char** argv) {
     offerAdvanced();
   });
 #endif
-  window.setWidget(content);
-  content->setMinimumWidth(460);
-  QSize size = content->sizeHint();
-  int room = window.screen()->availableGeometry().height() - 60;  // the title bar
-  if (size.height() > room) size = QSize(size.width() + window.verticalScrollBar()->sizeHint().width(), room);
-  window.resize(size);
+  // Each tab as tall as its rows, but no taller than the screen leaves (a 768-pixel laptop with
+  // GNOME's larger font): then it scrolls.
+  int room = window.screen()->availableGeometry().height() - 160;  // the title bar, the tabs and the margins
+  for (QScrollArea* scroll : pages) {
+    scroll->widget()->setMinimumWidth(460);
+    QSize size = scroll->widget()->sizeHint();
+    int bar = size.height() > room ? scroll->verticalScrollBar()->sizeHint().width() : 0;
+    scroll->setMinimumSize(size.width() + bar, std::min(size.height(), room));
+  }
+  window.adjustSize();
   window.show();
   return QApplication::exec();
 }

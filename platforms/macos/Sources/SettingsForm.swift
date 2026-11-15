@@ -1,4 +1,4 @@
-// The settings content: one grouped form, as in System Settings.
+// The settings content: a grouped form for each page, as in System Settings.
 import AppKit
 import CryptoKit
 import SwiftUI
@@ -32,175 +32,194 @@ struct SettingsForm: View {
   @ObservedObject var advanced: ModelsUpdater
   let clearChoices: () -> Void
 
+  // The sections as pages, switched between above them as on the other platforms.
+  private enum Page: String, CaseIterable { case choose = "選字", appearance = "外觀", keys = "按鍵", about = "關於" }
+  @State private var page = Page.choose
+
   var body: some View {
-    Form {
-      Section("選字") {
-        Picker("選字位置", selection: $candidatePosition) {
-          Text("游標後（Windows）").tag(0)
-          Text("游標前（macOS）").tag(1)
-        }
-        Picker("每列欄數", selection: $gridColumns) {
-          ForEach(0..<4) { Text("\($0 + 6)").tag($0) }
-        }
-        Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
-        Toggle(isOn: $omitTones) {
-          Text("省略聲調")
-          Text("開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ")
-        }
-        Toggle(isOn: $abbreviated) {
-          Text("簡拼")
-          Text("開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音")
-        }
-        Toggle(isOn: $fuzzySounds) {
-          Text("近似音")
-          Text("開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後")
-        }
-        Toggle(isOn: $associatedPhrases) {
-          Text("聯想詞")
-          Text("開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」，按 ⇧ 與數字鍵選取")
-        }
-        Toggle(isOn: $keypadPicks) {
-          Text("數字鍵盤選字")
-          Text("開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音")
-        }
-        Toggle("記住選過的字", isOn: $rememberChoices)
-        LabeledContent("選字紀錄") {
-          Button("清除") {
-            clearChoices()
-            cleared = true
-          }
-          .disabled(cleared)
-        }
-        LabeledContent {
-          Button("編輯…") { PKEditUserPhrases() }
-        } label: {
-          Text("自訂詞")
-          Text("每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ")
-        }
-        LabeledContent {
-          Button("編輯…") { PKEditExcludedPhrases() }
-        } label: {
-          Text("排除詞")
-          Text("不再出現的詞，格式同自訂詞；選字時按 ⌦ 也會加入")
-        }
-        LabeledContent {
-          Button("顯示") { PKShowDataFolder() }
-        } label: {
-          Text("資料夾")
-          Text("自訂詞、排除詞與學到的字串，複製檔案即可備份")
-        }
+    VStack(spacing: 0) {
+      Picker("", selection: $page) {
+        ForEach(Page.allCases, id: \.self) { Text($0.rawValue) }
       }
-      Section("外觀") {
-        Picker("候選視窗", selection: $appearance) {
-          Text("自動").tag(3)
-          Text("淺色").tag(2)
-          Text("深色").tag(0)
-          if PKGlassAvailable() { Text("Liquid Glass").tag(1) }
-        }
-        Picker("輸入時的整句預覽", selection: $proofPreview) {
-          Text("永遠").tag(0)
-          Text("有可疑字時").tag(1)
-          Text("關閉").tag(2)
-        }
-        Picker("選字時的整句預覽", selection: $choosingProof) {
-          Text("永遠").tag(0)
-          Text("有可疑字時").tag(1)
-          Text("關閉").tag(2)
-        }
-      }
-      Section("按鍵") {
-        Picker("鍵盤排列", selection: $keyboardLayout) {
-          Text("大千").tag(0)
-          Text("倚天").tag(1)
-          Text("許氏").tag(2)
-          Text("倚天 26 鍵").tag(3)
-          Text("IBM").tag(4)
-        }
-        Toggle(isOn: $capsLockToggle) {
-          Text("⇪ 切換中英")
-          Text("開啟時大寫用 ⇧；關閉時 ⇪ 鎖定大寫")
-        }
-        Toggle("單按 ⇧ 切換中英", isOn: $shiftToggle)
-        Toggle("⇧ Space 切換全形", isOn: $fullWidthToggle)
-        Toggle("⇥ 英文轉注音", isOn: $englishToZhuyin)
-        Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
-      }
-      Section("重設") {
-        LabeledContent("恢復原廠設定") {
-          if removeFailed {
-            Text("無法刪除資料")
-          } else {
-            Button("恢復…") { restoring = true }
-          }
-        }
-        .alert("恢復原廠設定？", isPresented: $restoring) {
-          Button("恢復設定") { PKRestoreSettings() }
-          Button("一併刪除資料", role: .destructive) {
-            PKRestoreSettings()
-            removeFailed = !PKRemoveUserWords()
-            clearChoices()  // personal.txt, and the choices the input method holds in memory
-            cleared = true
-          }
-          Button("取消", role: .cancel) {}
-        } message: {
-          Text("設定將改回預設值。「一併刪除資料」另刪除自訂詞、排除詞與選字紀錄，無法復原；下載的選字模型保留。")
-        }
-      }
-      Section("關於") {
-        LabeledContent("版本", value: currentVersion)
-        LabeledContent("更新") {
-          switch update {
-          case .checking: Text("檢查中…")
-          case .current: Text("已是最新版本")
-          case .available(let version, let page): Link("下載 \(version)", destination: page)
-          case .installable(let version, let file):
-            Button("更新到 \(version)") {
-              update = .installing(0)
-              Task { update = await installUpdate(file, progress: { update = .installing($0) }) ? .current : .installFailed }
+      .pickerStyle(.segmented)
+      .labelsHidden()
+      .fixedSize()
+      .padding(.top, 12)
+      Form {
+        switch page {
+        case .choose:
+          Section {
+            Picker("選字位置", selection: $candidatePosition) {
+              Text("游標後（Windows）").tag(0)
+              Text("游標前（macOS）").tag(1)
             }
-          case .installing(let fraction): Text(fraction < 1 ? "下載中 \(Int(fraction * 100))%" : "安裝中…")
-          case .installFailed: Text("無法更新")
-          case .failed: Text("無法檢查")
+            Picker("每列欄數", selection: $gridColumns) {
+              ForEach(0..<4) { Text("\($0 + 6)").tag($0) }
+            }
+            Toggle("選完跳到下一個可疑處", isOn: $nextDoubtful)
+            Toggle(isOn: $omitTones) {
+              Text("省略聲調")
+              Text("開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ")
+            }
+            Toggle(isOn: $abbreviated) {
+              Text("簡拼")
+              Text("開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音")
+            }
+            Toggle(isOn: $fuzzySounds) {
+              Text("近似音")
+              Text("開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後")
+            }
+            Toggle(isOn: $associatedPhrases) {
+              Text("聯想詞")
+              Text("開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」，按 ⇧ 與數字鍵選取")
+            }
+            Toggle(isOn: $keypadPicks) {
+              Text("數字鍵盤選字")
+              Text("開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音")
+            }
+            Toggle("記住選過的字", isOn: $rememberChoices)
+            LabeledContent("選字紀錄") {
+              Button("清除") {
+                clearChoices()
+                cleared = true
+              }
+              .disabled(cleared)
+            }
+            LabeledContent {
+              Button("編輯…") { PKEditUserPhrases() }
+            } label: {
+              Text("自訂詞")
+              Text("每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ")
+            }
+            LabeledContent {
+              Button("編輯…") { PKEditExcludedPhrases() }
+            } label: {
+              Text("排除詞")
+              Text("不再出現的詞，格式同自訂詞；選字時按 ⌦ 也會加入")
+            }
+            LabeledContent {
+              Button("顯示") { PKShowDataFolder() }
+            } label: {
+              Text("資料夾")
+              Text("自訂詞、排除詞與學到的字串，複製檔案即可備份")
+            }
           }
-        }
-        LabeledContent("選字模型") {
-          switch models.state {
-          case .current: Text(models.installed)
-          case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { models.download(release) }
-          case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
-          case .failed: Text("無法下載")
+        case .appearance:
+          Section {
+            Picker("候選視窗", selection: $appearance) {
+              Text("自動").tag(3)
+              Text("淺色").tag(2)
+              Text("深色").tag(0)
+              if PKGlassAvailable() { Text("Liquid Glass").tag(1) }
+            }
+            Picker("輸入時的整句預覽", selection: $proofPreview) {
+              Text("永遠").tag(0)
+              Text("有可疑字時").tag(1)
+              Text("關閉").tag(2)
+            }
+            Picker("選字時的整句預覽", selection: $choosingProof) {
+              Text("永遠").tag(0)
+              Text("有可疑字時").tag(1)
+              Text("關閉").tag(2)
+            }
           }
-        }
-        if advanced.supported {
-          LabeledContent("進階模型") {
-            HStack {
-              switch advanced.state {
-              case .current: Text(advancedRemoveFailed ? "無法移除" : advanced.installed)
-              case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { advanced.download(release) }
+        case .keys:
+          Section {
+            Picker("鍵盤排列", selection: $keyboardLayout) {
+              Text("大千").tag(0)
+              Text("倚天").tag(1)
+              Text("許氏").tag(2)
+              Text("倚天 26 鍵").tag(3)
+              Text("IBM").tag(4)
+            }
+            Toggle(isOn: $capsLockToggle) {
+              Text("⇪ 切換中英")
+              Text("開啟時大寫用 ⇧；關閉時 ⇪ 鎖定大寫")
+            }
+            Toggle("單按 ⇧ 切換中英", isOn: $shiftToggle)
+            Toggle("⇧ Space 切換全形", isOn: $fullWidthToggle)
+            Toggle("⇥ 英文轉注音", isOn: $englishToZhuyin)
+            Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
+          }
+        case .about:
+          Section {
+            LabeledContent("版本", value: currentVersion)
+            LabeledContent("更新") {
+              switch update {
+              case .checking: Text("檢查中…")
+              case .current: Text("已是最新版本")
+              case .available(let version, let page): Link("下載 \(version)", destination: page)
+              case .installable(let version, let file):
+                Button("更新到 \(version)") {
+                  update = .installing(0)
+                  Task { update = await installUpdate(file, progress: { update = .installing($0) }) ? .current : .installFailed }
+                }
+              case .installing(let fraction): Text(fraction < 1 ? "下載中 \(Int(fraction * 100))%" : "安裝中…")
+              case .installFailed: Text("無法更新")
+              case .failed: Text("無法檢查")
+              }
+            }
+            LabeledContent("選字模型") {
+              switch models.state {
+              case .current: Text(models.installed)
+              case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { models.download(release) }
               case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
               case .failed: Text("無法下載")
               }
-              if advanced.removable { Button("移除") { removingAdvanced = true } }
+            }
+            if advanced.supported {
+              LabeledContent("進階模型") {
+                HStack {
+                  switch advanced.state {
+                  case .current: Text(advancedRemoveFailed ? "無法移除" : advanced.installed)
+                  case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { advanced.download(release) }
+                  case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
+                  case .failed: Text("無法下載")
+                  }
+                  if advanced.removable { Button("移除") { removingAdvanced = true } }
+                }
+              }
+              .alert("移除進階模型？", isPresented: $removingAdvanced) {
+                Button("移除", role: .destructive) { Task { advancedRemoveFailed = !(await advanced.remove()) } }
+                Button("取消", role: .cancel) {}
+              } message: {
+                Text("打字停頓時，不再用進階模型重選整句。")
+              }
+            }
+            LabeledContent("歡迎視窗") {
+              Button("開啟") { WelcomeWindow.show() }
+            }
+            LabeledContent("授權", value: "MIT")
+            LabeledContent("引擎與詞庫") {
+              Link("McBopomofo", destination: URL(string: "https://github.com/openvanilla/McBopomofo")!)
             }
           }
-          .alert("移除進階模型？", isPresented: $removingAdvanced) {
-            Button("移除", role: .destructive) { Task { advancedRemoveFailed = !(await advanced.remove()) } }
-            Button("取消", role: .cancel) {}
-          } message: {
-            Text("打字停頓時，不再用進階模型重選整句。")
+          Section("重設") {
+            LabeledContent("恢復原廠設定") {
+              if removeFailed {
+                Text("無法刪除資料")
+              } else {
+                Button("恢復…") { restoring = true }
+              }
+            }
+            .alert("恢復原廠設定？", isPresented: $restoring) {
+              Button("恢復設定") { PKRestoreSettings() }
+              Button("一併刪除資料", role: .destructive) {
+                PKRestoreSettings()
+                removeFailed = !PKRemoveUserWords()
+                clearChoices()  // personal.txt, and the choices the input method holds in memory
+                cleared = true
+              }
+              Button("取消", role: .cancel) {}
+            } message: {
+              Text("設定將改回預設值。「一併刪除資料」另刪除自訂詞、排除詞與選字紀錄，無法復原；下載的選字模型保留。")
+            }
           }
         }
-        LabeledContent("歡迎視窗") {
-          Button("開啟") { WelcomeWindow.show() }
-        }
-        LabeledContent("授權", value: "MIT")
-        LabeledContent("引擎與詞庫") {
-          Link("McBopomofo", destination: URL(string: "https://github.com/openvanilla/McBopomofo")!)
-        }
       }
+      .formStyle(.grouped)
+      .scrollDisabled(true)
     }
-    .formStyle(.grouped)
-    .scrollDisabled(true)
     .frame(width: 440)
     .fixedSize(horizontal: false, vertical: true)
     .task { update = await checkForUpdate() }
