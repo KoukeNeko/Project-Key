@@ -57,10 +57,10 @@ public sealed partial class MainWindow : Window {
     Bind(KeyboardLayout, "KeyboardLayout", 0);
     // The text service's version (ProjectKey.rc); build.ps1 puts this app in Settings\ beside it.
     Version.Text = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "..", "ProjectKey.dll")).ProductVersion ?? "";
-    CheckForReleases(ModelsReleases);
+    CheckForReleases(ModelsReleases(Models));
 #if ADVANCED_MODEL
     Advanced.Visibility = Visibility.Visible;
-    CheckForReleases(AdvancedReleases);
+    CheckForReleases(AdvancedReleases(Advanced));
 #endif
     CheckForUpdate();
 
@@ -128,21 +128,24 @@ public sealed partial class MainWindow : Window {
   private record ModelsFile(string Name, long Size, string Digest, string Url);
 
   // A card offering downloads from GitHub releases named <prefix>YYYY-MM-DD with all the required files:
-  // the models, or the advanced model. Around puts what the card shows beside the rest of it.
-  private sealed record Releases(CommunityToolkit.WinUI.Controls.SettingsCard Card, string Prefix, string[] Required, string Folder, Func<string> InUse,
+  // the models, or the advanced model, in this window or the welcome window. Around puts what the
+  // card shows beside the rest of it.
+  internal sealed record Releases(CommunityToolkit.WinUI.Controls.SettingsCard Card, string Prefix, string[] Required, string Folder, Func<string> InUse,
                                  Func<UIElement> Installed, Func<UIElement, UIElement> Around);
 
-  private Releases ModelsReleases => new(Models, "models-", ["data.txt", "bigram.bin", "chars.bin"], DownloadedModels,
-                                         () => ModelsVersion(ModelsInUse()), InstalledModelsText, shown => shown);
+  internal static Releases ModelsReleases(CommunityToolkit.WinUI.Controls.SettingsCard card) =>
+      new(card, "models-", ["data.txt", "bigram.bin", "chars.bin"], DownloadedModels, () => ModelsVersion(ModelsInUse()),
+          InstalledModelsText, shown => shown);
 
   // Its version or the newer one offered, and 移除 once one is downloaded.
-  private Releases AdvancedReleases => new(Advanced, "advanced-", ["advanced.gguf"], DownloadedAdvanced, AdvancedVersion,
-                                           () => new TextBlock { Text = AdvancedVersion() is "" ? "未安裝" : AdvancedVersion() }, WithRemove);
+  internal static Releases AdvancedReleases(CommunityToolkit.WinUI.Controls.SettingsCard card) =>
+      new(card, "advanced-", ["advanced.gguf"], DownloadedAdvanced, AdvancedVersion,
+          () => new TextBlock { Text = AdvancedVersion() is "" ? "未安裝" : AdvancedVersion() }, shown => WithRemove(card, shown));
 
-  private UIElement WithRemove(UIElement shown) {
+  private static UIElement WithRemove(CommunityToolkit.WinUI.Controls.SettingsCard card, UIElement shown) {
     if (AdvancedVersion() == "") return shown;
     var remove = new Button { Content = "移除" };
-    remove.Click += (_, _) => RemoveAdvanced();
+    remove.Click += (_, _) => RemoveAdvanced(card);
     var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
     row.Children.Add(shown);
     row.Children.Add(remove);
@@ -150,9 +153,9 @@ public sealed partial class MainWindow : Window {
   }
 
   // Removes every advanced model downloaded and has the server drop it, then offers the newest again.
-  private async void RemoveAdvanced() {
+  private static async void RemoveAdvanced(CommunityToolkit.WinUI.Controls.SettingsCard card) {
     var dialog = new ContentDialog {
-      XamlRoot = Content.XamlRoot,
+      XamlRoot = card.XamlRoot,
       Title = "移除進階模型？",
       Content = "打字停頓時，不再用進階模型重選整句。",
       PrimaryButtonText = "移除",
@@ -176,14 +179,15 @@ public sealed partial class MainWindow : Window {
         }
       }
     } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-      Advanced.Content = new TextBlock { Text = "無法移除" };
+      card.Content = new TextBlock { Text = "無法移除" };
       return;
     }
-    CheckForReleases(AdvancedReleases);
+    CheckForReleases(AdvancedReleases(card));
   }
 
-  // The newest such release, offered when newer than the one in use. GitHub gives each file's SHA-256.
-  private async void CheckForReleases(Releases releasesOf) {
+  // The newest such release, offered when newer than the one in use, or with download downloaded at
+  // once. GitHub gives each file's SHA-256.
+  internal static async void CheckForReleases(Releases releasesOf, bool download = false) {
     releasesOf.Card.Content = releasesOf.Around(releasesOf.Installed());
     try {
       using var client = new HttpClient();
@@ -209,6 +213,10 @@ public sealed partial class MainWindow : Window {
       }
       string date = newestTag.Length > 0 ? newestTag[releasesOf.Prefix.Length..] : "";
       if (string.CompareOrdinal(date, releasesOf.InUse()) <= 0) return;
+      if (download) {
+        DownloadRelease(releasesOf, date, newestFiles);
+        return;
+      }
       var button = new Button { Content = $"下載 {date}（{newestFiles.Sum(file => file.Size) / 1_000_000} MB）" };
       button.Click += (_, _) => DownloadRelease(releasesOf, date, newestFiles);
       releasesOf.Card.Content = releasesOf.Around(button);
@@ -218,7 +226,7 @@ public sealed partial class MainWindow : Window {
     }
   }
 
-  private async void DownloadRelease(Releases releasesOf, string date, List<ModelsFile> files) {
+  private static async void DownloadRelease(Releases releasesOf, string date, List<ModelsFile> files) {
     var status = new TextBlock { Text = "下載中 0%" };
     releasesOf.Card.Content = status;
     long total = files.Sum(file => file.Size);

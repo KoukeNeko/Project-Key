@@ -517,8 +517,12 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 
 @end
 
+id<PKModels> PKInputMethodModels(void) {
+  return [[PKEngineModels alloc] init];
+}
+
 void PKShowSettings(void) {
   [PKSettingsWindow showWithClearChoices:^{
     ProjectKey::ClearChoices(SharedEnvironment());
-  } models:[[PKEngineModels alloc] init]];
+  } models:PKInputMethodModels()];
 }

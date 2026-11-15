@@ -159,23 +159,11 @@ struct SettingsForm: View {
               case .failed: Text("無法檢查")
               }
             }
-            LabeledContent("選字模型") {
-              switch models.state {
-              case .current: Text(models.installed)
-              case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { models.download(release) }
-              case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
-              case .failed: Text("無法下載")
-              }
-            }
+            LabeledContent("選字模型") { ModelsState(updater: models) }
             if advanced.supported {
               LabeledContent("進階模型") {
                 HStack {
-                  switch advanced.state {
-                  case .current: Text(advancedRemoveFailed ? "無法移除" : advanced.installed)
-                  case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { advanced.download(release) }
-                  case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
-                  case .failed: Text("無法下載")
-                  }
+                  ModelsState(updater: advanced, current: advancedRemoveFailed ? "無法移除" : nil)
                   if advanced.removable { Button("移除") { removingAdvanced = true } }
                 }
               }
@@ -187,7 +175,7 @@ struct SettingsForm: View {
               }
             }
             LabeledContent("歡迎視窗") {
-              Button("開啟") { WelcomeWindow.show() }
+              Button("開啟") { WelcomeWindow.show(models: models, advanced: advanced) }
             }
             LabeledContent("授權", value: "MIT")
             LabeledContent("引擎與詞庫") {
@@ -313,10 +301,10 @@ private func run(_ program: String, _ arguments: [String]) async throws {
 }
 
 // Models (tools/bigram-trainer) newer than the ones in use, from the GitHub releases
-// fetch-models.sh publishes as models-YYYY-MM-DD, downloaded when the user asks; with advanced, the
-// advanced model (core/engine/AdvancedModel.h) from advanced-YYYY-MM-DD releases, which can also be
-// removed. GitHub gives each file's SHA-256. One of each for all settings forms, so a download
-// outlives the window.
+// fetch-models.sh publishes as models-YYYY-MM-DD, downloaded when the user asks or by the welcome
+// window; with advanced, the advanced model (core/engine/AdvancedModel.h) from advanced-YYYY-MM-DD
+// releases, which can also be removed. GitHub gives each file's SHA-256. One of each for all settings
+// and welcome windows, so a download outlives the window.
 @MainActor
 final class ModelsUpdater: ObservableObject {
   struct Release {
@@ -334,8 +322,14 @@ final class ModelsUpdater: ObservableObject {
     case current, available(Release), downloading(Double), failed
   }
 
-  static var shared: ModelsUpdater?
-  static var sharedAdvanced: ModelsUpdater?
+  private static var shared: (ModelsUpdater, ModelsUpdater)?
+
+  static func shared(for models: PKModels) -> (ModelsUpdater, ModelsUpdater) {
+    if let shared { return shared }
+    let made = (ModelsUpdater(models: models), ModelsUpdater(models: models, advanced: true))
+    shared = made
+    return made
+  }
   @Published private(set) var state = State.current
   private let models: PKModels
   private let advanced: Bool
@@ -443,6 +437,22 @@ final class ModelsUpdater: ObservableObject {
   }
 }
 
+// What a models row shows: the version in use (or current), a button that downloads a newer one,
+// or the download's progress.
+struct ModelsState: View {
+  @ObservedObject var updater: ModelsUpdater
+  var current: String? = nil
+
+  var body: some View {
+    switch updater.state {
+    case .current: Text(current ?? updater.installed)
+    case .available(let release): Button("下載 \(release.date)（\(release.megabytes) MB）") { updater.download(release) }
+    case .downloading(let fraction): Text("下載中 \(Int(fraction * 100))%")
+    case .failed: Text("無法下載")
+    }
+  }
+}
+
 // Downloads url into target, reporting the bytes received so far every quarter second.
 private func fetch(_ url: URL, to target: URL, received: @escaping @MainActor (Int64) -> Void) async throws -> URLResponse {
   final class Download: @unchecked Sendable {
@@ -485,10 +495,7 @@ private func sha256(of file: URL) throws -> String {
 @objc(PKSettingsForm)
 final class SettingsFormFactory: NSObject {
   @MainActor @objc static func makeView(clearChoices: @escaping () -> Void, models: PKModels) -> NSView {
-    let updater = ModelsUpdater.shared ?? ModelsUpdater(models: models)
-    ModelsUpdater.shared = updater
-    let advanced = ModelsUpdater.sharedAdvanced ?? ModelsUpdater(models: models, advanced: true)
-    ModelsUpdater.sharedAdvanced = advanced
+    let (updater, advanced) = ModelsUpdater.shared(for: models)
     return NSHostingView(rootView: SettingsForm(models: updater, advanced: advanced, clearChoices: clearChoices).defaultAppStorage(PKDefaults()))
   }
 }

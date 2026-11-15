@@ -360,6 +360,8 @@ void CheckForModels(GtkLabel* label) {
           g_object_set_data_full(G_OBJECT(label), "models", new NewerModels(std::move(newer)),
                                  +[](gpointer data) { delete static_cast<NewerModels*>(data); });
           g_signal_connect(label, "activate-link", G_CALLBACK(Later<StartModelsDownload>), nullptr);
+          // The welcome window's 選字模型 row downloads it without asking.
+          if (g_object_get_data(G_OBJECT(label), "automatic")) StartModelsDownload(label);
         }
         if (body) g_bytes_unref(body);
         g_object_unref(label);
@@ -821,6 +823,18 @@ void ActivateWelcome(GtkApplication* app) {
   gtk_widget_set_size_request(frame, -1, 76);
   gtk_box_append(GTK_BOX(tryBox), frame);
   gtk_box_append(GTK_BOX(content), tryBox);
+
+  // The newest 選字模型 is downloaded; 進階模型 only when the user asks, for its size.
+  GtkWidget* models = adw_preferences_group_new();
+  GtkWidget* value = nullptr;
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(models), InfoRow("選字模型", &value, InstalledModelsText().c_str()));
+  gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
+  g_object_set_data(G_OBJECT(value), "automatic", GINT_TO_POINTER(1));
+  CheckForModels(GTK_LABEL(value));
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(models), AdvancedRow());
+#endif
+  gtk_box_append(GTK_BOX(content), models);
 
   GtkWidget* footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   GtkWidget* settings = gtk_button_new_with_label("設定…");

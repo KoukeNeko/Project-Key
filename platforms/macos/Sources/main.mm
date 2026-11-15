@@ -142,7 +142,7 @@ int main(int argc, const char *argv[]) {
       NSBitmapImageRep *rep = [form bitmapImageRepForCachingDisplayInRect:form.bounds];
       [form cacheDisplayInRect:form.bounds toBitmapImageRep:rep];
       [[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:[dir stringByAppendingPathComponent:@"settings.png"] atomically:YES];
-      [PKWelcome previewInto:dir];
+      [PKWelcome previewInto:dir models:[[PKPreviewModels alloc] init]];
       return 0;
     }
     NSString *connection = bundle.infoDictionary[@"InputMethodConnectionName"];
@@ -154,7 +154,7 @@ int main(int argc, const char *argv[]) {
     [NSApplication sharedApplication];
     PKAppDelegate *delegate = [[PKAppDelegate alloc] init];  // NSApp holds its delegate weakly
     NSApp.delegate = delegate;
-    [PKWelcome showIfNeeded];
+    [PKWelcome showIfNeededWithModels:PKInputMethodModels()];
     [NSApp run];
   }
   return 0;

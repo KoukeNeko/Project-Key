@@ -56,6 +56,8 @@ FOUNDATION_EXPORT NSURL *PKSupportDirectory(void);
 // Opens the settings window, as the input menu's 設定… does (InputController.mm), or at the
 // settings app's launch (SettingsApp/main.mm).
 FOUNDATION_EXPORT void PKShowSettings(void);
+// The input method's models (InputController.mm), for its welcome window; the settings app has none.
+FOUNDATION_EXPORT id<PKModels> PKInputMethodModels(void);
 // Opens the user's words (Lexicon::loadUserPhrases) in their text editor, made first when missing;
 // as the input menu's 編輯自訂詞… does. Nothing without a place to keep them (outside the app bundle).
 FOUNDATION_EXPORT void PKEditUserPhrases(void);

@@ -220,12 +220,13 @@ struct ModelsDownload : QObject {
 };
 
 // Offers the newest models release, or with advanced the advanced model's (Rows.h), as a link that
-// downloads it; finished runs once it is downloaded.
-void CheckForModels(QNetworkAccessManager& network, QLabel* label, bool advanced = false, std::function<void()> finished = nullptr) {
+// downloads it, or with automatic downloads it at once; finished runs once it is downloaded.
+void CheckForModels(QNetworkAccessManager& network, QLabel* label, bool advanced = false, std::function<void()> finished = nullptr,
+                    bool automatic = false) {
   QNetworkRequest request{QUrl(kAllReleases)};
   request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");
   QNetworkReply* reply = network.get(request);
-  QObject::connect(reply, &QNetworkReply::finished, label, [&network, reply, label, advanced, finished] {
+  QObject::connect(reply, &QNetworkReply::finished, label, [&network, reply, label, advanced, finished, automatic] {
     reply->deleteLater();
     std::vector<ModelsRelease> releases;
     for (const QJsonValue& value : QJsonDocument::fromJson(reply->readAll()).array()) {
@@ -242,16 +243,55 @@ void CheckForModels(QNetworkAccessManager& network, QLabel* label, bool advanced
     }
     NewerModels newer = advanced ? FindNewerAdvanced(releases) : FindNewerModels(releases);
     if (newer.date.empty()) return;  // the 更新 row already says when GitHub cannot be reached
-    label->setText(QString("<a href=\"#\">下載 %1（%2 MB）</a>").arg(QString::fromStdString(newer.date)).arg(newer.bytes() / 1000000));
-    QObject::connect(label, &QLabel::linkActivated, label, [&network, label, newer, advanced, finished] {
-      QObject::disconnect(label, &QLabel::linkActivated, nullptr, nullptr);
+    auto start = [&network, label, newer, advanced, finished] {
       std::filesystem::path partial = StartModels(newer.date, advanced ? DownloadedAdvanced() : DownloadedModels());
       if (partial.empty()) return label->setText("無法下載");
       label->setText("下載中 0%");
       (new ModelsDownload(network, label, newer, partial, advanced, finished))->next();
+    };
+    if (automatic) return start();
+    label->setText(QString("<a href=\"#\">下載 %1（%2 MB）</a>").arg(QString::fromStdString(newer.date)).arg(newer.bytes() / 1000000));
+    QObject::connect(label, &QLabel::linkActivated, label, [label, start] {
+      QObject::disconnect(label, &QLabel::linkActivated, nullptr, nullptr);
+      start();
     });
   });
 }
+
+#ifdef PROJECTKEY_ADVANCED_MODEL
+// 進階模型: its version or a link that downloads a newer one, and 移除 once one is downloaded.
+QWidget* AdvancedRow(QNetworkAccessManager& network) {
+  auto* advanced = new QWidget;
+  auto* advancedLayout = new QHBoxLayout(advanced);
+  advancedLayout->setContentsMargins(0, 0, 0, 0);
+  auto* advancedText = new QLabel(QString::fromStdString(InstalledAdvancedText()));
+  auto* remove = new QPushButton("移除");
+  remove->setVisible(!AdvancedVersion().empty());
+  advancedLayout->addWidget(advancedText);
+  advancedLayout->addWidget(remove);
+  advancedLayout->addStretch();
+  auto offerAdvanced = [&network, advancedText, remove] {
+    QObject::disconnect(advancedText, &QLabel::linkActivated, nullptr, nullptr);  // an offer from before a removal
+    CheckForModels(network, advancedText, true, [remove] { remove->setVisible(true); });
+  };
+  offerAdvanced();
+  QObject::connect(remove, &QPushButton::clicked, [remove, advancedText, offerAdvanced] {
+    QMessageBox question(QMessageBox::Question, remove->window()->windowTitle(), kRemoveAdvancedTitle, QMessageBox::NoButton, remove->window());
+    question.setInformativeText(kRemoveAdvancedBody);
+    QPushButton* removeButton = question.addButton("移除", QMessageBox::DestructiveRole);
+    question.setDefaultButton(question.addButton("取消", QMessageBox::RejectRole));
+    question.exec();
+    if (question.clickedButton() != removeButton) return;
+    bool removed = RemoveAdvanced();
+    QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ReloadModels");
+    if (!removed) return advancedText->setText("無法移除");
+    remove->setVisible(false);
+    advancedText->setText(QString::fromStdString(InstalledAdvancedText()));
+    offerAdvanced();
+  });
+  return advanced;
+}
+#endif
 
 // Whether the desktop asks apps for dark colors (the freedesktop portal's
 // color-scheme: 1 is dark), which KDE and GNOME both set.
@@ -382,6 +422,19 @@ int Welcome(QApplication& app, QDBusInterface& controller) {
   grid->addWidget(text, 4, 1, 1, 3);
   layout->addWidget(steps);
 
+  // The newest 選字模型 is downloaded; 進階模型 only when the user asks, for its size.
+  QNetworkAccessManager network;
+  auto* modelsFrame = new QFrame;
+  modelsFrame->setFrameShape(QFrame::StyledPanel);
+  auto* modelsForm = new QFormLayout(modelsFrame);
+  auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
+  modelsForm->addRow("選字模型：", models);
+  CheckForModels(network, models, false, nullptr, true);
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  modelsForm->addRow("進階模型：", AdvancedRow(network));
+#endif
+  layout->addWidget(modelsFrame);
+
   auto* footer = new QHBoxLayout;
   auto* settings = new QPushButton("設定…");
   settings->setFlat(true);
@@ -499,6 +552,7 @@ int main(int argc, char** argv) {
   // Each setting's control shows the config again, after 恢復原廠設定.
   std::vector<std::function<void(const QVariantMap&)>> showConfig;
   QPushButton* clearChoices = nullptr;
+  QNetworkAccessManager network;
   QFormLayout* form = nullptr;
   QFormLayout* about = nullptr;
   for (const Group& section : Groups()) {
@@ -626,47 +680,15 @@ int main(int argc, char** argv) {
   auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
   about->addRow("選字模型：", models);
 #ifdef PROJECTKEY_ADVANCED_MODEL
-  // 進階模型: its version or a link that downloads a newer one, and 移除 once one is downloaded.
-  auto* advanced = new QWidget;
-  auto* advancedLayout = new QHBoxLayout(advanced);
-  advancedLayout->setContentsMargins(0, 0, 0, 0);
-  auto* advancedText = new QLabel(QString::fromStdString(InstalledAdvancedText()));
-  auto* remove = new QPushButton("移除");
-  remove->setVisible(!AdvancedVersion().empty());
-  advancedLayout->addWidget(advancedText);
-  advancedLayout->addWidget(remove);
-  advancedLayout->addStretch();
-  about->addRow("進階模型：", advanced);
+  about->addRow("進階模型：", AdvancedRow(network));
 #endif
   about->addRow("授權：", new QLabel("MIT"));
   auto* engine = new QLabel(QString("<a href=\"%1\">McBopomofo</a>").arg(kEngineUrl));
   engine->setOpenExternalLinks(true);
   about->addRow("引擎與詞庫：", engine);
 
-  QNetworkAccessManager network;
   CheckForUpdate(network, update);
   CheckForModels(network, models);
-#ifdef PROJECTKEY_ADVANCED_MODEL
-  auto offerAdvanced = [&network, advancedText, remove] {
-    QObject::disconnect(advancedText, &QLabel::linkActivated, nullptr, nullptr);  // an offer from before a removal
-    CheckForModels(network, advancedText, true, [remove] { remove->setVisible(true); });
-  };
-  offerAdvanced();
-  QObject::connect(remove, &QPushButton::clicked, [remove, advancedText, offerAdvanced] {
-    QMessageBox question(QMessageBox::Question, "Project Key 設定", kRemoveAdvancedTitle, QMessageBox::NoButton, remove->window());
-    question.setInformativeText(kRemoveAdvancedBody);
-    QPushButton* removeButton = question.addButton("移除", QMessageBox::DestructiveRole);
-    question.setDefaultButton(question.addButton("取消", QMessageBox::RejectRole));
-    question.exec();
-    if (question.clickedButton() != removeButton) return;
-    bool removed = RemoveAdvanced();
-    QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ReloadModels");
-    if (!removed) return advancedText->setText("無法移除");
-    remove->setVisible(false);
-    advancedText->setText(QString::fromStdString(InstalledAdvancedText()));
-    offerAdvanced();
-  });
-#endif
   // Each tab as tall as its rows, but no taller than the screen leaves (a 768-pixel laptop with
   // GNOME's larger font): then it scrolls.
   int room = window.screen()->availableGeometry().height() - 160;  // the title bar, the tabs and the margins
