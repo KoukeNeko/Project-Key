@@ -14,7 +14,7 @@ step() { printf '%s==> %s%s\n' "$bold" "$*" "$plain"; }
 note() { printf '    %s\n' "$*"; }
 die() { printf '錯誤：%s\n' "$*" >&2; exit 1; }
 
-[ "$(id -u)" != 0 ] || die "請以自己的帳號執行，不要加 sudo：需要時會詢問密碼。"
+[ "$(id -u)" != 0 ] || die "請以一般使用者身分執行，毋須加上 sudo；需要管理員權限時將提示輸入密碼。"
 
 # The packages install.sh installs: from the repositories or built here, under the same names.
 packages=

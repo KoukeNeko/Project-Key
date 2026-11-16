@@ -26,7 +26,7 @@ step() { printf '%s==> %s%s\n' "$bold" "$*" "$plain"; }
 note() { printf '    %s\n' "$*"; }
 die() { printf '錯誤：%s\n' "$*" >&2; exit 1; }
 
-[ "$(id -u)" != 0 ] || die "請以自己的帳號執行，不要加 sudo：需要時會詢問密碼。"
+[ "$(id -u)" != 0 ] || die "請以一般使用者身分執行，毋須加上 sudo；需要管理員權限時將提示輸入密碼。"
 [ "$(uname -s)" = Linux ] || die "這個指令只適用於 Linux；macOS 與 Windows 的安裝方式見 https://github.com/$REPO#安裝"
 # Commands that need root go through as_root: sudo in a terminal; without one (started from the
 # desktop), pkexec, which asks for the password in a dialog of the desktop's. pkexec asks on every
