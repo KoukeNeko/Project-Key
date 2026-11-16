@@ -115,6 +115,11 @@ FCITX_CONFIGURATION(
     fcitx::Option<bool> fullWidthToggle{this, "FullWidthToggle", "Shift+Space 切換全形", DefaultFlag(Setting::kFullWidthToggle)};
     fcitx::Option<bool> englishToZhuyin{this, "EnglishToZhuyin", "Tab 英文轉注音", DefaultFlag(Setting::kEnglishToZhuyin)};
     fcitx::Option<bool> zhuyinToEnglish{this, "ZhuyinToEnglish", "Tab 注音轉英文", DefaultFlag(Setting::kZhuyinToEnglish)};
+    fcitx::Option<bool> simplified{this, "Simplified", "簡體中文", DefaultFlag(Setting::kSimplified)};
+    fcitx::Option<bool> simplifiedToggle{this, "SimplifiedToggle", "快捷鍵切換繁簡", DefaultFlag(Setting::kSimplifiedToggle)};
+    // Ctrl+Shift+F, as Fcitx5's own switch (chttrans) has it.
+    fcitx::Option<fcitx::Key, fcitx::KeyConstrain> simplifiedKey{
+        this, "SimplifiedKey", "繁簡切換鍵", fcitx::Key("Control+Shift+F"), fcitx::KeyConstrain(fcitx::KeyConstrainFlag::AllowModifierLess)};
     fcitx::Option<bool> dictation{this, "Dictation", "語音輸入", DefaultFlag(Setting::kDictation)};
     // Held to dictate: a modifier alone, or a key that types nothing (Settings/Gtk.cpp and Qt.cpp record it).
     fcitx::Option<fcitx::Key, fcitx::KeyConstrain> dictationKey{
@@ -151,13 +156,16 @@ class ConfigSettings : public Settings {
       case Setting::kGridColumns: return static_cast<int>(*config_.gridColumns);
       case Setting::kKeyboardLayout: return static_cast<int>(*config_.keyboardLayout);
       case Setting::kDictation: return *config_.dictation;
+      case Setting::kSimplified: return *config_.simplified;
+      case Setting::kSimplifiedToggle: return *config_.simplifiedToggle;
     }
     return std::nullopt;
   }
 
-  // The engine sets only the proof modes, from Ctrl+Shift+P.
+  // The engine sets only the proof modes, from Ctrl+Shift+P, and 簡體中文 from its switch.
   void set(Setting setting, int value) override {
     switch (setting) {
+      case Setting::kSimplified: config_.simplified.setValue(value != 0); break;
       case Setting::kProofPreview: config_.proofPreview.setValue(static_cast<ProofMode>(value)); break;
       case Setting::kChoosingProof: config_.choosingProof.setValue(static_cast<ProofMode>(value)); break;
       case Setting::kProofPreviewLastOn: config_.proofPreviewLastOn.setValue(value); break;
@@ -407,7 +415,7 @@ class Session : public fcitx::InputContextProperty, public Client {
       std::vector<std::string> labels;
       for (size_t i = 0; i < row.size(); i++) {
         labels.push_back(typing ? "" : std::to_string(i + 1) + " ");
-        list->append<Word>(this, row, static_cast<int>(i));
+        list->append<Word>(this, row[i], typing ? 0 : content.selectedRow, static_cast<int>(i));
       }
       list->setLabels(labels);
       if (!typing) list->setGlobalCursorIndex(content.selection);
@@ -491,23 +499,19 @@ class Session : public fcitx::InputContextProperty, public Client {
     explicit GridRow(fcitx::Text text) : fcitx::CandidateWord(std::move(text)) {}
     void select(fcitx::InputContext*) const override {}
   };
-  // A candidate clicked in the panel: its row's cells sit together in the
-  // controller's candidates, so the row's place there gives the index to pick.
+  // A candidate clicked in the panel, picked as a click in Project Key's window picks it.
   class Word : public fcitx::CandidateWord {
    public:
-    Word(Session* session, const std::vector<std::string>& row, int index)
-        : fcitx::CandidateWord(fcitx::Text(row[index])), session_(session), row_(row), index_(index) {}
+    Word(Session* session, const std::string& text, int row, int index)
+        : fcitx::CandidateWord(fcitx::Text(text)), session_(session), row_(row), index_(index) {}
     void select(fcitx::InputContext*) const override {
       Active active(session_);
-      const std::vector<std::string>& all = session_->controller.candidates();
-      auto found = std::search(all.begin(), all.end(), row_.begin(), row_.end());
-      if (found != all.end()) session_->controller.choose(static_cast<int>(found - all.begin()) + index_);
+      session_->controller.clickCandidate(row_, index_);
     }
 
    private:
     Session* session_;
-    std::vector<std::string> row_;
-    int index_;
+    int row_, index_;
   };
 
   fcitx::Instance* instance_;
@@ -794,6 +798,27 @@ class Engine : public fcitx::InputMethodEngineV2 {
     settingsAction_.setShortText("Project Key 設定…");
     settingsAction_.connect<fcitx::SimpleAction::Activated>([](fcitx::InputContext*) { fcitx::startProcess({PROJECTKEY_SETTINGS}); });
     instance_->userInterfaceManager().registerAction("projectkey-settings", &settingsAction_);
+    // The input method menu's switches, ticked as they are (syncMenu).
+    simplifiedAction_.setShortText("簡體中文");
+    simplifiedAction_.setCheckable(true);
+    simplifiedAction_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
+      if (!ic || instance_->inputMethodEngine(ic) != this) return;
+      Session* session = ic->propertyFor(&factory_);
+      Active active(session);
+      session->controller.toggleSimplified();
+      syncMenu(ic);
+    });
+    instance_->userInterfaceManager().registerAction("projectkey-simplified", &simplifiedAction_);
+    fullWidthAction_.setShortText("全形");
+    fullWidthAction_.setCheckable(true);
+    fullWidthAction_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) {
+      if (!ic || instance_->inputMethodEngine(ic) != this) return;
+      Session* session = ic->propertyFor(&factory_);
+      Active active(session);
+      session->controller.toggleFullWidth();
+      syncMenu(ic);
+    });
+    instance_->userInterfaceManager().registerAction("projectkey-fullwidth", &fullWidthAction_);
     checkAction_.setShortText("檢查 Project Key 安裝");
     checkAction_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) { checkInstall(ic); });
     instance_->userInterfaceManager().registerAction("projectkey-check", &checkAction_);
@@ -856,6 +881,12 @@ class Engine : public fcitx::InputMethodEngineV2 {
     Controller& controller = session->controller;
     fcitx::Key key = event.rawKey();
     fcitx::KeySym sym = key.sym();
+    if (!event.isRelease() && settings_.flag(Setting::kSimplifiedToggle) && event.key().check(*config_.simplifiedKey)) {
+      controller.toggleSimplified();
+      syncMenu(event.inputContext());
+      event.filterAndAccept();
+      return;
+    }
     // While dictation is on and has its model, its key is Project Key's, pressed and released.
     if (sym == config_.dictationKey->sym() && dictation_.loaded() && settings_.flag(Setting::kDictation)) {
       dictationKey(event, controller);
@@ -924,6 +955,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
       default: k.characters = fcitx::Key::keySymToUTF8(sym); break;  // the layout has applied Shift and Caps Lock
     }
     if (controller.handleKey(k)) event.filterAndAccept();
+    if (environment_.fullWidth != fullWidthAction_.isChecked(nullptr)) syncMenu(event.inputContext());  // Shift+Space
     waitForPause(event.inputContext());
   }
 
@@ -942,11 +974,14 @@ class Engine : public fcitx::InputMethodEngineV2 {
   }
 
   void activate(const fcitx::InputMethodEntry&, fcitx::InputContextEvent& event) override {
+    event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &simplifiedAction_);
+    event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &fullWidthAction_);
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settingsAction_);
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &checkAction_);
     Session* session = event.inputContext()->propertyFor(&factory_);
     Active active(session);
     session->controller.showMode();
+    syncMenu(event.inputContext());
   }
 
   // COSMIC's panel tints a tray icon with its text color, which turns the colored icon into
@@ -971,6 +1006,12 @@ class Engine : public fcitx::InputMethodEngineV2 {
   void reloadConfig() override { fcitx::readAsIni(config_, kConfigPath); }
 
  private:
+  void syncMenu(fcitx::InputContext* ic) {
+    simplifiedAction_.setChecked(settings_.flag(Setting::kSimplified));
+    fullWidthAction_.setChecked(environment_.fullWidth);
+    simplifiedAction_.update(ic);
+    fullWidthAction_.update(ic);
+  }
   void reloadAdvanced() {
     advanced_.reload([this](bool loaded) { environment_.advancedRanking = loaded; });
     dictation_.reload();
@@ -1073,7 +1114,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
   fcitx::InputContext* announcing_ = nullptr;  // switched to or from Project Key, until Fcitx5 announces it
   bool leaving_ = false;                        // from it
   std::unique_ptr<fcitx::EventSource> announced_;
-  fcitx::SimpleAction settingsAction_, checkAction_;
+  fcitx::SimpleAction settingsAction_, checkAction_, simplifiedAction_, fullWidthAction_;
   std::unique_ptr<fcitx::EventSourceTime> pause_;
   fcitx::TrackableObjectReference<fcitx::InputContext> paused_;
   AdvancedRanker advanced_{instance_->eventLoop()};  // after what its answers use

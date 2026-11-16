@@ -2,7 +2,7 @@ Name:           fcitx5-projectkey
 Version:        %{pk_version}
 Release:        1%{?dist}
 Summary:        Zhuyin input method for Fcitx5
-License:        MIT AND Unicode-3.0
+License:        MIT AND Unicode-3.0 AND Apache-2.0
 URL:            https://github.com/KoukeNeko/Project-Key
 # Made by package-rpm.sh, which also puts McBopomofo, llama.cpp and the models in it.
 Source0:        pk.tar.gz

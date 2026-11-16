@@ -72,6 +72,7 @@ cp ../linux/fcitx-projectkey.svg "$APP/Contents/Resources/"  # the icon, drawn b
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp "$MCB/LICENSE.txt" "$APP/Contents/Resources/McBopomofo-LICENSE.txt"
 cp ../../core/data/emoji.txt ../../core/data/EMOJI-NOTICE.txt "$APP/Contents/Resources/"  # the emoji, and the license of their annotations
+cp ../../core/data/TSCharacters.txt ../../core/data/OPENCC-LICENSE.txt "$APP/Contents/Resources/"  # OpenCC's table for 簡體中文, and its license
 # From tools/bigram-trainer: the dictionary with the words McBopomofo lacks, replacing
 # McBopomofo's, and the context ranking model; the app falls back to unigrams without it.
 if [ -f "$TRAINED/data.txt" ]; then cp "$TRAINED/data.txt" "$APP/Contents/Resources/"; fi

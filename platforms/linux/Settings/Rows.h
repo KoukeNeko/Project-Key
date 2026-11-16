@@ -259,7 +259,7 @@ inline bool RemoveUserData() {
 }
 
 struct Row {
-  enum Kind { kToggle, kChoice, kKey, kClearChoices, kEditPhrases, kShowFolder, kRestore } kind;
+  enum Kind { kToggle, kChoice, kKey, kShortcut, kClearChoices, kEditPhrases, kShowFolder, kRestore } kind;
   const char* key;  // empty for kClearChoices, kShowFolder and kRestore; the file's name for kEditPhrases
   const char* title;
   const char* detail = nullptr;              // a line under the row
@@ -267,16 +267,36 @@ struct Row {
   std::vector<const char*> shown = {};       // kChoice: what the list says, when not the names
 };
 
-// A kKey row's key as it shows: the config's keysym name (Fcitx5's, which X and GDK share), with
-// the sides of the modifiers spelled out.
-inline std::string KeyLabel(const std::string& name) {
+// A kKey or kShortcut row's key as it shows, from the config's form (Fcitx5's: modifiers and a
+// keysym name, which X and GDK share, joined by +), with the sides of lone modifiers spelled out.
+inline std::string KeyLabel(const std::string& key) {
   static const std::pair<const char*, const char*> kNames[] = {
       {"Alt", "Alt"}, {"Control", "Ctrl"}, {"Super", "Super"}, {"Shift", "Shift"}, {"Meta", "Meta"}, {"Hyper", "Hyper"}};
-  for (const auto& [prefix, shown] : kNames) {
-    if (name == std::string(prefix) + "_L") return std::string("左 ") + shown;
-    if (name == std::string(prefix) + "_R") return std::string("右 ") + shown;
+  if (key.empty()) return "未設定";
+  std::string label;
+  for (size_t start = 0; start < key.size();) {
+    size_t end = key.find('+', start + 1);  // a key named + alone is not a separator
+    if (end == std::string::npos) end = key.size();
+    std::string part = key.substr(start, end - start), shown = part;
+    for (const auto& [prefix, name] : kNames) {
+      if (part == prefix) shown = name;
+      if (part == std::string(prefix) + "_L") shown = std::string("左 ") + name;
+      if (part == std::string(prefix) + "_R") shown = std::string("右 ") + name;
+    }
+    label += (label.empty() ? "" : "+") + shown;
+    start = end + 1;
   }
-  return name.empty() ? "未設定" : name;
+  return label;
+}
+
+// What a key pressed while a row records becomes, in the config's form; empty while the row waits
+// for another. A kKey row is held alone: a modifier, or a key that types nothing (it would no longer
+// type). A kShortcut row is pressed with Ctrl, Alt or Super, or is a key that types nothing.
+inline std::string RecordedKey(bool shortcut, const std::string& name, bool modifier, bool types, bool control, bool alt,
+                               bool super, bool shift) {
+  if (!shortcut) return modifier || !types ? name : "";
+  if (modifier || (types && !control && !alt && !super)) return "";
+  return std::string(control ? "Control+" : "") + (alt ? "Alt+" : "") + (super ? "Super+" : "") + (shift ? "Shift+" : "") + name;
 }
 
 struct Group {
@@ -298,6 +318,7 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "AssociatedPhrases", "聯想詞", "開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」，按 Shift+數字鍵選取"},
            {Row::kToggle, "KeypadPicks", "數字鍵盤選字", "開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音"},
            {Row::kToggle, "RememberChoices", "記住選過的字"},
+           {Row::kToggle, "Simplified", "簡體中文"},
            {Row::kClearChoices, "", "選字紀錄"},
            {Row::kEditPhrases, "phrases.txt", "自訂詞", "每行一個詞和注音，如 小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ"},
            {Row::kEditPhrases, "exclude-phrases.txt", "排除詞", "不再出現的詞，格式同自訂詞；選字時按 Delete 也會加入"},
@@ -317,6 +338,8 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "FullWidthToggle", "Shift+Space 切換全形"},
            {Row::kToggle, "EnglishToZhuyin", "Tab 英文轉注音"},
            {Row::kToggle, "ZhuyinToEnglish", "Tab 注音轉英文"},
+           {Row::kToggle, "SimplifiedToggle", "快捷鍵切換繁簡"},
+           {Row::kShortcut, "SimplifiedKey", "繁簡切換鍵"},
 #ifdef PROJECTKEY_ADVANCED_MODEL
            {Row::kToggle, "Dictation", "語音輸入（Alpha）", "按住語音輸入鍵說話，放開後輸入；需下載「關於」的語音模型"},
            {Row::kKey, "DictationKey", "語音輸入鍵"},

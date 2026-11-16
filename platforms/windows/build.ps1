@@ -206,6 +206,7 @@ if (Test-Path "$Trained\data.txt") { Copy-Item "$Trained\data.txt" $Out } else {
 Copy-Item $Associated $Out  # derived from McBopomofo's data.txt, whichever dictionary is used
 Copy-Item "$Mcb\LICENSE.txt" "$Out\McBopomofo-LICENSE.txt"
 Copy-Item "$PSScriptRoot\..\..\core\data\emoji.txt", "$PSScriptRoot\..\..\core\data\EMOJI-NOTICE.txt" $Out  # the emoji, and the license of their annotations
+Copy-Item "$PSScriptRoot\..\..\core\data\TSCharacters.txt", "$PSScriptRoot\..\..\core\data\OPENCC-LICENSE.txt" $Out  # OpenCC's table for 簡體中文, and its license
 Copy-Item "$PSScriptRoot\..\..\LICENSE" "$Out\LICENSE.txt"
 if (Test-Path "$Trained\bigram.bin") { Copy-Item "$Trained\bigram.bin" $Out } else { Write-Host "no $Trained\bigram.bin`: building without context ranking" }
 if (Test-Path "$Trained\chars.bin") { Copy-Item "$Trained\chars.bin" $Out }

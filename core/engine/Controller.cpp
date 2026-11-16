@@ -124,6 +124,8 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kKeyboardLayout:
     case Setting::kAssociatedPhrases:
     case Setting::kDictation:
+    case Setting::kSimplified:
+    case Setting::kSimplifiedToggle:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
       return 0;
@@ -155,12 +157,14 @@ const char* Settings::Name(Setting setting) {
     case Setting::kKeyboardLayout: return "KeyboardLayout";
     case Setting::kAssociatedPhrases: return "AssociatedPhrases";
     case Setting::kDictation: return "Dictation";
+    case Setting::kSimplified: return "Simplified";
+    case Setting::kSimplifiedToggle: return "SimplifiedToggle";
   }
   return "";
 }
 
 Controller::Controller(Environment& environment, Client& client, bool personal)
-    : env_(environment), personal_(personal), client_(client) {
+    : env_(environment), personal_(personal), output_(environment, client), client_(output_) {
   makeComposer();
 }
 
@@ -236,6 +240,7 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   }
   if (!lm->isDataModelLoaded()) return false;
   lm->loadEmoji(Utf8(Path(bundled) / "emoji.txt"));  // not a model: the bundled one always serves
+  if (!env.simplified) env.simplified = LoadSimplified(Utf8(Path(bundled) / "TSCharacters.txt"));  // likewise
   lm->loadAssociatedPhrasesV2(Utf8(Path(bundled) / "associated-phrases-v2.txt").c_str());  // likewise
   auto bigram = std::make_shared<Bigram>();
   auto chars = std::make_shared<CharModel>();
@@ -326,6 +331,66 @@ std::string CleanDictation(const std::string& text) {
   while (!out.empty() && out.back() == ' ') out.pop_back();
   // Nothing but a filler was said on purpose, as an answer.
   return out.empty() && !text.empty() ? text : out;
+}
+
+std::shared_ptr<const std::unordered_map<char32_t, char32_t>> LoadSimplified(const std::string& path) {
+  std::ifstream file(Path(path));
+  if (!file) return nullptr;
+  auto table = std::make_shared<std::unordered_map<char32_t, char32_t>>();
+  for (std::string line; std::getline(file, line);) {
+    if (line.empty() || line[0] == '#') continue;
+    size_t i = 0;
+    char32_t traditional = NextCodePoint(line, i);
+    if (i >= line.size() || line[i] != '\t') continue;
+    i++;
+    char32_t simplified = NextCodePoint(line, i);
+    if (traditional != simplified && (traditional > 0xffff) == (simplified > 0xffff)) table->emplace(traditional, simplified);
+  }
+  return table;
+}
+
+std::string ToSimplified(const std::unordered_map<char32_t, char32_t>& table, const std::string& text) {
+  std::string out;
+  out.reserve(text.size());
+  for (size_t i = 0; i < text.size();) {
+    size_t start = i;
+    auto found = table.find(NextCodePoint(text, i));
+    if (found == table.end()) {
+      out.append(text, start, i - start);
+      continue;
+    }
+    char32_t c = found->second;
+    out += ToUtf8(c > 0xffff ? std::u16string{static_cast<char16_t>(0xd800 + ((c - 0x10000) >> 10)),
+                                              static_cast<char16_t>(0xdc00 + ((c - 0x10000) & 0x3ff))}
+                             : std::u16string(1, static_cast<char16_t>(c)));
+  }
+  return out;
+}
+
+bool SimplifiedClient::on() const {
+  return env_.simplified && env_.settings && env_.settings->flag(Setting::kSimplified);
+}
+
+std::string SimplifiedClient::convert(const std::string& text) const {
+  return on() ? ToSimplified(*env_.simplified, text) : text;
+}
+
+void SimplifiedClient::setComposition(const Composition& composition) {
+  Composition converted = composition;
+  converted.text = convert(composition.text);
+  app_.setComposition(converted);
+}
+
+// shortcut: two Traditional candidates can show as the same Simplified one (髮, 發 as 发); they stay apart.
+PanelContent SimplifiedClient::convert(const PanelContent& content) const {
+  if (!on()) return content;
+  PanelContent converted = content;
+  for (std::string& segment : converted.segments) segment = convert(segment);
+  for (auto& row : converted.rows) {
+    for (std::string& cell : row) cell = convert(cell);
+  }
+  converted.replacedText = convert(content.replacedText);
+  return converted;
 }
 
 void Controller::learn(const std::string& committed) {
@@ -465,6 +530,20 @@ void Controller::insertDictation(const std::string& text) {
   showMode();
 }
 
+void Controller::toggleFullWidth() {
+  commit();
+  forgetEnglishRun();
+  env_.fullWidth = !env_.fullWidth;
+  client_.showIndicator(ModeLabel(env_));
+}
+
+void Controller::toggleSimplified() {
+  bool simplified = !env_.settings->flag(Setting::kSimplified);
+  env_.settings->set(Setting::kSimplified, simplified);
+  client_.showIndicator(simplified ? "簡" : "繁");
+  if (!composer_->isEmpty()) refresh();  // the composition shows in the other script
+}
+
 void Controller::toggleMode() {
   commit();
   forgetEnglishRun();
@@ -509,10 +588,7 @@ bool Controller::handleKey(const KeyEvent& original) {
     return false;
   }
   if (event.key == Key::kSpace && event.shift && env_.settings->flag(Setting::kFullWidthToggle)) {
-    commit();
-    forgetEnglishRun();
-    env_.fullWidth = !env_.fullWidth;
-    client_.showIndicator(ModeLabel(env_));
+    toggleFullWidth();
     return true;
   }
   bool plainTab = event.key == Key::kTab && !event.shift;

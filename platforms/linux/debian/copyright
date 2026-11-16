@@ -21,5 +21,10 @@ License: Unicode-3.0
  Built from the Unicode CLDR Traditional Chinese emoji annotations and emoji-test.txt;
  see usr/share/fcitx5/projectkey/EMOJI-NOTICE.txt.
 
+Files: usr/share/fcitx5/projectkey/TSCharacters.txt
+Copyright: OpenCC contributors
+License: Apache-2.0
+ See usr/share/fcitx5/projectkey/OPENCC-LICENSE.txt.
+
 License: MIT
  See the LICENSE file in the source repository.

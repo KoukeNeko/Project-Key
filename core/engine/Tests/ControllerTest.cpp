@@ -538,6 +538,33 @@ int main(int argc, char** argv) {
     assert(DictationWords(Environment{}).empty());
   }
 
+  // 簡體中文: the table OpenCC writes, and what goes to the app converted while the setting is on.
+  {
+    auto table = LoadSimplified((std::filesystem::path(__FILE__).parent_path() / "../../data/TSCharacters.txt").string());
+    assert(table && table->size() > 3000 && table->at(U'們') == U'们' && !table->count(U'我'));
+    assert(ToSimplified(*table, "我們的頭髮。") == "我们的头发。" && ToSimplified(*table, "").empty());
+    assert(!LoadSimplified("/nonexistent/TSCharacters.txt"));
+    env.simplified = table;
+  }
+  client.committed.clear();
+  controller.insertDictation("我們");
+  assert(client.committed == "我們");  // off by default
+  controller.toggleSimplified();
+  assert(settings.flag(Setting::kSimplified) && client.indicator == "簡");
+  client.committed.clear();
+  controller.insertDictation("我們");
+  assert(client.committed == "我们");
+  Type(controller, "rup ");
+  for (const std::string& cell : client.panel.rows[0]) assert(cell == ToSimplified(*env.simplified, cell));
+  EscapeAll(controller, client);
+  controller.toggleSimplified();
+  assert(!settings.flag(Setting::kSimplified) && client.indicator == "繁");
+  client.committed.clear();
+  controller.toggleFullWidth();
+  assert(env.fullWidth && client.indicator == "ㄅ全");
+  controller.toggleFullWidth();
+  assert(!env.fullWidth);
+
   // Zhuyin typed in English mode: Tab turns the whole syllables at
   // the end (ji3cl3, 我好) into a composition and leaves the English alone.
   TapShift(controller);

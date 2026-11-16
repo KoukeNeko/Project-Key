@@ -97,9 +97,9 @@ void ChoiceChanged(AdwComboRow* combo, GParamSpec*, gpointer data) {
   Unsaved(GTK_WIDGET(combo));
 }
 
-// A kKey row's button: once clicked, the next key pressed in the window becomes the row's key.
-// Escape gives up; a key that types something would no longer type it, so it is passed over.
-void RecordKey(GtkButton* button, gpointer key) {
+// A kKey or kShortcut row's button: once clicked, the next key pressed in the window that the row
+// takes (RecordedKey) becomes its key; Escape gives up.
+void RecordKey(GtkButton* button, gpointer data) {
   GtkWidget* window = GTK_WIDGET(gtk_widget_get_root(GTK_WIDGET(button)));
   if (g_object_get_data(G_OBJECT(button), "recording")) return;
   GtkEventController* keys = gtk_event_controller_key_new();
@@ -108,19 +108,26 @@ void RecordKey(GtkButton* button, gpointer key) {
   g_object_set_data(G_OBJECT(button), "recording", keys);
   g_object_set_data_full(G_OBJECT(button), "shown", g_strdup(gtk_button_get_label(button)), g_free);
   gtk_button_set_label(button, "請按一個鍵");
-  g_signal_connect(keys, "key-pressed", G_CALLBACK((+[](GtkEventControllerKey* keys, guint keyval, guint, GdkModifierType, gpointer key) -> gboolean {
+  g_signal_connect(keys, "key-pressed", G_CALLBACK((+[](GtkEventControllerKey* keys, guint keyval, guint, GdkModifierType state, gpointer data) -> gboolean {
+                     const Row* row = static_cast<const Row*>(data);
                      auto* button = GTK_BUTTON(g_object_get_data(G_OBJECT(keys), "button"));
-                     if (keyval != GDK_KEY_Escape && gdk_keyval_to_unicode(keyval) != 0) return TRUE;
-                     const char* name = keyval == GDK_KEY_Escape ? nullptr : gdk_keyval_name(keyval);
-                     bool saved = name && WriteConfig(static_cast<const char*>(key), name);
-                     gtk_button_set_label(button, saved ? KeyLabel(name).c_str()
+                     std::string recorded;
+                     if (keyval != GDK_KEY_Escape) {
+                       const char* name = gdk_keyval_name(keyval);
+                       bool modifier = (keyval >= GDK_KEY_Shift_L && keyval <= GDK_KEY_Hyper_R) || keyval == GDK_KEY_ISO_Level3_Shift;
+                       recorded = RecordedKey(row->kind == Row::kShortcut, name ? name : "", modifier, gdk_keyval_to_unicode(keyval) != 0,
+                                              state & GDK_CONTROL_MASK, state & GDK_ALT_MASK, state & GDK_SUPER_MASK, state & GDK_SHIFT_MASK);
+                       if (recorded.empty()) return TRUE;
+                     }
+                     bool saved = !recorded.empty() && WriteConfig(row->key, recorded.c_str());
+                     gtk_button_set_label(button, saved ? KeyLabel(recorded).c_str()
                                                         : static_cast<const char*>(g_object_get_data(G_OBJECT(button), "shown")));
                      g_object_set_data(G_OBJECT(button), "recording", nullptr);
                      gtk_widget_remove_controller(gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(keys)), GTK_EVENT_CONTROLLER(keys));
-                     if (name && !saved) Unsaved(GTK_WIDGET(button));
+                     if (!recorded.empty() && !saved) Unsaved(GTK_WIDGET(button));
                      return TRUE;
                    })),
-                   key);
+                   data);
   gtk_widget_add_controller(window, keys);
 }
 
@@ -526,11 +533,11 @@ void Activate(GtkApplication* app) {
         }
         g_object_set_data(G_OBJECT(widget), "saved", GUINT_TO_POINTER(adw_combo_row_get_selected(ADW_COMBO_ROW(widget))));
         g_signal_connect(widget, "notify::selected", G_CALLBACK(ChoiceChanged), const_cast<Row*>(&row));
-      } else if (row.kind == Row::kKey) {
+      } else if (row.kind == Row::kKey || row.kind == Row::kShortcut) {
         widget = adw_action_row_new();
         GtkWidget* change = gtk_button_new_with_label(KeyLabel(text(row.key)).c_str());
         gtk_widget_set_valign(change, GTK_ALIGN_CENTER);
-        g_signal_connect(change, "clicked", G_CALLBACK(RecordKey), const_cast<char*>(row.key));
+        g_signal_connect(change, "clicked", G_CALLBACK(RecordKey), const_cast<Row*>(&row));
         adw_action_row_add_suffix(ADW_ACTION_ROW(widget), change);
       } else if (row.kind == Row::kEditPhrases) {
         widget = adw_action_row_new();

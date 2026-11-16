@@ -10,6 +10,7 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -93,6 +94,8 @@ enum class Setting {
   kKeyboardLayout,      // 0 大千, 1 倚天, 2 許氏, 3 倚天 26 鍵, 4 IBM
   kAssociatedPhrases,   // 聯想詞: after Enter or Tab commits, a row offers the phrases that commonly follow its last word
   kDictation,           // 語音輸入: holding the right Alt (Option) key records, and what was said is typed (SpeechModel.h)
+  kSimplified,          // 簡體中文: what goes to the app is in Simplified Chinese (SimplifiedClient)
+  kSimplifiedToggle,    // the platform's shortcut switches kSimplified
 };
 
 class Settings {
@@ -145,6 +148,8 @@ struct Environment {
   std::function<int(const std::string&)> columnsSpannedBy;
   bool englishMode = false;  // one switch for all sessions, like a keyboard's own layout toggle
   bool fullWidth = false;    // Shift+Space: letters, digits, symbols and spaces typed outside a composition are full-width
+  // Traditional characters to Simplified ones, for Setting::kSimplified; null when the table is missing.
+  std::shared_ptr<const std::unordered_map<char32_t, char32_t>> simplified;
   std::string tabKeycap = "Tab";  // the key the conversion previews end with
   std::string backspaceKeycap = "Backspace";  // the key that takes back the exclusion, named in the notice
   std::string deleteKeycap = "Delete";  // the key that excludes the selected candidate, as the proof row shows it
@@ -175,6 +180,35 @@ std::vector<std::string> DictationWords(const Environment& env);
 // A transcription without the fillers said between clauses (嗯、呃、欸), and without spaces at its end;
 // one that is nothing but a filler stays as it is.
 std::string CleanDictation(const std::string& text);
+
+// OpenCC's table of Traditional characters to Simplified ones (core/data/TSCharacters.txt), each to
+// its first: one-to-one, and only where the UTF-16 length stays, so a composition's caret and
+// ranges hold as they are. Null when the file cannot be read.
+std::shared_ptr<const std::unordered_map<char32_t, char32_t>> LoadSimplified(const std::string& path);
+std::string ToSimplified(const std::unordered_map<char32_t, char32_t>& table, const std::string& text);
+
+// What the controller does to the app, its text in Simplified Chinese while Setting::kSimplified is
+// on. The controller itself keeps to Traditional Chinese, which the dictionary and models are in.
+class SimplifiedClient final : public Client {
+ public:
+  SimplifiedClient(const Environment& env, Client& app) : env_(env), app_(app) {}
+  void insertText(const std::string& text) override { app_.insertText(convert(text)); }
+  void setComposition(const Composition& composition) override;
+  void showPanel(const PanelContent& content) override { app_.showPanel(convert(content)); }
+  void hidePanel() override { app_.hidePanel(); }
+  void showIndicator(const std::string& label) override { app_.showIndicator(label); }
+  void beep() override { app_.beep(); }
+  std::string textBeforeCaret() override { return app_.textBeforeCaret(); }
+  void showHint(const PanelContent& content) override { app_.showHint(convert(content)); }
+  void hideHint() override { app_.hideHint(); }
+
+ private:
+  bool on() const;
+  std::string convert(const std::string& text) const;
+  PanelContent convert(const PanelContent& content) const;
+  const Environment& env_;
+  Client& app_;
+};
 
 // Loads data.txt, bigram.bin and chars.bin from ModelsDirectory(bundled, downloaded) (Models.h)
 // into env, at start and after the settings window downloads a release; controllers switch on
@@ -221,6 +255,10 @@ class Controller {
   static constexpr std::chrono::milliseconds kDictationHold{250};
   // The 中/英 button in the taskbar: commits and switches modes.
   void toggleMode();
+  // Shift+Space, or the input menu: switches full-width.
+  void toggleFullWidth();
+  // The platform's shortcut, or the input menu: switches Setting::kSimplified, the composition too.
+  void toggleSimplified();
   // Focus left the document: commit what is composed.
   void deactivate();
   // A field took focus: the badge shows the current mode without switching it.
@@ -343,7 +381,8 @@ class Controller {
 
   Environment& env_;
   bool personal_;
-  Client& client_;
+  SimplifiedClient output_;
+  Client& client_;  // output_
   std::unique_ptr<Composer> composer_;
   bool choosing_ = false;
   size_t activeStart_ = 0;  // start reading of the segment being chosen

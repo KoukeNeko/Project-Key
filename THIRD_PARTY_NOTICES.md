@@ -57,6 +57,10 @@ SOFTWARE.
 
 設定視窗可另外下載語音模型（`speech-YYYY-MM-DD` release 的 `speech.gguf` 與 `speech-encoder.gguf`）：[Qwen3-ASR 0.6B](https://huggingface.co/Qwen/Qwen3-ASR-0.6B)（阿里巴巴通義千問團隊，Apache License 2.0）由 llama.cpp 轉換並量化為 8 位元（Q8_0）的 GGUF（[ggml-org/Qwen3-ASR-0.6B-GGUF](https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF)），release 附 Apache License 2.0 條文。語音輸入時，引擎以 llama.cpp 的 mtmd 執行它，將錄音轉為文字。錄音經 [miniaudio](https://github.com/mackron/miniaudio)（David Reid，public domain 或 MIT No Attribution）取得，原始碼隨 llama.cpp 一同建置。
 
+### 簡體中文轉換表
+
+`core/data/TSCharacters.txt` 為 [OpenCC](https://github.com/BYVoid/OpenCC)（ver.1.4.2）的繁體字轉簡體字表，以 Apache License 2.0 授權；各平台與它一同安裝其條文 [`OPENCC-LICENSE.txt`](core/data/OPENCC-LICENSE.txt)。開啟「簡體中文」時，引擎以它將送出的文字逐字轉為簡體。
+
 ### 表情符號
 
 `core/data/emoji.txt` 由 `tools/emoji/build-emoji.py` 從 [Unicode CLDR](https://cldr.unicode.org) 的繁體中文表情符號註解（`common/annotations/zh_Hant.xml`）與 Unicode 的 `emoji-test.txt` 產生，以 Unicode License v3（Unicode-3.0）授權。各平台與 `emoji.txt` 一同安裝其條文 [`EMOJI-NOTICE.txt`](core/data/EMOJI-NOTICE.txt)。

@@ -45,6 +45,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <set>
 
 #include <fcitx-utils/key.h>
 
@@ -100,11 +101,11 @@ void Unsaved(QWidget* control) {
   QMessageBox::warning(control->window(), "Project Key 設定", "無法儲存：Fcitx5 沒有回應，設定沒有改變。");
 }
 
-// A kKey row's button: once clicked, the next key pressed becomes the row's key. Escape gives up;
-// a key that types something would no longer type it, so it is passed over.
+// A kKey or kShortcut row's button: once clicked, the next key pressed that the row takes
+// (RecordedKey) becomes its key; Escape gives up.
 class KeyButton : public QPushButton {
  public:
-  KeyButton(QDBusInterface& controller, QString key) : controller_(controller), key_(std::move(key)) {
+  KeyButton(QDBusInterface& controller, QString key, bool shortcut) : controller_(controller), key_(std::move(key)), shortcut_(shortcut) {
     connect(this, &QPushButton::clicked, this, [this] {
       recording_ = true;
       setText("請按一個鍵");
@@ -119,13 +120,20 @@ class KeyButton : public QPushButton {
  protected:
   void keyPressEvent(QKeyEvent* event) override {
     if (!recording_) return QPushButton::keyPressEvent(event);
-    if (event->key() != Qt::Key_Escape && !event->text().isEmpty() && event->text()[0].isPrint()) return;
+    QString name;
+    if (event->key() != Qt::Key_Escape) {
+      // Qt gives the X keysym as the native key, on Wayland too.
+      std::string keysym = fcitx::Key::keySymToString(static_cast<fcitx::KeySym>(event->nativeVirtualKey()));
+      static const std::set<int> kModifiers = {Qt::Key_Shift, Qt::Key_Control, Qt::Key_Alt, Qt::Key_Meta, Qt::Key_AltGr,
+                                               Qt::Key_Super_L, Qt::Key_Super_R, Qt::Key_Hyper_L, Qt::Key_Hyper_R};
+      Qt::KeyboardModifiers held = event->modifiers();
+      bool types = !event->text().isEmpty() && event->text()[0].isPrint();
+      name = QString::fromStdString(RecordedKey(shortcut_, keysym, kModifiers.count(event->key()) > 0, types, held & Qt::ControlModifier,
+                                                held & Qt::AltModifier, held & Qt::MetaModifier, held & Qt::ShiftModifier));
+      if (name.isEmpty()) return;
+    }
     recording_ = false;
     releaseKeyboard();
-    // Qt gives the X keysym as the native key, on Wayland too.
-    QString name = event->key() == Qt::Key_Escape
-                       ? QString()
-                       : QString::fromStdString(fcitx::Key::keySymToString(static_cast<fcitx::KeySym>(event->nativeVirtualKey())));
     if (name.isEmpty()) return show(name_);
     if (WriteConfig(controller_, key_, name)) return show(name);
     show(name_);
@@ -135,6 +143,7 @@ class KeyButton : public QPushButton {
  private:
   QDBusInterface& controller_;
   QString key_, name_;
+  bool shortcut_;
   bool recording_ = false;
 };
 
@@ -659,8 +668,8 @@ int main(int argc, char** argv) {
           Unsaved(combo);
         });
         form->addRow(label(row.title), combo);
-      } else if (row.kind == Row::kKey) {
-        auto* button = new KeyButton(controller, key);
+      } else if (row.kind == Row::kKey || row.kind == Row::kShortcut) {
+        auto* button = new KeyButton(controller, key, row.kind == Row::kShortcut);
         button->show(Text(config.value(key)));
         button->setEnabled(available);
         showConfig.push_back([button, key](const QVariantMap& config) { button->show(Text(config.value(key))); });

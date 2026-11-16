@@ -155,6 +155,8 @@ install(FILES "${MCBOPOMOFO}/Source/Data/data.txt" "${MCBOPOMOFO}/Source/Data/as
 install(FILES "${MCBOPOMOFO}/LICENSE.txt" RENAME McBopomofo-LICENSE.txt DESTINATION "${DATA_DIR}")
 # The emoji, and the license of their annotations (tools/emoji/build-emoji.py).
 install(FILES ../../core/data/emoji.txt ../../core/data/EMOJI-NOTICE.txt DESTINATION "${DATA_DIR}")
+# OpenCC's table for 簡體中文, and its license.
+install(FILES ../../core/data/TSCharacters.txt ../../core/data/OPENCC-LICENSE.txt DESTINATION "${DATA_DIR}")
 # From tools/bigram-trainer when it was run: the dictionary with the words McBopomofo
 # lacks (it replaces McBopomofo's) and the context ranking models.
 # REQUIRE_MODELS stops the build without them, as releases need them; models-version.txt is
