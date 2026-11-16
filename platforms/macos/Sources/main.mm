@@ -34,6 +34,12 @@
 - (NSURL *)advancedDownloads {
   return [NSURL fileURLWithPath:NSTemporaryDirectory()];
 }
+- (NSString *)speechVersion {
+  return @"";
+}
+- (NSURL *)speechDownloads {
+  return [NSURL fileURLWithPath:NSTemporaryDirectory()];
+}
 - (void)reloadAdvanced {
 }
 @end

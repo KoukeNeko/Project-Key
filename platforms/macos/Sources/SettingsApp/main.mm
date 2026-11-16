@@ -55,6 +55,13 @@ void Post(NSString *name) {
 - (NSURL *)advancedDownloads {
   return [PKSupportDirectory() URLByAppendingPathComponent:@"advanced" isDirectory:YES];
 }
+- (NSString *)speechVersion {
+  std::filesystem::path dir = ProjectKey::NewestDownload(self.speechDownloads.fileSystemRepresentation);
+  return dir.empty() ? @"" : @(ProjectKey::ModelsVersion(dir).c_str());
+}
+- (NSURL *)speechDownloads {
+  return [PKSupportDirectory() URLByAppendingPathComponent:@"speech" isDirectory:YES];
+}
 - (void)reloadAdvanced {
   Post(PKReloadModelsNotification);  // the input method reloads both
 }

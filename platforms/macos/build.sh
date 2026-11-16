@@ -31,11 +31,14 @@ if [ -n "${PROJECTKEY_LLAMA:-}" ]; then
   # shellcheck disable=SC2086
   cmake -S "$PROJECTKEY_LLAMA" -B "$BUILD/llama" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DBUILD_SHARED_LIBS=OFF \
     -DGGML_NATIVE=OFF -DGGML_METAL=OFF -DGGML_BLAS=OFF -DGGML_ACCELERATE=OFF -DGGML_OPENMP=OFF $X86 \
-    -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF >/dev/null
-  cmake --build "$BUILD/llama" --target llama >/dev/null
-  ENGINE="$ENGINE $CORE/AdvancedModel.cpp"
-  CXXFLAGS="$CXXFLAGS -DPROJECTKEY_ADVANCED_MODEL -I$PROJECTKEY_LLAMA/include -I$PROJECTKEY_LLAMA/ggml/include"
-  LIBS="$LIBS $BUILD/llama/src/libllama.a $BUILD/llama/ggml/src/libggml.a $BUILD/llama/ggml/src/libggml-cpu.a $BUILD/llama/ggml/src/libggml-base.a"
+    -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF \
+    -DLLAMA_BUILD_MTMD=ON -DMTMD_VIDEO=OFF >/dev/null
+  # mtmd, llama.cpp's audio input, for the speech model (core/engine/SpeechModel.h); the microphone
+  # (core/engine/Microphone.h) through the miniaudio llama.cpp vendors.
+  cmake --build "$BUILD/llama" --target llama mtmd >/dev/null
+  ENGINE="$ENGINE $CORE/AdvancedModel.cpp $CORE/SpeechModel.cpp $CORE/Microphone.cpp"
+  CXXFLAGS="$CXXFLAGS -DPROJECTKEY_ADVANCED_MODEL -I$PROJECTKEY_LLAMA/include -I$PROJECTKEY_LLAMA/ggml/include -I$PROJECTKEY_LLAMA/tools/mtmd -I$PROJECTKEY_LLAMA/vendor"
+  LIBS="$LIBS $BUILD/llama/tools/mtmd/libmtmd.a $BUILD/llama/vendor/hash/libvendor-hash.a $BUILD/llama/src/libllama.a $BUILD/llama/ggml/src/libggml.a $BUILD/llama/ggml/src/libggml-cpu.a $BUILD/llama/ggml/src/libggml-base.a"
 fi
 
 # The settings and welcome forms are SwiftUI; they expose ProjectKey-Swift.h to Objective-C.

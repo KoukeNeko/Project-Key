@@ -97,11 +97,14 @@ if ($Llama) {
   $LlamaBuild = Join-Path $Build 'llama'
   Invoke-Native cmake -S $Llama -B $LlamaBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF `
     -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON `
-    -DGGML_OPENMP=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF
-  Invoke-Native cmake --build $LlamaBuild --target llama
-  $CxxFlags += '/DPROJECTKEY_ADVANCED_MODEL', "/I$Llama\include", "/I$Llama\ggml\include"
-  $LlamaLibs = @("$LlamaBuild\src\llama.lib", "$LlamaBuild\ggml\src\ggml.lib", "$LlamaBuild\ggml\src\ggml-cpu.lib",
-    "$LlamaBuild\ggml\src\ggml-base.lib")
+    -DGGML_OPENMP=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF `
+    -DLLAMA_BUILD_MTMD=ON -DMTMD_VIDEO=OFF
+  # mtmd, llama.cpp's audio input, for the speech model (core/engine/SpeechModel.h); the microphone
+  # (core/engine/Microphone.h) through the miniaudio llama.cpp vendors.
+  Invoke-Native cmake --build $LlamaBuild --target llama mtmd
+  $CxxFlags += '/DPROJECTKEY_ADVANCED_MODEL', "/I$Llama\include", "/I$Llama\ggml\include", "/I$Llama\tools\mtmd", "/I$Llama\vendor"
+  $LlamaLibs = @("$LlamaBuild\tools\mtmd\mtmd.lib", "$LlamaBuild\vendor\hash\vendor-hash.lib", "$LlamaBuild\src\llama.lib",
+    "$LlamaBuild\ggml\src\ggml.lib", "$LlamaBuild\ggml\src\ggml-cpu.lib", "$LlamaBuild\ggml\src\ggml-base.lib")
 }
 
 # Same sources, same bytes: Smart App Control judges each new binary, so unchanged ones keep their verdict.
@@ -122,7 +125,7 @@ $engineSources = @('AssociatedPhrasesV2', 'ByteBlockBackedDictionary', 'McBopomo
 $engineSources += "$Engine\gramambular2\reading_grid.cpp", "$Engine\Mandarin\Mandarin.cpp"
 $engineObjects = @(Compile 'mcbopomofo' $engineSources @('/W0'))
 $coreSources = @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\SentenceModel.cpp", "$Core\PersonalModel.cpp", "$Core\Controller.cpp", "$Core\InputMacro.cpp")
-if ($Llama) { $coreSources += "$Core\AdvancedModel.cpp" }
+if ($Llama) { $coreSources += "$Core\AdvancedModel.cpp", "$Core\SpeechModel.cpp", "$Core\Microphone.cpp" }
 $engineObjects += Compile 'engine' $coreSources
 Invoke-Native lib.exe /nologo "/OUT:$Obj\engine.lib" @engineObjects
 

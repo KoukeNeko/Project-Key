@@ -54,16 +54,18 @@ set(PROJECTKEY_LLAMA "" CACHE PATH "llama.cpp checkout, for the advanced model (
 if(PROJECTKEY_LLAMA)
   set(BUILD_SHARED_LIBS OFF)
   # One static CPU backend for x86-64-v3 (AVX2 and FMA, since 2013 and 2015), not the build machine's own.
-  foreach(option GGML_NATIVE GGML_OPENMP LLAMA_BUILD_TESTS LLAMA_BUILD_EXAMPLES LLAMA_BUILD_TOOLS LLAMA_BUILD_SERVER LLAMA_CURL)
+  foreach(option GGML_NATIVE GGML_OPENMP LLAMA_BUILD_TESTS LLAMA_BUILD_EXAMPLES LLAMA_BUILD_TOOLS LLAMA_BUILD_SERVER LLAMA_CURL MTMD_VIDEO)
     set(${option} OFF CACHE BOOL "" FORCE)
   endforeach()
+  # mtmd, llama.cpp's audio input, for the speech model (core/engine/SpeechModel.h).
+  set(LLAMA_BUILD_MTMD ON CACHE BOOL "" FORCE)
   foreach(option GGML_AVX GGML_AVX2 GGML_FMA GGML_F16C GGML_BMI2)
     set(${option} ON CACHE BOOL "" FORCE)
   endforeach()
   add_subdirectory("${PROJECTKEY_LLAMA}" llama EXCLUDE_FROM_ALL)
-  target_sources(engine PRIVATE "${CORE}/AdvancedModel.cpp")
+  target_sources(engine PRIVATE "${CORE}/AdvancedModel.cpp" "${CORE}/SpeechModel.cpp" "${CORE}/Microphone.cpp")
   target_compile_definitions(engine PUBLIC PROJECTKEY_ADVANCED_MODEL)
-  target_link_libraries(engine PUBLIC llama)
+  target_link_libraries(engine PUBLIC llama mtmd PRIVATE vendor::miniaudio ${CMAKE_DL_LIBS})
 endif()
 
 foreach(test ComposerTest ControllerTest)
@@ -102,7 +104,8 @@ set_target_properties(projectkey PROPERTIES PREFIX "")
 # The settings window, opened from the Fcitx5 menu or the app launcher through the
 # projectkey-settings script: Qt on KDE, GTK (libadwaita) on GNOME when it is built.
 add_executable(projectkey-settings-qt Settings/Qt.cpp)
-target_link_libraries(projectkey-settings-qt PRIVATE Qt${PROJECTKEY_QT}::Widgets Qt${PROJECTKEY_QT}::DBus Qt${PROJECTKEY_QT}::Network)
+# Fcitx5's key names, for the key the 語音輸入鍵 row records.
+target_link_libraries(projectkey-settings-qt PRIVATE Qt${PROJECTKEY_QT}::Widgets Qt${PROJECTKEY_QT}::DBus Qt${PROJECTKEY_QT}::Network Fcitx5::Utils)
 target_include_directories(projectkey-settings-qt PRIVATE "${CORE}")  # Models.h
 target_compile_definitions(projectkey-settings-qt PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}" PROJECTKEY_DATA_DIR="${DATA_DIR}")
 pkg_check_modules(ADWAITA IMPORTED_TARGET libadwaita-1 libsoup-3.0 json-glib-1.0)

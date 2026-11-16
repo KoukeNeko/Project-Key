@@ -1,3 +1,4 @@
 CFBundleName = "Project Key";
 CFBundleDisplayName = "Project Key";
 "org.projectkey.inputmethod.ProjectKey.Bopomofo" = "Project Key 注音";
+NSMicrophoneUsageDescription = "按住右 Option 鍵說話時錄音，在這台 Mac 上轉成文字。";

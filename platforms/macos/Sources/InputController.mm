@@ -11,6 +11,8 @@
 #import "SettingsWindow.h"
 #ifdef PROJECTKEY_ADVANCED_MODEL
 #include "AdvancedModel.h"
+#include "Microphone.h"
+#include "SpeechModel.h"
 #endif
 #include "Controller.h"
 #include "Models.h"
@@ -88,6 +90,14 @@ NSURL *DownloadedAdvanced() {
   return [PKSupportDirectory() URLByAppendingPathComponent:@"advanced" isDirectory:YES];
 }
 
+// The speech model the settings window downloads, beside the advanced model.
+NSURL *DownloadedSpeech() {
+  return [PKSupportDirectory() URLByAppendingPathComponent:@"speech" isDirectory:YES];
+}
+
+// The device-dependent flag of the right ⌥ alone (NX_DEVICERALTKEYMASK), which the left ⌥ leaves off.
+constexpr NSEventModifierFlags kRightOptionDown = 0x40;
+
 // How long the typing pauses before the advanced model chooses the sentence.
 constexpr NSTimeInterval kPauseSeconds = 0.3;
 
@@ -160,6 +170,82 @@ class AdvancedRanker {
 #endif
 };
 
+// Dictation (Setting::kDictation): the microphone records on the main thread while the right ⌥ is
+// held, and the speech model (core/engine/SpeechModel.h) transcribes on a serial queue of its own,
+// handing what was said back on the main thread. Built without llama.cpp, there is never a model,
+// and the right ⌥ stays an ordinary modifier.
+class Dictation {
+ public:
+  static Dictation &Shared() {
+    static Dictation *dictation = new Dictation();
+    return *dictation;
+  }
+  bool loaded() const { return sampleRate_ > 0; }  // main thread
+  // Loads the newest download, or drops the model when there is none.
+  void reload() {
+    dispatch_async(queue_, ^{
+      int rate = load();
+      dispatch_async(dispatch_get_main_queue(), ^{
+        sampleRate_ = rate;
+      });
+    });
+  }
+  // NO when the microphone cannot be opened, or the user has not allowed it.
+  bool record() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    return loaded() && microphone_.start(sampleRate_);
+#else
+    return false;
+#endif
+  }
+  // Stops recording; with answer, transcribes what was recorded, biased toward words.
+  void finish(std::vector<std::string> words, std::function<void(const std::string &)> answer) {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    auto job = std::make_shared<std::tuple<std::vector<float>, std::vector<std::string>, std::function<void(const std::string &)>>>(
+        microphone_.stop(), std::move(words), std::move(answer));
+    if (!std::get<2>(*job)) return;
+    dispatch_async(queue_, ^{
+      std::string text = model_ ? model_->transcribe(std::get<0>(*job), std::get<1>(*job)) : "";
+      dispatch_async(dispatch_get_main_queue(), ^{
+        std::get<2>(*job)(text);
+      });
+    });
+#endif
+  }
+
+ private:
+  // The model's sample rate, 0 for none.
+  int load() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    model_.reset();
+    std::filesystem::path folder = DownloadedSpeech().fileSystemRepresentation;
+    std::filesystem::path dir = ProjectKey::NewestDownload(folder);
+    if (dir.empty()) return 0;
+    auto model = std::make_unique<ProjectKey::SpeechModel>();
+    int threads = std::clamp(static_cast<int>(NSProcessInfo.processInfo.activeProcessorCount) - 1, 1, 8);
+    if (!model->load(dir.string(), threads)) {
+      NSLog(@"Project Key: cannot load the speech model in %s", dir.c_str());
+      return 0;
+    }
+    model_ = std::move(model);
+    std::error_code error;
+    for (const auto &entry : std::filesystem::directory_iterator(folder, error)) {
+      if (entry.path() != dir && entry.path().extension() != ".partial") std::filesystem::remove_all(entry.path(), error);
+    }
+    return model_->sampleRate();
+#else
+    return 0;
+#endif
+  }
+
+  dispatch_queue_t queue_ = dispatch_queue_create("org.projectkey.inputmethod.speech", DISPATCH_QUEUE_SERIAL);
+  int sampleRate_ = 0;
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  ProjectKey::Microphone microphone_;                  // main thread
+  std::unique_ptr<ProjectKey::SpeechModel> model_;  // only the queue touches it
+#endif
+};
+
 // Switches env to the newest models. The tests run from a bare executable without a bundle and
 // must not pick up the user's downloads.
 bool UseNewestModels(ProjectKey::Environment &env) {
@@ -191,8 +277,10 @@ ProjectKey::Environment &SharedEnvironment() {
       [center addObserverForName:PKReloadModelsNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *) {
         if (!UseNewestModels(*env)) NSLog(@"Project Key: cannot load the downloaded models");
         AdvancedRanker::Shared().reload(env);
+        Dictation::Shared().reload();
       }];
       AdvancedRanker::Shared().reload(env);
+      Dictation::Shared().reload();
     }
     static DefaultsSettings settings;
     env->settings = &settings;
@@ -383,8 +471,18 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
   return DownloadedAdvanced();
 }
 
+- (NSString *)speechVersion {
+  std::filesystem::path dir = ProjectKey::NewestDownload(DownloadedSpeech().fileSystemRepresentation);
+  return dir.empty() ? @"" : String(ProjectKey::ModelsVersion(dir));
+}
+
+- (NSURL *)speechDownloads {
+  return DownloadedSpeech();
+}
+
 - (void)reloadAdvanced {
   AdvancedRanker::Shared().reload(&SharedEnvironment());
+  Dictation::Shared().reload();
 }
 
 @end
@@ -486,6 +584,13 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
       case kVK_RightShift:
         _controller->handleShift(event.modifierFlags & NSEventModifierFlagShift);
         break;
+      case kVK_RightOption:
+        if (Dictation::Shared().loaded() && SharedEnvironment().settings->flag(ProjectKey::Setting::kDictation)) {
+          [self dictationKey:(event.modifierFlags & kRightOptionDown) != 0];
+        } else {
+          _controller->handleOtherModifier();
+        }
+        break;
       default:
         _controller->handleOtherModifier();
         break;
@@ -496,6 +601,24 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
   BOOL handled = _controller->handleKey(KeyEventFrom(event));
   [self waitForPause];
   return handled;
+}
+
+// The right ⌥ pressed or released: records while it is held, then types what was said in the
+// client it was said in.
+- (void)dictationKey:(BOOL)down {
+  if (down) {
+    if (_controller->dictationKey(true) && !Dictation::Shared().record()) _controller->handleOtherModifier();  // takes the badge away
+    return;
+  }
+  if (!_controller->dictationKey(false)) return Dictation::Shared().finish({}, nullptr);
+  __weak PKInputController *weakSelf = self;
+  id client = _client->client;
+  Dictation::Shared().finish(ProjectKey::DictationWords(SharedEnvironment()), [weakSelf, client](const std::string &text) {
+    PKInputController *strongSelf = weakSelf;
+    if (!strongSelf) return;
+    strongSelf->_client->client = client;
+    strongSelf->_controller->insertDictation(text);
+  });
 }
 
 // After each key the pause starts again; once it lasts, the advanced model chooses

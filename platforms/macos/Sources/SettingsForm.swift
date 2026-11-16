@@ -15,6 +15,7 @@ struct SettingsForm: View {
   @AppStorage(PKCapsLockToggleKey) private var capsLockToggle = false
   @AppStorage(PKEnglishToZhuyinKey) private var englishToZhuyin = true
   @AppStorage(PKZhuyinToEnglishKey) private var zhuyinToEnglish = true
+  @AppStorage(PKDictationKey) private var dictation = false
   @AppStorage(PKAppearanceKey) private var appearance = 3
   @AppStorage(PKProofPreviewKey) private var proofPreview = 1
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
@@ -28,8 +29,11 @@ struct SettingsForm: View {
   @State private var update = UpdateState.checking
   @State private var removingAdvanced = false
   @State private var advancedRemoveFailed = false
+  @State private var removingSpeech = false
+  @State private var speechRemoveFailed = false
   @ObservedObject var models: ModelsUpdater
   @ObservedObject var advanced: ModelsUpdater
+  @ObservedObject var speech: ModelsUpdater
   let clearChoices: () -> Void
 
   // The sections as pages, switched between above them as on the other platforms.
@@ -140,6 +144,12 @@ struct SettingsForm: View {
             Toggle("⇧ Space 切換全形", isOn: $fullWidthToggle)
             Toggle("⇥ 英文轉注音", isOn: $englishToZhuyin)
             Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
+            if speech.supported {
+              Toggle(isOn: $dictation) {
+                Text("語音輸入（Alpha）")
+                Text("按住右 ⌥ 說話，放開後輸入；需下載「關於」的語音模型")
+              }
+            }
           }
         case .about:
           Section {
@@ -172,6 +182,20 @@ struct SettingsForm: View {
                 Button("取消", role: .cancel) {}
               } message: {
                 Text("打字停頓時，不再用進階模型重選整句。")
+              }
+            }
+            if speech.supported {
+              LabeledContent("語音模型") {
+                HStack {
+                  ModelsState(updater: speech, current: speechRemoveFailed ? "無法移除" : nil)
+                  if speech.removable { Button("移除") { removingSpeech = true } }
+                }
+              }
+              .alert("移除語音模型？", isPresented: $removingSpeech) {
+                Button("移除", role: .destructive) { Task { speechRemoveFailed = !(await speech.remove()) } }
+                Button("取消", role: .cancel) {}
+              } message: {
+                Text("按住右 ⌥ 不再錄音輸入。")
               }
             }
             LabeledContent("歡迎視窗") {
@@ -213,6 +237,7 @@ struct SettingsForm: View {
     .task { update = await checkForUpdate() }
     .task { await models.check() }
     .task { if advanced.supported { await advanced.check() } }
+    .task { if speech.supported { await speech.check() } }
   }
 }
 
@@ -302,9 +327,10 @@ private func run(_ program: String, _ arguments: [String]) async throws {
 
 // Models (tools/bigram-trainer) newer than the ones in use, from the GitHub releases
 // fetch-models.sh publishes as models-YYYY-MM-DD, downloaded when the user asks or by the welcome
-// window; with advanced, the advanced model (core/engine/AdvancedModel.h) from advanced-YYYY-MM-DD
-// releases, which can also be removed. GitHub gives each file's SHA-256. One of each for all settings
-// and welcome windows, so a download outlives the window.
+// window; the advanced model (core/engine/AdvancedModel.h) from advanced-YYYY-MM-DD releases and the
+// speech model (core/engine/SpeechModel.h) from speech-YYYY-MM-DD ones, which can also be removed.
+// GitHub gives each file's SHA-256. One of each for all settings and welcome windows, so a download
+// outlives the window.
 @MainActor
 final class ModelsUpdater: ObservableObject {
   struct Release {
@@ -322,37 +348,70 @@ final class ModelsUpdater: ObservableObject {
     case current, available(Release), downloading(Double), failed
   }
 
+  enum Kind { case models, advanced, speech }
+
   private static var shared: (ModelsUpdater, ModelsUpdater)?
+  private static var sharedSpeech: ModelsUpdater?
 
   static func shared(for models: PKModels) -> (ModelsUpdater, ModelsUpdater) {
     if let shared { return shared }
-    let made = (ModelsUpdater(models: models), ModelsUpdater(models: models, advanced: true))
+    let made = (ModelsUpdater(models: models), ModelsUpdater(models: models, kind: .advanced))
     shared = made
+    return made
+  }
+  static func speech(for models: PKModels) -> ModelsUpdater {
+    if let sharedSpeech { return sharedSpeech }
+    let made = ModelsUpdater(models: models, kind: .speech)
+    sharedSpeech = made
     return made
   }
   @Published private(set) var state = State.current
   private let models: PKModels
-  private let advanced: Bool
+  private let kind: Kind
 
-  init(models: PKModels, advanced: Bool = false) {
+  init(models: PKModels, kind: Kind = .models) {
     self.models = models
-    self.advanced = advanced
+    self.kind = kind
   }
 
-  private var prefix: String { advanced ? "advanced-" : "models-" }
-  private var required: [String] { advanced ? ["advanced.gguf"] : ["data.txt", "bigram.bin", "chars.bin"] }
-  private var version: String { advanced ? models.advancedVersion : models.version }
-  private var downloads: URL { advanced ? models.advancedDownloads : models.downloads }
-  // The advanced model's row is shown only where the input method can run what it downloads.
-  var supported: Bool { !advanced || models.advancedSupported }
+  private var prefix: String {
+    switch kind {
+    case .models: "models-"
+    case .advanced: "advanced-"
+    case .speech: "speech-"
+    }
+  }
+  private var required: [String] {
+    switch kind {
+    case .models: ["data.txt", "bigram.bin", "chars.bin"]
+    case .advanced: ["advanced.gguf"]
+    case .speech: ["speech.gguf", "speech-encoder.gguf"]
+    }
+  }
+  private var version: String {
+    switch kind {
+    case .models: models.version
+    case .advanced: models.advancedVersion
+    case .speech: models.speechVersion
+    }
+  }
+  private var downloads: URL {
+    switch kind {
+    case .models: models.downloads
+    case .advanced: models.advancedDownloads
+    case .speech: models.speechDownloads
+    }
+  }
+  // The advanced and speech models' rows are shown only where the input method can run what they download.
+  var supported: Bool { kind == .models || models.advancedSupported }
   var removable: Bool {
     if case .downloading(_) = state { return false }
-    return advanced && !models.advancedVersion.isEmpty
+    return kind != .models && !version.isEmpty
   }
 
   // What the row says while nothing newer is offered.
   var installed: String {
-    if advanced { return models.advancedVersion.isEmpty ? "未安裝" : models.advancedVersion }
+    if kind != .models { return version.isEmpty ? "未安裝" : version }
     return models.loaded ? (models.version.isEmpty ? "已安裝" : models.version) : "未安裝"
   }
 
@@ -381,7 +440,7 @@ final class ModelsUpdater: ObservableObject {
     state = date > version ? .available(Release(date: date, files: newest.assets)) : .current
   }
 
-  // Removes every advanced model downloaded and has the input method drop it, then offers the
+  // Removes every advanced or speech model downloaded and has the input method drop it, then offers the
   // newest again; false when one could not be removed.
   func remove() async -> Bool {
     let fileManager = FileManager.default
@@ -423,7 +482,7 @@ final class ModelsUpdater: ObservableObject {
         let target = downloads.appendingPathComponent(release.date, isDirectory: true)
         try? fileManager.removeItem(at: target)
         try fileManager.moveItem(at: partial, to: target)
-        if advanced {
+        if kind != .models {
           models.reloadAdvanced()  // it loads in the background; a file it cannot load leaves the walk's choices
           state = .current
         } else {
@@ -496,6 +555,7 @@ private func sha256(of file: URL) throws -> String {
 final class SettingsFormFactory: NSObject {
   @MainActor @objc static func makeView(clearChoices: @escaping () -> Void, models: PKModels) -> NSView {
     let (updater, advanced) = ModelsUpdater.shared(for: models)
-    return NSHostingView(rootView: SettingsForm(models: updater, advanced: advanced, clearChoices: clearChoices).defaultAppStorage(PKDefaults()))
+    return NSHostingView(rootView: SettingsForm(models: updater, advanced: advanced, speech: ModelsUpdater.speech(for: models),
+                                                clearChoices: clearChoices).defaultAppStorage(PKDefaults()))
   }
 }

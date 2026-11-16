@@ -123,6 +123,7 @@ int Settings::DefaultValue(Setting setting) {
     case Setting::kGridColumns:
     case Setting::kKeyboardLayout:
     case Setting::kAssociatedPhrases:
+    case Setting::kDictation:
     case Setting::kProofPreviewLastOn:
     case Setting::kChoosingProofLastOn:
       return 0;
@@ -153,6 +154,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kGridColumns: return "GridColumns";
     case Setting::kKeyboardLayout: return "KeyboardLayout";
     case Setting::kAssociatedPhrases: return "AssociatedPhrases";
+    case Setting::kDictation: return "Dictation";
   }
   return "";
 }
@@ -280,6 +282,52 @@ void ReloadUserPhrases(Environment& env) {
   env.userPhrasesVersion++;
 }
 
+std::vector<std::string> DictationWords(const Environment& env) {
+  std::vector<std::string> words;
+  if (env.userPhrasesPath.empty()) return words;
+  std::ifstream file(Path(env.userPhrasesPath));
+  for (std::string line; std::getline(file, line);) {
+    std::string word = line.substr(0, line.find_first_of(" \t\r"));
+    if (!word.empty() && word[0] != '#') words.push_back(word);
+  }
+  std::reverse(words.begin(), words.end());  // the file's newest words are at its end
+  return words;
+}
+
+std::string CleanDictation(const std::string& text) {
+  // Fillers are dropped when they make a clause of their own (「嗯，」) or open one (「呃我想」).
+  auto isFiller = [](char32_t c) { return c == U'嗯' || c == U'呃' || c == U'欸'; };
+  auto isBreak = [](char32_t c) {
+    return c == U'，' || c == U'。' || c == U'、' || c == U'！' || c == U'？' || c == U'；' || c == U'：' || c == ',' ||
+           c == '.' || c == '!' || c == '?' || c == ' ';
+  };
+  std::string out;
+  bool clauseStart = true;
+  for (size_t i = 0; i < text.size();) {
+    size_t start = i;
+    char32_t c = NextCodePoint(text, i);
+    if (clauseStart && isFiller(c)) {
+      // The filler's run, and the break after it when it is a clause of its own.
+      size_t end = i;
+      while (end < text.size()) {
+        size_t next = end;
+        char32_t following = NextCodePoint(text, next);
+        if (!isFiller(following) && !isBreak(following)) break;
+        end = next;
+      }
+      i = end;
+      continue;
+    }
+    // A break right after a dropped clause, or at the start, goes with it.
+    if (isBreak(c) && out.empty()) continue;
+    clauseStart = isBreak(c);
+    out.append(text, start, i - start);
+  }
+  while (!out.empty() && out.back() == ' ') out.pop_back();
+  // Nothing but a filler was said on purpose, as an answer.
+  return out.empty() && !text.empty() ? text : out;
+}
+
 void Controller::learn(const std::string& committed) {
   if (!rememberChoices_ || !personal_ || !env_.personal) return;
   env_.personal->learn(committed);
@@ -295,6 +343,7 @@ void Controller::deactivate() {
 
 void Controller::reset() {
   shiftAlone_ = false;  // a click is no key, so a Shift held through it is not a lone Shift
+  breakDictation();
   composer_->clear();
   choosing_ = false;
   zhuyinKeys_.clear();
@@ -355,6 +404,7 @@ bool Controller::typeFullWidth(char c) {
 void Controller::handleCapsLock() {
   // Each Caps Lock press switches 中/英, like the system's own Caps Lock switch.
   shiftAlone_ = false;
+  breakDictation();
   if (!env_.settings->flag(Setting::kCapsLockToggle)) return;
   commit();
   forgetEnglishRun();
@@ -362,6 +412,7 @@ void Controller::handleCapsLock() {
 }
 
 void Controller::handleShift(bool down) {
+  if (down) breakDictation();
   // A Shift press and release with no key in between switches 中/英.
   if (!env_.settings->flag(Setting::kShiftToggle)) {
     shiftAlone_ = false;
@@ -375,6 +426,43 @@ void Controller::handleShift(bool down) {
 
 void Controller::handleOtherModifier() {
   shiftAlone_ = false;
+  breakDictation();
+}
+
+bool Controller::dictationKey(bool down, std::chrono::steady_clock::time_point now) {
+  if (!env_.settings->flag(Setting::kDictation)) return false;
+  shiftAlone_ = false;
+  if (down) {
+    if (dictationSince_) return false;  // already recording
+    dictationSince_ = now;
+    client_.showIndicator("錄音中");
+    return true;
+  }
+  if (!dictationSince_) return false;
+  bool held = now - *dictationSince_ >= kDictationHold;
+  dictationSince_.reset();
+  if (!held) {
+    showMode();
+    return false;
+  }
+  client_.showIndicator("辨識中");
+  return true;
+}
+
+void Controller::breakDictation() {
+  if (!dictationSince_) return;
+  dictationSince_.reset();
+  showMode();
+}
+
+void Controller::insertDictation(const std::string& text) {
+  std::string cleaned = CleanDictation(text);
+  if (!cleaned.empty()) {
+    commit();
+    client_.insertText(cleaned);
+    learn(cleaned);
+  }
+  showMode();
 }
 
 void Controller::toggleMode() {
@@ -387,6 +475,7 @@ bool Controller::handleKey(const KeyEvent& original) {
   if (!env_.lm) return false;  // no dictionary loaded, even the bundled one: the keys go to the app
   KeyEvent event = original;
   shiftAlone_ = false;
+  breakDictation();
   typed_ = false;
   if (!choosing_) notice_.clear();
   if (composer_->isEmpty()) {

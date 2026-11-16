@@ -16,6 +16,7 @@
 #include <QDBusVariant>
 #include <QFile>
 #include <QFormLayout>
+#include <QKeyEvent>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -44,6 +45,8 @@
 
 #include <algorithm>
 #include <functional>
+
+#include <fcitx-utils/key.h>
 
 #include "Rows.h"
 
@@ -96,6 +99,44 @@ bool WriteConfig(QDBusInterface& controller, const QString& key, const QString& 
 void Unsaved(QWidget* control) {
   QMessageBox::warning(control->window(), "Project Key 設定", "無法儲存：Fcitx5 沒有回應，設定沒有改變。");
 }
+
+// A kKey row's button: once clicked, the next key pressed becomes the row's key. Escape gives up;
+// a key that types something would no longer type it, so it is passed over.
+class KeyButton : public QPushButton {
+ public:
+  KeyButton(QDBusInterface& controller, QString key) : controller_(controller), key_(std::move(key)) {
+    connect(this, &QPushButton::clicked, this, [this] {
+      recording_ = true;
+      setText("請按一個鍵");
+      grabKeyboard();
+    });
+  }
+  void show(const QString& name) {
+    name_ = name;
+    setText(QString::fromStdString(KeyLabel(name.toStdString())));
+  }
+
+ protected:
+  void keyPressEvent(QKeyEvent* event) override {
+    if (!recording_) return QPushButton::keyPressEvent(event);
+    if (event->key() != Qt::Key_Escape && !event->text().isEmpty() && event->text()[0].isPrint()) return;
+    recording_ = false;
+    releaseKeyboard();
+    // Qt gives the X keysym as the native key, on Wayland too.
+    QString name = event->key() == Qt::Key_Escape
+                       ? QString()
+                       : QString::fromStdString(fcitx::Key::keySymToString(static_cast<fcitx::KeySym>(event->nativeVirtualKey())));
+    if (name.isEmpty()) return show(name_);
+    if (WriteConfig(controller_, key_, name)) return show(name);
+    show(name_);
+    Unsaved(this);
+  }
+
+ private:
+  QDBusInterface& controller_;
+  QString key_, name_;
+  bool recording_ = false;
+};
 
 // Runs the update (UpdateCommand in Rows.h); once it is done, restarts Fcitx5, which then loads
 // the new addon, and opens the new version's settings window in place of this one.
@@ -154,14 +195,14 @@ void CheckForUpdate(QNetworkAccessManager& network, QLabel* label) {
   });
 }
 
-// A models or, on the 進階模型 row, advanced model download in progress, one file after another;
+// A models or, on an add-on's row (Rows.h), add-on download in progress, one file after another;
 // it lives as long as the label. done runs when it is complete.
 struct ModelsDownload : QObject {
-  ModelsDownload(QNetworkAccessManager& network, QLabel* label, NewerModels models, std::filesystem::path partial, bool advanced,
+  ModelsDownload(QNetworkAccessManager& network, QLabel* label, NewerModels models, std::filesystem::path partial, const AddOn* addOn,
                  std::function<void()> finished)
-      : QObject(label), network(network), label(label), models(std::move(models)), partial(std::move(partial)), advanced(advanced),
+      : QObject(label), network(network), label(label), models(std::move(models)), partial(std::move(partial)), addOn(addOn),
         finished(std::move(finished)) {}
-  std::filesystem::path folder() const { return advanced ? DownloadedAdvanced() : DownloadedModels(); }
+  std::filesystem::path folder() const { return addOn ? addOn->downloaded() : DownloadedModels(); }
 
   void fail() {
     AbandonModels(models.date, folder());
@@ -173,7 +214,7 @@ struct ModelsDownload : QObject {
     if (index == models.files.size()) {
       if (!FinishModels(models.date, folder())) return fail();
       QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ReloadModels");
-      label->setText(QString::fromStdString(advanced ? InstalledAdvancedText() : InstalledModelsText()));
+      label->setText(QString::fromStdString(addOn ? InstalledAddOnText(*addOn) : InstalledModelsText()));
       if (finished) finished();
       deleteLater();
       return;
@@ -213,20 +254,20 @@ struct ModelsDownload : QObject {
   QLabel* label;
   NewerModels models;
   std::filesystem::path partial;
-  bool advanced;
+  const AddOn* addOn;  // null for the 選字模型
   std::function<void()> finished;
   size_t index = 0;
   long long done = 0;
 };
 
-// Offers the newest models release, or with advanced the advanced model's (Rows.h), as a link that
+// Offers the newest models release, or with addOn that add-on's (Rows.h), as a link that
 // downloads it, or with automatic downloads it at once; finished runs once it is downloaded.
-void CheckForModels(QNetworkAccessManager& network, QLabel* label, bool advanced = false, std::function<void()> finished = nullptr,
+void CheckForModels(QNetworkAccessManager& network, QLabel* label, const AddOn* addOn = nullptr, std::function<void()> finished = nullptr,
                     bool automatic = false) {
   QNetworkRequest request{QUrl(kAllReleases)};
   request.setHeader(QNetworkRequest::UserAgentHeader, "ProjectKey");
   QNetworkReply* reply = network.get(request);
-  QObject::connect(reply, &QNetworkReply::finished, label, [&network, reply, label, advanced, finished, automatic] {
+  QObject::connect(reply, &QNetworkReply::finished, label, [&network, reply, label, addOn, finished, automatic] {
     reply->deleteLater();
     std::vector<ModelsRelease> releases;
     for (const QJsonValue& value : QJsonDocument::fromJson(reply->readAll()).array()) {
@@ -241,13 +282,13 @@ void CheckForModels(QNetworkAccessManager& network, QLabel* label, bool advanced
       }
       releases.push_back(std::move(parsed));
     }
-    NewerModels newer = advanced ? FindNewerAdvanced(releases) : FindNewerModels(releases);
+    NewerModels newer = addOn ? FindNewerAddOn(releases, *addOn) : FindNewerModels(releases);
     if (newer.date.empty()) return;  // the 更新 row already says when GitHub cannot be reached
-    auto start = [&network, label, newer, advanced, finished] {
-      std::filesystem::path partial = StartModels(newer.date, advanced ? DownloadedAdvanced() : DownloadedModels());
+    auto start = [&network, label, newer, addOn, finished] {
+      std::filesystem::path partial = StartModels(newer.date, addOn ? addOn->downloaded() : DownloadedModels());
       if (partial.empty()) return label->setText("無法下載");
       label->setText("下載中 0%");
-      (new ModelsDownload(network, label, newer, partial, advanced, finished))->next();
+      (new ModelsDownload(network, label, newer, partial, addOn, finished))->next();
     };
     if (automatic) return start();
     label->setText(QString("<a href=\"#\">下載 %1（%2 MB）</a>").arg(QString::fromStdString(newer.date)).arg(newer.bytes() / 1000000));
@@ -259,34 +300,34 @@ void CheckForModels(QNetworkAccessManager& network, QLabel* label, bool advanced
 }
 
 #ifdef PROJECTKEY_ADVANCED_MODEL
-// 進階模型: its version or a link that downloads a newer one, and 移除 once one is downloaded.
-QWidget* AdvancedRow(QNetworkAccessManager& network) {
+// 進階模型 or 語音模型: its version or a link that downloads a newer one, and 移除 once one is downloaded.
+QWidget* AddOnRow(QNetworkAccessManager& network, const AddOn& addOn) {
   auto* advanced = new QWidget;
   auto* advancedLayout = new QHBoxLayout(advanced);
   advancedLayout->setContentsMargins(0, 0, 0, 0);
-  auto* advancedText = new QLabel(QString::fromStdString(InstalledAdvancedText()));
+  auto* advancedText = new QLabel(QString::fromStdString(InstalledAddOnText(addOn)));
   auto* remove = new QPushButton("移除");
-  remove->setVisible(!AdvancedVersion().empty());
+  remove->setVisible(!AddOnVersion(addOn).empty());
   advancedLayout->addWidget(advancedText);
   advancedLayout->addWidget(remove);
   advancedLayout->addStretch();
-  auto offerAdvanced = [&network, advancedText, remove] {
+  auto offerAdvanced = [&network, &addOn, advancedText, remove] {
     QObject::disconnect(advancedText, &QLabel::linkActivated, nullptr, nullptr);  // an offer from before a removal
-    CheckForModels(network, advancedText, true, [remove] { remove->setVisible(true); });
+    CheckForModels(network, advancedText, &addOn, [remove] { remove->setVisible(true); });
   };
   offerAdvanced();
-  QObject::connect(remove, &QPushButton::clicked, [remove, advancedText, offerAdvanced] {
-    QMessageBox question(QMessageBox::Question, remove->window()->windowTitle(), kRemoveAdvancedTitle, QMessageBox::NoButton, remove->window());
-    question.setInformativeText(kRemoveAdvancedBody);
+  QObject::connect(remove, &QPushButton::clicked, [&addOn, remove, advancedText, offerAdvanced] {
+    QMessageBox question(QMessageBox::Question, remove->window()->windowTitle(), addOn.removeTitle, QMessageBox::NoButton, remove->window());
+    question.setInformativeText(addOn.removeBody);
     QPushButton* removeButton = question.addButton("移除", QMessageBox::DestructiveRole);
     question.setDefaultButton(question.addButton("取消", QMessageBox::RejectRole));
     question.exec();
     if (question.clickedButton() != removeButton) return;
-    bool removed = RemoveAdvanced();
+    bool removed = RemoveAddOn(addOn);
     QDBusInterface(kFcitx, "/projectkey", "org.projectkey.Engine").call("ReloadModels");
     if (!removed) return advancedText->setText("無法移除");
     remove->setVisible(false);
-    advancedText->setText(QString::fromStdString(InstalledAdvancedText()));
+    advancedText->setText(QString::fromStdString(InstalledAddOnText(addOn)));
     offerAdvanced();
   });
   return advanced;
@@ -429,9 +470,9 @@ int Welcome(QApplication& app, QDBusInterface& controller) {
   auto* modelsForm = new QFormLayout(modelsFrame);
   auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
   modelsForm->addRow("選字模型：", models);
-  CheckForModels(network, models, false, nullptr, true);
+  CheckForModels(network, models, nullptr, nullptr, true);
 #ifdef PROJECTKEY_ADVANCED_MODEL
-  modelsForm->addRow("進階模型：", AdvancedRow(network));
+  modelsForm->addRow("進階模型：", AddOnRow(network, kAdvanced));
 #endif
   layout->addWidget(modelsFrame);
 
@@ -618,6 +659,12 @@ int main(int argc, char** argv) {
           Unsaved(combo);
         });
         form->addRow(label(row.title), combo);
+      } else if (row.kind == Row::kKey) {
+        auto* button = new KeyButton(controller, key);
+        button->show(Text(config.value(key)));
+        button->setEnabled(available);
+        showConfig.push_back([button, key](const QVariantMap& config) { button->show(Text(config.value(key))); });
+        form->addRow(label(row.title), button);
       } else if (row.kind == Row::kEditPhrases) {
         auto* edit = new QPushButton("編輯…");
         QObject::connect(edit, &QPushButton::clicked, [edit, name = std::string(row.key)] {
@@ -680,7 +727,8 @@ int main(int argc, char** argv) {
   auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
   about->addRow("選字模型：", models);
 #ifdef PROJECTKEY_ADVANCED_MODEL
-  about->addRow("進階模型：", AdvancedRow(network));
+  about->addRow("進階模型：", AddOnRow(network, kAdvanced));
+  about->addRow("語音模型：", AddOnRow(network, kSpeech));
 #endif
   about->addRow("授權：", new QLabel("MIT"));
   auto* engine = new QLabel(QString("<a href=\"%1\">McBopomofo</a>").arg(kEngineUrl));

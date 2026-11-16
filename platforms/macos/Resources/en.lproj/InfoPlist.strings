@@ -1,3 +1,4 @@
 CFBundleName = "Project Key";
 CFBundleDisplayName = "Project Key";
 "org.projectkey.inputmethod.ProjectKey.Bopomofo" = "Project Key Bopomofo";
+NSMicrophoneUsageDescription = "Records while you hold the right Option key and turns what you say into text on this Mac.";

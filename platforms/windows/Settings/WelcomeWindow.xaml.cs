@@ -38,7 +38,7 @@ public sealed partial class WelcomeWindow : Window {
     MainWindow.CheckForReleases(MainWindow.ModelsReleases(Models), download: true);
 #if ADVANCED_MODEL
     Advanced.Visibility = Visibility.Visible;
-    MainWindow.CheckForReleases(MainWindow.AdvancedReleases(Advanced));
+    MainWindow.CheckForReleases(MainWindow.AddOnReleases(Advanced, MainWindow.AdvancedModel));
 #endif
   }
 

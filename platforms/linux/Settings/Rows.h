@@ -40,12 +40,26 @@ inline std::filesystem::path DownloadedModels() {
   return data.empty() ? data : data / "models";
 }
 
-// Where the advanced model (core/engine/AdvancedModel.h) goes, a release per folder as for the
-// models; the addon uses the newest (NewestDownload). Nothing is bundled.
-inline std::filesystem::path DownloadedAdvanced() {
-  std::filesystem::path data = UserData();
-  return data.empty() ? data : data / "advanced";
-}
+// A model downloaded apart from the 選字模型 and never bundled: the advanced model
+// (core/engine/AdvancedModel.h) and the speech model (core/engine/SpeechModel.h). Each goes in a
+// folder of its own, a release per folder as for the models, and the addon uses the newest
+// (NewestDownload). Its row offers <prefix>YYYY-MM-DD releases published with all its files.
+struct AddOn {
+  const char* title;   // the row's
+  const char* folder;  // under UserData()
+  const char* prefix;
+  std::vector<const char*> files;
+  const char* removeTitle, *removeBody;  // 移除's question, as on macOS and Windows
+  std::filesystem::path downloaded() const {
+    std::filesystem::path data = UserData();
+    return data.empty() ? data : data / folder;
+  }
+};
+inline const AddOn kAdvanced{"進階模型", "advanced", "advanced-", {"advanced.gguf"}, "移除進階模型？", "打字停頓時，不再用進階模型重選整句。"};
+inline const AddOn kSpeech{"語音模型", "speech", "speech-", {"speech.gguf", "speech-encoder.gguf"}, "移除語音模型？", "按住右 Alt 不再錄音輸入。"};
+
+inline std::filesystem::path DownloadedAdvanced() { return kAdvanced.downloaded(); }
+inline std::filesystem::path DownloadedSpeech() { return kSpeech.downloaded(); }
 
 // The user's own words, phrases.txt (core/engine Lexicon::loadUserPhrases), or the words never
 // offered, exclude-phrases.txt, which the addon reads again on the next composition after a
@@ -132,33 +146,26 @@ inline NewerModels FindNewerModels(const std::vector<ModelsRelease>& releases) {
   return FindNewer(releases, "models-", {"data.txt", "bigram.bin", "chars.bin"}, ProjectKey::ModelsVersion(ModelsInUse()));
 }
 
-// The advanced model's version, empty when none is downloaded.
-inline std::string AdvancedVersion() {
-  std::filesystem::path dir = ProjectKey::NewestDownload(DownloadedAdvanced());
+// The add-on's version, empty when none is downloaded.
+inline std::string AddOnVersion(const AddOn& addOn) {
+  std::filesystem::path dir = ProjectKey::NewestDownload(addOn.downloaded());
   return dir.empty() ? "" : ProjectKey::ModelsVersion(dir);
 }
 
-// The 進階模型 row while nothing newer is offered.
-inline std::string InstalledAdvancedText() {
-  std::string version = AdvancedVersion();
+// Its row while nothing newer is offered.
+inline std::string InstalledAddOnText(const AddOn& addOn) {
+  std::string version = AddOnVersion(addOn);
   return version.empty() ? "未安裝" : version;
 }
 
-// The newest advanced-YYYY-MM-DD release, published with its one file (core/engine/AdvancedModel.h),
-// when newer than the one downloaded.
-constexpr char kAdvancedFile[] = "advanced.gguf";
-inline NewerModels FindNewerAdvanced(const std::vector<ModelsRelease>& releases) {
-  return FindNewer(releases, "advanced-", {kAdvancedFile}, AdvancedVersion());
+inline NewerModels FindNewerAddOn(const std::vector<ModelsRelease>& releases, const AddOn& addOn) {
+  return FindNewer(releases, addOn.prefix, std::vector<std::string>(addOn.files.begin(), addOn.files.end()), AddOnVersion(addOn));
 }
 
-// 移除's question on the 進階模型 row, as on macOS and Windows.
-constexpr char kRemoveAdvancedTitle[] = "移除進階模型？";
-constexpr char kRemoveAdvancedBody[] = "打字停頓時，不再用進階模型重選整句。";
-
-// Removes every advanced model downloaded; false when one could not be removed.
-inline bool RemoveAdvanced() {
+// Removes every one of it downloaded; false when one could not be removed.
+inline bool RemoveAddOn(const AddOn& addOn) {
   std::error_code error;
-  std::filesystem::remove_all(DownloadedAdvanced(), error);
+  std::filesystem::remove_all(addOn.downloaded(), error);
   return !error;
 }
 
@@ -252,13 +259,25 @@ inline bool RemoveUserData() {
 }
 
 struct Row {
-  enum Kind { kToggle, kChoice, kClearChoices, kEditPhrases, kShowFolder, kRestore } kind;
+  enum Kind { kToggle, kChoice, kKey, kClearChoices, kEditPhrases, kShowFolder, kRestore } kind;
   const char* key;  // empty for kClearChoices, kShowFolder and kRestore; the file's name for kEditPhrases
   const char* title;
   const char* detail = nullptr;              // a line under the row
   std::vector<const char*> values = {};      // kChoice: the config's names for its options
   std::vector<const char*> shown = {};       // kChoice: what the list says, when not the names
 };
+
+// A kKey row's key as it shows: the config's keysym name (Fcitx5's, which X and GDK share), with
+// the sides of the modifiers spelled out.
+inline std::string KeyLabel(const std::string& name) {
+  static const std::pair<const char*, const char*> kNames[] = {
+      {"Alt", "Alt"}, {"Control", "Ctrl"}, {"Super", "Super"}, {"Shift", "Shift"}, {"Meta", "Meta"}, {"Hyper", "Hyper"}};
+  for (const auto& [prefix, shown] : kNames) {
+    if (name == std::string(prefix) + "_L") return std::string("左 ") + shown;
+    if (name == std::string(prefix) + "_R") return std::string("右 ") + shown;
+  }
+  return name.empty() ? "未設定" : name;
+}
 
 struct Group {
   const char* title;
@@ -298,6 +317,10 @@ inline const std::vector<Group>& Groups() {
            {Row::kToggle, "FullWidthToggle", "Shift+Space 切換全形"},
            {Row::kToggle, "EnglishToZhuyin", "Tab 英文轉注音"},
            {Row::kToggle, "ZhuyinToEnglish", "Tab 注音轉英文"},
+#ifdef PROJECTKEY_ADVANCED_MODEL
+           {Row::kToggle, "Dictation", "語音輸入（Alpha）", "按住語音輸入鍵說話，放開後輸入；需下載「關於」的語音模型"},
+           {Row::kKey, "DictationKey", "語音輸入鍵"},
+#endif
        }},
       {"重設", {{Row::kRestore, "", "恢復原廠設定"}}},
   };

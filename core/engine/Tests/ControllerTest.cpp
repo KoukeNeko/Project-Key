@@ -492,6 +492,52 @@ int main(int argc, char** argv) {
   controller.handleShift(false);
   assert(!controller.englishMode());
 
+  // Dictation: a hold of the right Alt records, a tap or a hold another key breaks does not.
+  using std::chrono::milliseconds;
+  auto pressed = std::chrono::steady_clock::now();
+  assert(!controller.dictationKey(true, pressed));  // off by default: an ordinary modifier
+  settings.set(Setting::kDictation, 1);
+  assert(controller.dictationKey(true, pressed) && client.indicator == "錄音中");
+  assert(!controller.dictationKey(true, pressed + milliseconds(100)));  // a repeat records on
+  assert(!controller.dictationKey(false, pressed + milliseconds(100)) && client.indicator == "ㄅ半");
+  assert(controller.dictationKey(true, pressed));
+  assert(controller.dictationKey(false, pressed + milliseconds(900)) && client.indicator == "辨識中");
+  assert(controller.dictationKey(true, pressed));
+  controller.handleOtherModifier();  // Alt+Control, say
+  assert(!controller.dictationKey(false, pressed + milliseconds(900)) && client.indicator == "ㄅ半");
+  assert(controller.dictationKey(true, pressed));
+  KeyEvent altF = Press("f");
+  altF.alt = true;
+  controller.handleKey(altF);  // Alt+F, whatever it does
+  assert(!controller.dictationKey(false, pressed + milliseconds(900)));
+  EscapeAll(controller, client);
+  // What was said follows the composition, which is committed first, without its fillers.
+  client.committed.clear();
+  Type(controller, "rup ");
+  std::string composed = client.marked;
+  controller.insertDictation("嗯，今天天氣很好。");
+  assert(client.committed == composed + "今天天氣很好。" && client.marked.empty() && client.indicator == "ㄅ半");
+  client.committed.clear();
+  Type(controller, "rup ");
+  controller.insertDictation("");  // nothing recognized: the composition goes on
+  assert(client.committed.empty() && client.marked == composed);
+  EscapeAll(controller, client);
+  settings.set(Setting::kDictation, 0);
+  assert(CleanDictation("呃我想說，嗯嗯，明天見。") == "我想說，明天見。");
+  assert(CleanDictation("我嗯想") == "我嗯想");  // only where a clause starts
+  assert(CleanDictation("欸你好 ") == "你好");
+  assert(CleanDictation("嗯。") == "嗯。");  // an answer
+  assert(CleanDictation("").empty());
+  {
+    std::filesystem::path phrases = std::filesystem::temp_directory_path() / "projectkey-dictation-phrases.txt";
+    std::ofstream(phrases) << "# 註解\n小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n\n大鍵\tㄉㄚˋ-ㄐㄧㄢˋ\n";
+    Environment words;
+    words.userPhrasesPath = phrases.string();
+    assert((DictationWords(words) == std::vector<std::string>{"大鍵", "小鍵"}));
+    std::filesystem::remove(phrases);
+    assert(DictationWords(Environment{}).empty());
+  }
+
   // Zhuyin typed in English mode: Tab turns the whole syllables at
   // the end (ji3cl3, 我好) into a composition and leaves the English alone.
   TapShift(controller);

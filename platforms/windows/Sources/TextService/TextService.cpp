@@ -1,6 +1,7 @@
 #include "TextService/TextService.h"
 
 #include <ctffunc.h>
+#include <utility>
 
 #include "Common/Win.h"
 #include "TextService/DisplayAttributes.h"
@@ -51,6 +52,8 @@ void SetSelection(TfEditCookie cookie, ITfContext* context, ITfRange* range) {
   selection.style.fInterimChar = FALSE;
   context->SetSelection(cookie, 1, &selection);
 }
+
+constexpr UINT kDictationPollMs = 100;  // how often the server is asked for what was said, once the right Alt is up
 
 bool IsDown(int key) {
   return (GetKeyState(key) & 0x8000) != 0;
@@ -187,6 +190,9 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
 STDMETHODIMP TextService::Deactivate() {
   if (pauseTimer_) KillTimer(nullptr, pauseTimer_);
   pauseTimer_ = 0;
+  if (dictationTimer_) KillTimer(nullptr, dictationTimer_);
+  dictationTimer_ = 0;
+  SafeRelease(dictationContext_);
   if (pausedService_ == this) pausedService_ = nullptr;
   if (composition_) request(compositionContext_, {Protocol::Request::kDeactivate});
   candidates_.hide();
@@ -351,26 +357,29 @@ STDMETHODIMP TextService::OnKeyDown(ITfContext* context, WPARAM wParam, LPARAM l
   }
   if (testedDown_ == wParam) {  // the test already handled it and left it to the app
     testedDown_ = 0;
+    *eaten = IsDictationKey(wParam, lParam) && dictationHeld_;
     return S_OK;
   }
   keyDown(context, wParam, lParam, eaten, false);
   return S_OK;
 }
 
-STDMETHODIMP TextService::OnTestKeyUp(ITfContext* context, WPARAM wParam, LPARAM, BOOL* eaten) {
+STDMETHODIMP TextService::OnTestKeyUp(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten) {
   *eaten = FALSE;
   testedUp_ = wParam;
-  keyUp(context, wParam);
+  dictationUpEaten_ = false;
+  keyUp(context, wParam, lParam, eaten);
   return S_OK;
 }
 
-STDMETHODIMP TextService::OnKeyUp(ITfContext* context, WPARAM wParam, LPARAM, BOOL* eaten) {
+STDMETHODIMP TextService::OnKeyUp(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten) {
   *eaten = FALSE;
   if (testedUp_ == wParam) {
     testedUp_ = 0;
+    *eaten = IsDictationKey(wParam, lParam) && std::exchange(dictationUpEaten_, false);
     return S_OK;
   }
-  keyUp(context, wParam);
+  keyUp(context, wParam, lParam, eaten);
   return S_OK;
 }
 
@@ -384,8 +393,18 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
     case VK_CAPITAL:
       if (!repeat) request(context, {Protocol::Request::kCapsLock});
       return;
-    case VK_CONTROL:
     case VK_MENU:
+      if (IsDictationKey(wParam, lParam)) {
+        if (!repeat) {
+          std::optional<Protocol::Reply> reply = request(context, {Protocol::Request::kDictationKey, {}, true});
+          dictationHeld_ = reply && reply->handled;
+        }
+        *eaten = dictationHeld_;
+        return;
+      }
+      if (!repeat) engine_.send({Protocol::Request::kOtherModifier});
+      return;
+    case VK_CONTROL:
     case VK_LWIN:
     case VK_RWIN:
       if (!repeat) engine_.send({Protocol::Request::kOtherModifier});
@@ -419,9 +438,41 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
   apply(context, *reply);  // e.g. the commit before a shortcut the app handles
 }
 
-void TextService::keyUp(ITfContext* context, WPARAM wParam) {
+void TextService::keyUp(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten) {
+  if (IsDictationKey(wParam, lParam) && dictationHeld_) {
+    dictationHeld_ = false;
+    *eaten = dictationUpEaten_ = true;
+    if (!context) return;
+    std::optional<Protocol::Reply> reply = request(context, {Protocol::Request::kDictationKey, {}, false});
+    if (!reply || !reply->handled) return;
+    // What was said goes into this document, wherever the focus is by then.
+    SafeRelease(dictationContext_);
+    dictationContext_ = context;
+    context->AddRef();
+    if (dictationTimer_) KillTimer(nullptr, dictationTimer_);
+    dictatingService_ = this;
+    dictationTimer_ = SetTimer(nullptr, 0, kDictationPollMs, &TextService::OnDictationTimer);
+    return;
+  }
   if (wParam != VK_SHIFT || !context || keyboardDisabled(context)) return;
   request(context, {Protocol::Request::kShift, {}, false});
+}
+
+// The right Alt: an extended VK_MENU. AltGr sends it with a Control press of its own first, so it is left to the layout.
+bool TextService::IsDictationKey(WPARAM wParam, LPARAM lParam) {
+  return wParam == VK_MENU && (lParam & (1 << 24)) && !IsDown(VK_CONTROL);
+}
+
+thread_local TextService* TextService::dictatingService_ = nullptr;
+
+void CALLBACK TextService::OnDictationTimer(HWND, UINT, UINT_PTR, DWORD) {
+  TextService* self = dictatingService_;
+  if (!self || !self->dictationContext_) return;
+  std::optional<Protocol::Reply> reply = self->request(self->dictationContext_, {Protocol::Request::kDictated});
+  if (reply && reply->handled) return;  // still transcribing
+  KillTimer(nullptr, self->dictationTimer_);
+  self->dictationTimer_ = 0;
+  SafeRelease(self->dictationContext_);
 }
 
 void TextService::candidateClicked(const Metrics::PanelHit& hit) {

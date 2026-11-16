@@ -49,6 +49,8 @@
 
 #ifdef PROJECTKEY_ADVANCED_MODEL
 #include "AdvancedModel.h"
+#include "Microphone.h"
+#include "SpeechModel.h"
 #endif
 #include "Controller.h"
 #include "Panel.h"
@@ -113,6 +115,11 @@ FCITX_CONFIGURATION(
     fcitx::Option<bool> fullWidthToggle{this, "FullWidthToggle", "Shift+Space 切換全形", DefaultFlag(Setting::kFullWidthToggle)};
     fcitx::Option<bool> englishToZhuyin{this, "EnglishToZhuyin", "Tab 英文轉注音", DefaultFlag(Setting::kEnglishToZhuyin)};
     fcitx::Option<bool> zhuyinToEnglish{this, "ZhuyinToEnglish", "Tab 注音轉英文", DefaultFlag(Setting::kZhuyinToEnglish)};
+    fcitx::Option<bool> dictation{this, "Dictation", "語音輸入", DefaultFlag(Setting::kDictation)};
+    // Held to dictate: a modifier alone, or a key that types nothing (Settings/Gtk.cpp and Qt.cpp record it).
+    fcitx::Option<fcitx::Key, fcitx::KeyConstrain> dictationKey{
+        this, "DictationKey", "語音輸入鍵", fcitx::Key(FcitxKey_Alt_R),
+        fcitx::KeyConstrain({fcitx::KeyConstrainFlag::AllowModifierLess, fcitx::KeyConstrainFlag::AllowModifierOnly})};
     // The proof mode Ctrl+Shift+P turns back on; -1 until it is first toggled.
     fcitx::HiddenOption<int> proofPreviewLastOn{this, "ProofPreviewLastOn", "", -1};
     fcitx::HiddenOption<int> choosingProofLastOn{this, "ChoosingProofLastOn", "", -1};);
@@ -143,6 +150,7 @@ class ConfigSettings : public Settings {
       case Setting::kAppearance: return static_cast<int>(*config_.appearance);
       case Setting::kGridColumns: return static_cast<int>(*config_.gridColumns);
       case Setting::kKeyboardLayout: return static_cast<int>(*config_.keyboardLayout);
+      case Setting::kDictation: return *config_.dictation;
     }
     return std::nullopt;
   }
@@ -604,6 +612,117 @@ class AdvancedRanker {
   std::thread thread_;  // last: it runs on the members above
 };
 
+// Dictation (Setting::kDictation): the microphone records on Fcitx5's thread while the dictation key is
+// held, and the speech model (core/engine/SpeechModel.h) the settings windows download transcribes
+// on a thread of its own; what was said goes back on Fcitx5's thread. Built without llama.cpp,
+// there is never a model, and the dictation key stays an ordinary key.
+class Dictation {
+ public:
+  using Answer = std::function<void(const std::string&)>;
+  explicit Dictation(fcitx::EventLoop& loop) {
+    dispatcher_.attach(&loop);
+    thread_ = std::thread([this] { run(); });
+  }
+  ~Dictation() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      stopping_ = true;
+    }
+    wake_.notify_all();
+    thread_.join();
+    dispatcher_.detach();
+  }
+  // Fcitx5's thread only, as the answer of reload says.
+  bool loaded() const { return sampleRate_ > 0; }
+  // Loads the newest download, or drops the model when there is none.
+  void reload() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    reload_ = true;
+    wake_.notify_all();
+  }
+  // false when the microphone cannot be opened.
+  bool record() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    return loaded() && microphone_.start(sampleRate_);
+#else
+    return false;
+#endif
+  }
+  // Stops recording; with answer, transcribes what was recorded, biased toward words.
+  void finish(std::vector<std::string> words, Answer answer) {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    std::vector<float> samples = microphone_.stop();
+    if (!answer) return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    jobs_.push_back({std::move(samples), std::move(words), std::move(answer)});
+    wake_.notify_all();
+#endif
+  }
+
+ private:
+  struct Job {
+    std::vector<float> samples;
+    std::vector<std::string> words;
+    Answer answer;
+  };
+  void run() {
+    for (;;) {
+      std::unique_lock<std::mutex> lock(mutex_);
+      wake_.wait(lock, [&] { return stopping_ || reload_ || !jobs_.empty(); });
+      if (stopping_) return;
+      if (reload_) {
+        reload_ = false;
+        lock.unlock();
+        int rate = load();
+        dispatcher_.schedule([this, rate] { sampleRate_ = rate; });
+        continue;
+      }
+      Job job = std::move(jobs_.front());
+      jobs_.erase(jobs_.begin());
+      lock.unlock();
+      std::string text;
+#ifdef PROJECTKEY_ADVANCED_MODEL
+      if (model_) text = model_->transcribe(job.samples, job.words);
+#endif
+      dispatcher_.schedule([answer = std::move(job.answer), text = std::move(text)] { answer(text); });
+    }
+  }
+  // The model's sample rate, 0 for none.
+  int load() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    model_.reset();
+    std::filesystem::path dir = NewestDownload(SettingsRows::DownloadedSpeech());
+    if (dir.empty()) return 0;
+    auto model = std::make_unique<SpeechModel>();
+    int threads = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 1, 8);
+    if (!model->load(dir.string(), threads)) {
+      FCITX_ERROR() << "Project Key: cannot load the speech model in " << dir;
+      return 0;
+    }
+    model_ = std::move(model);
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator(SettingsRows::DownloadedSpeech(), error)) {
+      if (entry.path() != dir && entry.path().extension() != ".partial") std::filesystem::remove_all(entry.path(), error);
+    }
+    return model_->sampleRate();
+#else
+    return 0;
+#endif
+  }
+
+  fcitx::EventDispatcher dispatcher_;
+  int sampleRate_ = 0;
+  std::mutex mutex_;
+  std::condition_variable wake_;
+  bool stopping_ = false, reload_ = false;
+  std::vector<Job> jobs_;
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  Microphone microphone_;                  // Fcitx5's thread
+  std::unique_ptr<SpeechModel> model_;  // the thread's
+#endif
+  std::thread thread_;  // last: it runs on the members above
+};
+
 // What the settings windows (Settings/Qt.cpp, Settings/Gtk.cpp) ask of the engine over D-Bus,
 // at /projectkey on Fcitx5's own bus name: forgetting the choices, which live
 // only in this process, switching to models they downloaded, and every setting's default.
@@ -737,6 +856,12 @@ class Engine : public fcitx::InputMethodEngineV2 {
     Controller& controller = session->controller;
     fcitx::Key key = event.rawKey();
     fcitx::KeySym sym = key.sym();
+    // While dictation is on and has its model, its key is Project Key's, pressed and released.
+    if (sym == config_.dictationKey->sym() && dictation_.loaded() && settings_.flag(Setting::kDictation)) {
+      dictationKey(event, controller);
+      event.filterAndAccept();
+      return;
+    }
     switch (sym) {
       case FcitxKey_Shift_L:
       case FcitxKey_Shift_R:
@@ -848,6 +973,32 @@ class Engine : public fcitx::InputMethodEngineV2 {
  private:
   void reloadAdvanced() {
     advanced_.reload([this](bool loaded) { environment_.advancedRanking = loaded; });
+    dictation_.reload();
+  }
+  // The dictation key pressed or released: records while it is held, then types what was said in the
+  // field it was said in.
+  void dictationKey(fcitx::KeyEvent& event, Controller& controller) {
+    if (!event.isRelease()) {
+      if (controller.dictationKey(true) && !dictation_.record()) {
+        controller.handleOtherModifier();  // takes the recording badge away
+        notify("沒有可用的麥克風", "語音輸入需要麥克風。");
+      }
+      return;
+    }
+    if (!controller.dictationKey(false)) return dictation_.finish({}, nullptr);
+    dictation_.finish(DictationWords(environment_), [this, ref = event.inputContext()->watch()](const std::string& text) {
+      fcitx::InputContext* ic = ref.get();
+      if (!ic || instance_->inputMethodEngine(ic) != this) return;
+      Session* session = ic->propertyFor(&factory_);
+      Active active(session);
+      session->controller.insertDictation(text);
+    });
+  }
+  void notify(const std::string& summary, const std::string& body) {
+    if (fcitx::AddonInstance* notifications = this->notifications()) {
+      notifications->call<fcitx::INotifications::sendNotification>("Project Key", 0, "fcitx-projectkey", summary, body,
+                                                                   std::vector<std::string>{}, -1, nullptr, nullptr);
+    }
   }
   // After each key the pause starts again; once it lasts, the advanced model chooses for the
   // context typed in, and its answer is dropped if a key came since (Controller::applyRanking).
@@ -926,6 +1077,7 @@ class Engine : public fcitx::InputMethodEngineV2 {
   std::unique_ptr<fcitx::EventSourceTime> pause_;
   fcitx::TrackableObjectReference<fcitx::InputContext> paused_;
   AdvancedRanker advanced_{instance_->eventLoop()};  // after what its answers use
+  Dictation dictation_{instance_->eventLoop()};
   SettingsObject settingsObject_{environment_, config_, [this] { reloadAdvanced(); }};
 };
 

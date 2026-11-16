@@ -102,7 +102,7 @@ class TextService : public ITfTextInputProcessorEx,
   bool keyboardDisabled(ITfContext* context);
   KeyEvent keyEvent(WPARAM wParam) const;
   void keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten, bool testing);
-  void keyUp(ITfContext* context, WPARAM wParam);
+  void keyUp(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten);
   void candidateClicked(const Metrics::PanelHit& hit);
   void updateLangBar();
   // The advanced model (Protocol::Request::kPause, kRanked): after each key the pause starts again;
@@ -113,6 +113,15 @@ class TextService : public ITfTextInputProcessorEx,
   static thread_local TextService* pausedService_;  // the one whose timer runs on this thread
   UINT_PTR pauseTimer_ = 0;
   bool ranking_ = false;  // the server answered that the model is choosing
+  // Dictation (Protocol::Request::kDictationKey, kDictated): the server takes the right Alt, the app
+  // never sees it; once released, the server is asked for what was said until it has it.
+  static bool IsDictationKey(WPARAM wParam, LPARAM lParam);
+  static void CALLBACK OnDictationTimer(HWND, UINT, UINT_PTR, DWORD);
+  static thread_local TextService* dictatingService_;
+  bool dictationHeld_ = false;   // the server took the right Alt's press
+  bool dictationUpEaten_ = false;  // and its release, which OnKeyUp eats too after OnTestKeyUp
+  UINT_PTR dictationTimer_ = 0;
+  ITfContext* dictationContext_ = nullptr;  // the document it was said in
 
   LONG refs_ = 1;
   ITfThreadMgr* threadMgr_ = nullptr;

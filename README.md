@@ -102,6 +102,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 - **排除詞**：選字時按兩次 Delete（無 Delete 鍵的鍵盤可按 Shift+Backspace），將反白的候選寫入 `exclude-phrases.txt`，此後不再列出。
 - **還原**：以 `+` 加入或排除後，立即按 Backspace 即撤銷該次變更。
 - **進階模型**（選用；macOS、Windows、Linux）：於設定的「關於」下載進階模型（刪去詞表的 Gemma 4 E2B，約 1.3 GB）後，打字停頓 0.3 秒時由它重選整句，於本機的 CPU 執行；不下載時選字與先前相同。
+- **語音輸入**（選用；macOS、Windows、Linux）：於設定的「關於」下載語音模型（Qwen3-ASR 0.6B，約 1 GB）並開啟「按鍵」的「語音輸入」後，按住右 Alt（macOS 為右 Option；Linux 可於「語音輸入鍵」改用其他鍵）說話，放開後所說的話即轉為繁體中文輸入，於本機的 CPU 執行，錄音不離開電腦。句首與分句處的「嗯、呃、欸」不輸入；自訂詞一併提供給模型，使其採用相同寫法。macOS 第一次使用時須允許麥克風。
 - **記住選過的字**：相同上下文下優先選取曾選過的字，並自送出的文字學習常用說法；學習結果隨輸入量增加逐步淡化。資料僅存於本機，詳見各平台 README。
 
 ## 常用按鍵
@@ -123,6 +124,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 | 任何時候 | 單按 Shift | 切換中文與英文 |
 | | Caps Lock | 開啟設定中的「Caps Lock 切換中英」（預設關閉）時，切換中文與英文；未開啟時，大寫鎖定亮起亦不影響中文模式，字母仍為注音 |
 | | Shift+Space | 切換全形與半形 |
+| | 按住右 Alt（macOS 為右 ⌥；Linux 為設定的語音輸入鍵） | 開啟「語音輸入」並下載語音模型時錄音，放開後輸入所說的話 |
 | 候選視窗 | 滑鼠點選候選字 | 選取該字（iOS 為觸控） |
 | | 滑鼠點選列尾的頁碼或箭頭 | 展開或收合候選格線（macOS、Windows、Linux） |
 

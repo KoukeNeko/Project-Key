@@ -92,6 +92,7 @@ enum class Setting {
   kGridColumns,         // candidates per row: 0 to 3 for 6 to 9 columns
   kKeyboardLayout,      // 0 大千, 1 倚天, 2 許氏, 3 倚天 26 鍵, 4 IBM
   kAssociatedPhrases,   // 聯想詞: after Enter or Tab commits, a row offers the phrases that commonly follow its last word
+  kDictation,           // 語音輸入: holding the right Alt (Option) key records, and what was said is typed (SpeechModel.h)
 };
 
 class Settings {
@@ -169,6 +170,12 @@ std::string ExcludedPhrasesPath(const Environment& env);
 // or was removed.
 void ReloadUserPhrases(Environment& env);
 
+// The user's own words (phrases.txt), newest first, that the speech model is asked to spell as they do.
+std::vector<std::string> DictationWords(const Environment& env);
+// A transcription without the fillers said between clauses (嗯、呃、欸), and without spaces at its end;
+// one that is nothing but a filler stays as it is.
+std::string CleanDictation(const std::string& text);
+
 // Loads data.txt, bigram.bin and chars.bin from ModelsDirectory(bundled, downloaded) (Models.h)
 // into env, at start and after the settings window downloads a release; controllers switch on
 // their next composition. Then removes the downloaded releases it did not choose, except one still
@@ -203,6 +210,15 @@ class Controller {
   void handleCapsLock();
   // Another modifier (Control, Alt, Windows) pressed; it ends a lone Shift.
   void handleOtherModifier();
+  // The dictation key (right Alt, or right Option on macOS) pressed or released, while
+  // Setting::kDictation is on; otherwise it is an ordinary modifier. Pressed: true when the
+  // platform should record. Released: true when the platform should transcribe what it recorded
+  // and give it to insertDictation; false for a tap shorter than kDictationHold or a hold that
+  // another key broke, whose recording is dropped.
+  bool dictationKey(bool down, std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
+  // What was said: commits the composition, then types the text cleaned of fillers; nothing for empty text.
+  void insertDictation(const std::string& text);
+  static constexpr std::chrono::milliseconds kDictationHold{250};
   // The 中/英 button in the taskbar: commits and switches modes.
   void toggleMode();
   // Focus left the document: commit what is composed.
@@ -255,6 +271,8 @@ class Controller {
   bool convertZhuyinKeys();
   bool convertEnglishRun();
   void switchMode(bool english);
+  // A key, a modifier or a reset while the dictation key is held: what it recorded is dropped.
+  void breakDictation();
   // The selected candidate is never offered again: it goes in exclude-phrases.txt.
   void excludeSelected();
   // ` puts the list of symbols in the composition and chooses from it; a capital letter or a
@@ -340,6 +358,8 @@ class Controller {
   bool expanded_ = false;  // several rows shown; collapsed shows only the selection's row
   int firstRow_ = 0;       // first grid row on screen
   bool shiftAlone_ = false;
+  // While the dictation key is held: when it was pressed, until a key breaks the hold.
+  std::optional<std::chrono::steady_clock::time_point> dictationSince_;
   bool cursorMoved_ = false;  // arrows moved the cursor since the last typed key
   bool typed_ = false;        // this key typed or deleted at the cursor
   std::optional<size_t> rowSegment_;  // the segment whose words the row shown while typing offers

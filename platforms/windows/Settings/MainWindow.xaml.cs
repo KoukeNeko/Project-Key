@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window {
     Bind(FullWidthToggle, "FullWidthToggle");
     Bind(EnglishToZhuyin, "EnglishToZhuyin");
     Bind(ZhuyinToEnglish, "ZhuyinToEnglish");
+    Bind(Dictation, "Dictation", false);
     // 自動, 淺色, 深色, Acrylic, Mica, Mica Alt: 淺色 and 自動 came after the others, which keep their values.
     Bind(Appearance, "Appearance", 5, [5, 4, 0, 1, 2, 3]);
     Bind(ProofPreview, "ProofPreview", 1);
@@ -60,7 +61,10 @@ public sealed partial class MainWindow : Window {
     CheckForReleases(ModelsReleases(Models));
 #if ADVANCED_MODEL
     Advanced.Visibility = Visibility.Visible;
-    CheckForReleases(AdvancedReleases(Advanced));
+    CheckForReleases(AddOnReleases(Advanced, AdvancedModel));
+    DictationCard.Visibility = Visibility.Visible;
+    Speech.Visibility = Visibility.Visible;
+    CheckForReleases(AddOnReleases(Speech, SpeechModel));
 #endif
     CheckForUpdate();
 
@@ -111,14 +115,23 @@ public sealed partial class MainWindow : Window {
     return new TextBlock { Text = !installed ? "未安裝" : version != "" ? version : "已安裝" };
   }
 
-  // The advanced model (core/engine/AdvancedModel.h), which nothing installs: the newest release this
-  // window downloaded, chosen as for the models; empty when there is none.
-  private static readonly string DownloadedAdvanced =
-      Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key", "advanced");
+  // A model downloaded apart from the models that nothing installs: the advanced model
+  // (core/engine/AdvancedModel.h) or the speech model (core/engine/SpeechModel.h), in a folder of
+  // its own, from <Prefix>YYYY-MM-DD releases with all its files.
+  internal sealed record AddOn(string Folder, string Prefix, string[] Files, string RemoveTitle, string RemoveBody);
 
-  private static string AdvancedVersion() {
+  private static string UserFolder(string name) =>
+      Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key", name);
+
+  internal static readonly AddOn AdvancedModel =
+      new(UserFolder("advanced"), "advanced-", ["advanced.gguf"], "移除進階模型？", "打字停頓時，不再用進階模型重選整句。");
+  internal static readonly AddOn SpeechModel =
+      new(UserFolder("speech"), "speech-", ["speech.gguf", "speech-encoder.gguf"], "移除語音模型？", "按住右 Alt 不再錄音輸入。");
+
+  // The newest release of it this window downloaded, chosen as for the models; empty when there is none.
+  private static string AddOnVersion(AddOn addOn) {
     string newest = "";
-    foreach (string dir in Directory.Exists(DownloadedAdvanced) ? Directory.GetDirectories(DownloadedAdvanced) : []) {
+    foreach (string dir in Directory.Exists(addOn.Folder) ? Directory.GetDirectories(addOn.Folder) : []) {
       string version = ModelsVersion(dir);
       if (version != "" && version == Path.GetFileName(dir) && string.CompareOrdinal(version, newest) > 0) newest = version;
     }
@@ -138,26 +151,26 @@ public sealed partial class MainWindow : Window {
           InstalledModelsText, shown => shown);
 
   // Its version or the newer one offered, and 移除 once one is downloaded.
-  internal static Releases AdvancedReleases(CommunityToolkit.WinUI.Controls.SettingsCard card) =>
-      new(card, "advanced-", ["advanced.gguf"], DownloadedAdvanced, AdvancedVersion,
-          () => new TextBlock { Text = AdvancedVersion() is "" ? "未安裝" : AdvancedVersion() }, shown => WithRemove(card, shown));
+  internal static Releases AddOnReleases(CommunityToolkit.WinUI.Controls.SettingsCard card, AddOn addOn) =>
+      new(card, addOn.Prefix, addOn.Files, addOn.Folder, () => AddOnVersion(addOn),
+          () => new TextBlock { Text = AddOnVersion(addOn) is "" ? "未安裝" : AddOnVersion(addOn) }, shown => WithRemove(card, addOn, shown));
 
-  private static UIElement WithRemove(CommunityToolkit.WinUI.Controls.SettingsCard card, UIElement shown) {
-    if (AdvancedVersion() == "") return shown;
+  private static UIElement WithRemove(CommunityToolkit.WinUI.Controls.SettingsCard card, AddOn addOn, UIElement shown) {
+    if (AddOnVersion(addOn) == "") return shown;
     var remove = new Button { Content = "移除" };
-    remove.Click += (_, _) => RemoveAdvanced(card);
+    remove.Click += (_, _) => RemoveAddOn(card, addOn);
     var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
     row.Children.Add(shown);
     row.Children.Add(remove);
     return row;
   }
 
-  // Removes every advanced model downloaded and has the server drop it, then offers the newest again.
-  private static async void RemoveAdvanced(CommunityToolkit.WinUI.Controls.SettingsCard card) {
+  // Removes every one of it downloaded and has the server drop it, then offers the newest again.
+  private static async void RemoveAddOn(CommunityToolkit.WinUI.Controls.SettingsCard card, AddOn addOn) {
     var dialog = new ContentDialog {
       XamlRoot = card.XamlRoot,
-      Title = "移除進階模型？",
-      Content = "打字停頓時，不再用進階模型重選整句。",
+      Title = addOn.RemoveTitle,
+      Content = addOn.RemoveBody,
       PrimaryButtonText = "移除",
       CloseButtonText = "取消",
       DefaultButton = ContentDialogButton.Close,
@@ -166,13 +179,13 @@ public sealed partial class MainWindow : Window {
     try {
       // The server keeps the model's file open. Without its version file a folder is no longer one to
       // load (core/engine/Models.h), so the server lets go of it on Request::kReloadModels, and then it can go.
-      foreach (string dir in Directory.Exists(DownloadedAdvanced) ? Directory.GetDirectories(DownloadedAdvanced) : []) {
+      foreach (string dir in Directory.Exists(addOn.Folder) ? Directory.GetDirectories(addOn.Folder) : []) {
         File.Delete(Path.Combine(dir, "models-version.txt"));
       }
-      SendToServer(11);  // Protocol.h: Request::kReloadModels, which reloads the advanced model too
+      SendToServer(11);  // Protocol.h: Request::kReloadModels, which reloads the advanced and speech models too
       for (int attempt = 0; ; attempt++) {
         try {
-          if (Directory.Exists(DownloadedAdvanced)) Directory.Delete(DownloadedAdvanced, true);
+          if (Directory.Exists(addOn.Folder)) Directory.Delete(addOn.Folder, true);
           break;
         } catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < 20) {
           await Task.Delay(250);  // the server unloads it on a thread of its own
@@ -182,7 +195,7 @@ public sealed partial class MainWindow : Window {
       card.Content = new TextBlock { Text = "無法移除" };
       return;
     }
-    CheckForReleases(AdvancedReleases(card));
+    CheckForReleases(AddOnReleases(card, addOn));
   }
 
   // The newest such release, offered when newer than the one in use, or with download downloaded at

@@ -120,6 +120,10 @@
         <tk:SettingsCard Header="Tab 注音轉英文">
           <ToggleSwitch x:Name="ZhuyinToEnglish" OffContent="關閉" OnContent="開啟" />
         </tk:SettingsCard>
+        <!-- Shown when build.ps1 built the server with llama.cpp (ADVANCED_MODEL). -->
+        <tk:SettingsCard x:Name="DictationCard" Header="語音輸入（Alpha）" Description="按住右 Alt 說話，放開後輸入；需下載「關於」的語音模型" Visibility="Collapsed">
+          <ToggleSwitch x:Name="Dictation" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
       </StackPanel>
       <StackPanel x:Name="AboutPage" Spacing="4" Visibility="Collapsed">
         <tk:SettingsCard Header="版本">
@@ -131,6 +135,7 @@
         <tk:SettingsCard x:Name="Models" Header="選字模型" />
         <!-- Shown when build.ps1 built the server with llama.cpp (ADVANCED_MODEL). -->
         <tk:SettingsCard x:Name="Advanced" Header="進階模型" Visibility="Collapsed" />
+        <tk:SettingsCard x:Name="Speech" Header="語音模型" Visibility="Collapsed" />
         <tk:SettingsCard Header="授權">
           <TextBlock Text="MIT" />
         </tk:SettingsCard>

@@ -38,6 +38,12 @@ enum class Request : uint8_t {
   // without them answers neither as handled, so a text service stops asking.
   kPause = 15,
   kRanked = 16,
+  // Dictation (Controller::dictationKey): the right Alt pressed or released (down), handled when the
+  // server takes it, so the app never sees it. Released, handled when it is transcribing what was
+  // recorded; then each kDictated brings what was said once it has it, and is handled while it is
+  // still transcribing. A server without them answers neither as handled: the key stays an Alt.
+  kDictationKey = 17,
+  kDictated = 18,
 };
 
 // What the text service does with the document and windows, in order.
@@ -195,7 +201,7 @@ inline PanelContent ReadPanel(Reader& r) {
 struct Message {
   Request type = Request::kState;
   KeyEvent key;         // kKeyDown
-  bool down = false;    // kShift
+  bool down = false;    // kShift, kDictationKey
   std::string context;  // kKeyDown: text before the caret, for Tab in 英 and for a composition the key may start in 中
   int row = 0, index = 0;  // kClickCandidate
 };

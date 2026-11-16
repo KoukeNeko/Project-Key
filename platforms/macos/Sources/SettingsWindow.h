@@ -24,6 +24,7 @@ FOUNDATION_EXPORT NSString *const PKNextDoubtfulKey;       // picking a candidat
 FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's digits pick from the row shown while typing
 FOUNDATION_EXPORT NSString *const PKGridColumnsKey;        // candidates per row: 0 to 3 for 6 to 9
 FOUNDATION_EXPORT NSString *const PKKeyboardLayoutKey;     // 0 大千, 1 倚天, 2 許氏, 3 倚天 26 鍵, 4 IBM
+FOUNDATION_EXPORT NSString *const PKDictationKey;          // 語音輸入: holding the right ⌥ records, and what was said is typed
 
 // The dictionary and context models the engine uses, and where the settings window puts a
 // newer release for it (core/engine/Models.h).
@@ -37,7 +38,11 @@ FOUNDATION_EXPORT NSString *const PKKeyboardLayoutKey;     // 0 大千, 1 倚天
 @property(readonly) BOOL advancedSupported;           // this input method was built to run it
 @property(readonly, copy) NSString *advancedVersion;  // the newest one downloaded; empty when there is none
 @property(readonly, copy) NSURL *advancedDownloads;
-- (void)reloadAdvanced;  // after a download or a removal: loads the newest, or drops it
+// The speech model for dictation (core/engine/SpeechModel.h), downloaded the same way; it runs
+// wherever the advanced model does (advancedSupported).
+@property(readonly, copy) NSString *speechVersion;
+@property(readonly, copy) NSURL *speechDownloads;
+- (void)reloadAdvanced;  // after a download or a removal of either: loads the newest of both, or drops them
 @end
 
 // The input method's bundle identifier (Resources/Info.plist). The settings app

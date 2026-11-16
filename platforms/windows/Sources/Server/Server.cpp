@@ -25,6 +25,8 @@
 #include "Common/Win.h"
 #ifdef PROJECTKEY_ADVANCED_MODEL
 #include "AdvancedModel.h"
+#include "Microphone.h"
+#include "SpeechModel.h"
 #endif
 #include "Controller.h"
 #include "Models.h"
@@ -230,6 +232,113 @@ class AdvancedRanker {
 #endif
 };
 
+// Dictation (Request::kDictationKey, kDictated): the microphone records while the right Alt is held
+// in whichever app has it, and the speech model (core/engine/SpeechModel.h) the settings app
+// downloads transcribes on a thread of its own. Built without llama.cpp, there is never a model.
+class Dictation {
+ public:
+  // A connection's recording; text is set once it is transcribed.
+  struct Job {
+    std::vector<float> samples;
+    std::vector<std::string> words;
+    std::mutex lock;
+    std::optional<std::string> text;
+  };
+  static Dictation& Shared() {
+    static Dictation* dictation = new Dictation();  // its thread runs as long as the process
+    return *dictation;
+  }
+  bool loaded() const { return sampleRate_ > 0; }
+  void reload() {
+    std::lock_guard lock(mutex_);
+    reload_ = true;
+    wake_.notify_all();
+  }
+  // false when the microphone cannot be opened.
+  bool record() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    std::lock_guard lock(microphoneLock_);
+    return loaded() && microphone_.start(sampleRate_);
+#else
+    return false;
+#endif
+  }
+  std::vector<float> stop() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    std::lock_guard lock(microphoneLock_);
+    return microphone_.stop();
+#else
+    return {};
+#endif
+  }
+  // Answers the job unless its connection has dropped it by then.
+  void ask(const std::shared_ptr<Job>& job) {
+    std::lock_guard lock(mutex_);
+    jobs_.push_back(job);
+    wake_.notify_all();
+  }
+
+ private:
+  Dictation() { std::thread([this] { run(); }).detach(); }
+  void run() {
+    for (;;) {
+      std::unique_lock lock(mutex_);
+      wake_.wait(lock, [&] { return reload_ || !jobs_.empty(); });
+      if (reload_) {
+        reload_ = false;
+        lock.unlock();
+        sampleRate_ = load();
+        continue;
+      }
+      std::shared_ptr<Job> job = jobs_.front().lock();
+      jobs_.pop_front();
+      lock.unlock();
+      if (!job) continue;
+      std::string text;
+#ifdef PROJECTKEY_ADVANCED_MODEL
+      if (model_) text = model_->transcribe(job->samples, job->words);
+#endif
+      std::lock_guard answered(job->lock);
+      job->text = std::move(text);
+    }
+  }
+  // The model's sample rate, 0 for none.
+  int load() {
+#ifdef PROJECTKEY_ADVANCED_MODEL
+    model_.reset();
+    if (UserData().empty()) return 0;
+    std::filesystem::path folder = UserData() + L"speech";
+    std::filesystem::path dir = NewestDownload(folder);
+    if (dir.empty()) return 0;
+    auto model = std::make_unique<SpeechModel>();
+    int threads = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 1, 8);
+    if (!model->load(Narrow(dir.wstring()), threads)) {
+      Log(L"cannot load the speech model in " + dir.wstring());
+      return 0;
+    }
+    model_ = std::move(model);
+    std::error_code error;
+    for (const auto& entry : std::filesystem::directory_iterator(folder, error)) {
+      if (entry.path() != dir && entry.path().extension() != L".partial") std::filesystem::remove_all(entry.path(), error);
+    }
+    return model_->sampleRate();
+#else
+    return 0;
+#endif
+  }
+
+  std::atomic<int> sampleRate_{0};
+  std::mutex mutex_;
+  std::condition_variable wake_;
+  bool reload_ = false;
+  std::deque<std::weak_ptr<Job>> jobs_;
+#ifdef PROJECTKEY_ADVANCED_MODEL
+  std::mutex microphoneLock_;
+  Microphone microphone_;
+  std::unique_ptr<SpeechModel> model_;  // only the thread touches it
+#endif
+};
+
 // Whether the other end of the pipe is the installed settings window. Apps in a
 // sandbox can connect too, but cannot pose as it.
 bool FromSettings(HANDLE pipe) {
@@ -271,6 +380,7 @@ void Serve(HANDLE pipe) {
     controller = std::make_unique<Controller>(gEnvironment, recorder, personal);
   }
   std::shared_ptr<AdvancedRanker::Job> ranking;  // the advanced model's question for this connection
+  std::shared_ptr<Dictation::Job> dictated;      // and what it recorded, while it is transcribed
   std::string bytes;
   while (ReadMessage(pipe, bytes)) {
     Protocol::Message message;
@@ -295,6 +405,40 @@ void Serve(HANDLE pipe) {
           if (!FromSettings(pipe)) break;
           if (!UseNewestModels()) Log(L"cannot load the downloaded models");
           AdvancedRanker::Shared().reload();  // after the advanced model was downloaded or removed too
+          Dictation::Shared().reload();       // and the speech model
+          break;
+        case Protocol::Request::kDictationKey:
+          if (!Dictation::Shared().loaded() || !gSettings.flag(Setting::kDictation)) {
+            if (message.down) controller->handleOtherModifier();  // an ordinary Alt
+            break;
+          }
+          recorder.reply.handled = message.down;
+          if (message.down) {
+            if (controller->dictationKey(true) && !Dictation::Shared().record()) controller->handleOtherModifier();  // takes the badge away
+          } else if (controller->dictationKey(false)) {
+            dictated = std::make_shared<Dictation::Job>();
+            dictated->samples = Dictation::Shared().stop();
+            dictated->words = DictationWords(gEnvironment);
+            Dictation::Shared().ask(dictated);
+            recorder.reply.handled = true;
+          } else {
+            Dictation::Shared().stop();  // a tap, or a hold another key broke
+          }
+          break;
+        case Protocol::Request::kDictated:
+          if (dictated) {
+            std::optional<std::string> text;
+            {
+              std::lock_guard answered(dictated->lock);
+              text = dictated->text;
+            }
+            if (text) {
+              controller->insertDictation(*text);
+              dictated.reset();
+            } else {
+              recorder.reply.handled = true;
+            }
+          }
           break;
         case Protocol::Request::kPause:
           ranking.reset();
@@ -385,6 +529,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     return 1;
   }
   AdvancedRanker::Shared().reload();
+  Dictation::Shared().reload();
   gEnvironment.userModel = NewUserModel();
   // What the user typed, learned on this PC only, beside other per-user app data.
   if (!UserData().empty()) {

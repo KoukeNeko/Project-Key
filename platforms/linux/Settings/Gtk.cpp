@@ -97,6 +97,33 @@ void ChoiceChanged(AdwComboRow* combo, GParamSpec*, gpointer data) {
   Unsaved(GTK_WIDGET(combo));
 }
 
+// A kKey row's button: once clicked, the next key pressed in the window becomes the row's key.
+// Escape gives up; a key that types something would no longer type it, so it is passed over.
+void RecordKey(GtkButton* button, gpointer key) {
+  GtkWidget* window = GTK_WIDGET(gtk_widget_get_root(GTK_WIDGET(button)));
+  if (g_object_get_data(G_OBJECT(button), "recording")) return;
+  GtkEventController* keys = gtk_event_controller_key_new();
+  gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
+  g_object_set_data(G_OBJECT(keys), "button", button);
+  g_object_set_data(G_OBJECT(button), "recording", keys);
+  g_object_set_data_full(G_OBJECT(button), "shown", g_strdup(gtk_button_get_label(button)), g_free);
+  gtk_button_set_label(button, "請按一個鍵");
+  g_signal_connect(keys, "key-pressed", G_CALLBACK((+[](GtkEventControllerKey* keys, guint keyval, guint, GdkModifierType, gpointer key) -> gboolean {
+                     auto* button = GTK_BUTTON(g_object_get_data(G_OBJECT(keys), "button"));
+                     if (keyval != GDK_KEY_Escape && gdk_keyval_to_unicode(keyval) != 0) return TRUE;
+                     const char* name = keyval == GDK_KEY_Escape ? nullptr : gdk_keyval_name(keyval);
+                     bool saved = name && WriteConfig(static_cast<const char*>(key), name);
+                     gtk_button_set_label(button, saved ? KeyLabel(name).c_str()
+                                                        : static_cast<const char*>(g_object_get_data(G_OBJECT(button), "shown")));
+                     g_object_set_data(G_OBJECT(button), "recording", nullptr);
+                     gtk_widget_remove_controller(gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(keys)), GTK_EVENT_CONTROLLER(keys));
+                     if (name && !saved) Unsaved(GTK_WIDGET(button));
+                     return TRUE;
+                   })),
+                   key);
+  gtk_widget_add_controller(window, keys);
+}
+
 std::vector<int> VersionParts(const std::string& version) {
   std::vector<int> parts;
   for (size_t start = 0; start <= version.size();) {
@@ -206,13 +233,13 @@ void CheckForUpdate(GtkLabel* label) {
   g_object_unref(message);
 }
 
-// The 進階模型 row's label, whose downloads go to DownloadedAdvanced() (Rows.h); the 選字模型 row's
-// go to DownloadedModels().
-bool IsAdvanced(GtkLabel* label) { return g_object_get_data(G_OBJECT(label), "advanced") != nullptr; }
-std::filesystem::path FolderOf(GtkLabel* label) { return IsAdvanced(label) ? DownloadedAdvanced() : DownloadedModels(); }
-std::string InstalledText(GtkLabel* label) { return IsAdvanced(label) ? InstalledAdvancedText() : InstalledModelsText(); }
+// The add-on (Rows.h) whose row the label is on, the 進階模型's or the 語音模型's; null on the
+// 選字模型 row, whose downloads go to DownloadedModels().
+const AddOn* AddOnOf(GtkLabel* label) { return static_cast<const AddOn*>(g_object_get_data(G_OBJECT(label), "addon")); }
+std::filesystem::path FolderOf(GtkLabel* label) { return AddOnOf(label) ? AddOnOf(label)->downloaded() : DownloadedModels(); }
+std::string InstalledText(GtkLabel* label) { return AddOnOf(label) ? InstalledAddOnText(*AddOnOf(label)) : InstalledModelsText(); }
 
-// A models or advanced model download in progress, one file after another.
+// A models or add-on download in progress, one file after another.
 struct ModelsDownload {
   GtkLabel* label;
   SoupSession* session;
@@ -229,7 +256,7 @@ struct ModelsDownload {
 void EndModelsDownload(ModelsDownload* download, bool done) {
   if (!done) AbandonModels(download->models.date, FolderOf(download->label));
   gtk_label_set_text(download->label, done ? InstalledText(download->label).c_str() : "無法下載");
-  // The 進階模型 row's 移除, now that there is one to remove.
+  // An add-on row's 移除, now that there is one to remove.
   if (auto* remove = static_cast<GtkWidget*>(g_object_get_data(G_OBJECT(download->label), "remove")); remove && done) {
     gtk_widget_set_visible(remove, true);
   }
@@ -314,7 +341,7 @@ void StartModelsDownload(GtkLabel* label) {
   g_object_set_data(G_OBJECT(label), "models", nullptr);
 }
 
-// Offers the newest models release, or the advanced model's on its row (Rows.h), as a link that downloads it.
+// Offers the newest models release, or an add-on's on its row (Rows.h), as a link that downloads it.
 void CheckForModels(GtkLabel* label) {
   SoupSession* session = soup_session_new_with_options("user-agent", "ProjectKey", nullptr);
   SoupMessage* message = soup_message_new("GET", kAllReleases);
@@ -352,7 +379,7 @@ void CheckForModels(GtkLabel* label) {
           g_object_unref(parser);
         }
         // Without a newer release, or without GitHub (the 更新 row says so), the row stays as it is.
-        NewerModels newer = IsAdvanced(label) ? FindNewerAdvanced(releases) : FindNewerModels(releases);
+        NewerModels newer = AddOnOf(label) ? FindNewerAddOn(releases, *AddOnOf(label)) : FindNewerModels(releases);
         if (!newer.date.empty()) {
           char* markup = g_markup_printf_escaped("<a href=\"#\">下載 %s（%lld MB）</a>", newer.date.c_str(), newer.bytes() / 1000000);
           gtk_label_set_markup(label, markup);
@@ -383,20 +410,21 @@ GtkWidget* InfoRow(const char* title, GtkWidget** value, const char* text) {
 }
 
 #ifdef PROJECTKEY_ADVANCED_MODEL
-// 進階模型: its version, or a link that downloads a newer one (CheckForModels), and 移除 once one is
-// downloaded. The addon loads it, and drops it after a removal, when told to reload its models.
-GtkWidget* AdvancedRow() {
+// 進階模型 or 語音模型: its version, or a link that downloads a newer one (CheckForModels), and 移除
+// once one is downloaded. The addon loads it, and drops it after a removal, when told to reload its models.
+GtkWidget* AddOnRow(const AddOn& addOn) {
   GtkWidget* value = nullptr;
-  GtkWidget* row = InfoRow("進階模型", &value, InstalledAdvancedText().c_str());
+  GtkWidget* row = InfoRow(addOn.title, &value, InstalledAddOnText(addOn).c_str());
   gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
-  g_object_set_data(G_OBJECT(value), "advanced", GINT_TO_POINTER(1));
+  g_object_set_data(G_OBJECT(value), "addon", const_cast<AddOn*>(&addOn));
   GtkWidget* remove = gtk_button_new_with_label("移除");
   gtk_widget_set_valign(remove, GTK_ALIGN_CENTER);
-  gtk_widget_set_visible(remove, !AdvancedVersion().empty());
+  gtk_widget_set_visible(remove, !AddOnVersion(addOn).empty());
   g_object_set_data(G_OBJECT(value), "remove", remove);
   g_object_set_data(G_OBJECT(remove), "label", value);
   g_signal_connect(remove, "clicked", G_CALLBACK((+[](GtkButton* button, gpointer) {
-                     AdwDialog* dialog = adw_alert_dialog_new(kRemoveAdvancedTitle, kRemoveAdvancedBody);
+                     const AddOn& addOn = *AddOnOf(GTK_LABEL(g_object_get_data(G_OBJECT(button), "label")));
+                     AdwDialog* dialog = adw_alert_dialog_new(addOn.removeTitle, addOn.removeBody);
                      adw_alert_dialog_add_responses(ADW_ALERT_DIALOG(dialog), "cancel", "取消", "remove", "移除", nullptr);
                      adw_alert_dialog_set_response_appearance(ADW_ALERT_DIALOG(dialog), "remove", ADW_RESPONSE_DESTRUCTIVE);
                      adw_alert_dialog_set_default_response(ADW_ALERT_DIALOG(dialog), "cancel");
@@ -405,17 +433,18 @@ GtkWidget* AdvancedRow() {
                                         if (std::strcmp(response, "remove") != 0) return;
                                         auto* button = GTK_WIDGET(data);
                                         auto* label = GTK_LABEL(g_object_get_data(G_OBJECT(button), "label"));
-                                        bool removed = RemoveAdvanced();
+                                        const AddOn& addOn = *AddOnOf(label);
+                                        bool removed = RemoveAddOn(addOn);
                                         g_dbus_connection_call(Bus(), kFcitx, "/projectkey", "org.projectkey.Engine", "ReloadModels", nullptr,
                                                                nullptr, G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr, nullptr);
                                         if (!removed) {
-                                          AdwDialog* failed = adw_alert_dialog_new("無法移除", "進階模型的檔案仍在資料夾中。");
+                                          AdwDialog* failed = adw_alert_dialog_new("無法移除", (std::string(addOn.title) + "的檔案仍在資料夾中。").c_str());
                                           adw_alert_dialog_add_response(ADW_ALERT_DIALOG(failed), "close", "好");
                                           adw_dialog_present(failed, button);
                                           return;
                                         }
                                         gtk_widget_set_visible(button, false);
-                                        gtk_label_set_text(label, InstalledAdvancedText().c_str());
+                                        gtk_label_set_text(label, InstalledAddOnText(addOn).c_str());
                                         CheckForModels(label);  // offers it again
                                       })),
                                       button);
@@ -497,6 +526,12 @@ void Activate(GtkApplication* app) {
         }
         g_object_set_data(G_OBJECT(widget), "saved", GUINT_TO_POINTER(adw_combo_row_get_selected(ADW_COMBO_ROW(widget))));
         g_signal_connect(widget, "notify::selected", G_CALLBACK(ChoiceChanged), const_cast<Row*>(&row));
+      } else if (row.kind == Row::kKey) {
+        widget = adw_action_row_new();
+        GtkWidget* change = gtk_button_new_with_label(KeyLabel(text(row.key)).c_str());
+        gtk_widget_set_valign(change, GTK_ALIGN_CENTER);
+        g_signal_connect(change, "clicked", G_CALLBACK(RecordKey), const_cast<char*>(row.key));
+        adw_action_row_add_suffix(ADW_ACTION_ROW(widget), change);
       } else if (row.kind == Row::kEditPhrases) {
         widget = adw_action_row_new();
         GtkWidget* edit = gtk_button_new_with_label("編輯…");
@@ -588,7 +623,8 @@ void Activate(GtkApplication* app) {
   gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
   CheckForModels(GTK_LABEL(value));
 #ifdef PROJECTKEY_ADVANCED_MODEL
-  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), AdvancedRow());
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), AddOnRow(kAdvanced));
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), AddOnRow(kSpeech));
 #endif
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("授權", &value, "MIT"));
   GtkWidget* engine = adw_action_row_new();
@@ -832,7 +868,7 @@ void ActivateWelcome(GtkApplication* app) {
   g_object_set_data(G_OBJECT(value), "automatic", GINT_TO_POINTER(1));
   CheckForModels(GTK_LABEL(value));
 #ifdef PROJECTKEY_ADVANCED_MODEL
-  adw_preferences_group_add(ADW_PREFERENCES_GROUP(models), AdvancedRow());
+  adw_preferences_group_add(ADW_PREFERENCES_GROUP(models), AddOnRow(kAdvanced));
 #endif
   gtk_box_append(GTK_BOX(content), models);
 
