@@ -181,6 +181,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
   if (std::optional<Protocol::Reply> reply = engine_.send({Protocol::Request::kState})) {
     englishMode_ = reply->englishMode;
     fullWidth_ = reply->fullWidth;
+    simplified_ = reply->simplified;
     appearance_ = reply->appearance;
   }
   updateLangBar();
@@ -393,6 +394,22 @@ void TextService::keyDown(ITfContext* context, WPARAM wParam, LPARAM lParam, BOO
     case VK_CAPITAL:
       if (!repeat) request(context, {Protocol::Request::kCapsLock});
       return;
+    case 'F':
+      // Ctrl+Shift+F switches 簡體中文 while its shortcut is on (the server decides); else it is the app's.
+      if (IsDown(VK_CONTROL) && IsDown(VK_SHIFT) && !IsDown(VK_MENU) && !repeat) {
+        std::optional<Protocol::Reply> reply = engine_.send({Protocol::Request::kToggleSimplified, {}, true});
+        if (reply && reply->handled) {
+          *eaten = TRUE;
+          if (testing) {
+            pending_ = std::move(reply);  // applied in OnKeyDown, as for any key
+            pendingKey_ = wParam;
+          } else {
+            apply(context, *reply);
+          }
+          return;
+        }
+      }
+      break;
     case VK_MENU:
       if (IsDictationKey(wParam, lParam)) {
         if (!repeat) {
@@ -484,17 +501,29 @@ void TextService::candidateClicked(const Metrics::PanelHit& hit) {
 }
 
 void TextService::toggleMode() {
+  requestForFocus({Protocol::Request::kToggleMode});
+}
+
+void TextService::toggleSimplified() {
+  requestForFocus({Protocol::Request::kToggleSimplified});
+}
+
+void TextService::toggleFullWidth() {
+  requestForFocus({Protocol::Request::kToggleFullWidth});
+}
+
+void TextService::requestForFocus(const Protocol::Message& message) {
   ITfDocumentMgr* document = nullptr;
   ITfContext* context = nullptr;
   if (threadMgr_ && SUCCEEDED(threadMgr_->GetFocus(&document)) && document) {
     document->GetTop(&context);
     document->Release();
   }
-  std::optional<Protocol::Reply> reply = context ? request(context, {Protocol::Request::kToggleMode})
-                                                 : engine_.send({Protocol::Request::kToggleMode});
+  std::optional<Protocol::Reply> reply = context ? request(context, message) : engine_.send(message);
   if (!context && reply) {
     englishMode_ = reply->englishMode;
     fullWidth_ = reply->fullWidth;
+    simplified_ = reply->simplified;
     updateLangBar();
   }
   SafeRelease(context);
@@ -552,9 +581,10 @@ HRESULT TextService::editSession(ITfContext* context, DWORD flags, std::function
 }
 
 void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
-  if (reply.englishMode != englishMode_ || reply.fullWidth != fullWidth_) {
+  if (reply.englishMode != englishMode_ || reply.fullWidth != fullWidth_ || reply.simplified != simplified_) {
     englishMode_ = reply.englishMode;
     fullWidth_ = reply.fullWidth;
+    simplified_ = reply.simplified;
     updateLangBar();
   }
   appearance_ = reply.appearance;
@@ -888,7 +918,7 @@ void TextService::showSettings() {
 }
 
 void TextService::updateLangBar() {
-  if (langBar_) langBar_->update(englishMode_, fullWidth_);
+  if (langBar_) langBar_->update(englishMode_, fullWidth_, simplified_);
 }
 
 }  // namespace ProjectKey

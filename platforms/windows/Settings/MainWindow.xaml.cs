@@ -49,6 +49,8 @@ public sealed partial class MainWindow : Window {
     Bind(EnglishToZhuyin, "EnglishToZhuyin");
     Bind(ZhuyinToEnglish, "ZhuyinToEnglish");
     Bind(Dictation, "Dictation", false);
+    Bind(Simplified, "Simplified", false);
+    Bind(SimplifiedToggle, "SimplifiedToggle", false);
     // 自動, 淺色, 深色, Acrylic, Mica, Mica Alt: 淺色 and 自動 came after the others, which keep their values.
     Bind(Appearance, "Appearance", 5, [5, 4, 0, 1, 2, 3]);
     Bind(ProofPreview, "ProofPreview", 1);

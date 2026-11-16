@@ -56,6 +56,9 @@
         <tk:SettingsCard Header="記住選過的字">
           <ToggleSwitch x:Name="RememberChoices" OffContent="關閉" OnContent="開啟" />
         </tk:SettingsCard>
+        <tk:SettingsCard Header="簡體中文">
+          <ToggleSwitch x:Name="Simplified" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
         <tk:SettingsCard Header="選字紀錄">
           <Button x:Name="ClearChoices" Click="OnClearChoices" Content="清除" />
         </tk:SettingsCard>
@@ -119,6 +122,9 @@
         </tk:SettingsCard>
         <tk:SettingsCard Header="Tab 注音轉英文">
           <ToggleSwitch x:Name="ZhuyinToEnglish" OffContent="關閉" OnContent="開啟" />
+        </tk:SettingsCard>
+        <tk:SettingsCard Header="Ctrl+Shift+F 切換繁簡">
+          <ToggleSwitch x:Name="SimplifiedToggle" OffContent="關閉" OnContent="開啟" />
         </tk:SettingsCard>
         <!-- Shown when build.ps1 built the server with llama.cpp (ADVANCED_MODEL). -->
         <tk:SettingsCard x:Name="DictationCard" Header="語音輸入（Alpha）" Description="按住右 Alt 說話，放開後輸入；需下載「關於」的語音模型" Visibility="Collapsed">

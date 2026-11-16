@@ -24,6 +24,8 @@ FOUNDATION_EXPORT NSString *const PKNextDoubtfulKey;       // picking a candidat
 FOUNDATION_EXPORT NSString *const PKKeypadPicksKey;        // the keypad's digits pick from the row shown while typing
 FOUNDATION_EXPORT NSString *const PKGridColumnsKey;        // candidates per row: 0 to 3 for 6 to 9
 FOUNDATION_EXPORT NSString *const PKKeyboardLayoutKey;     // 0 大千, 1 倚天, 2 許氏, 3 倚天 26 鍵, 4 IBM
+FOUNDATION_EXPORT NSString *const PKSimplifiedKey;         // 簡體中文: what goes to the app is in Simplified Chinese
+FOUNDATION_EXPORT NSString *const PKSimplifiedToggleKey;   // ⌃⇧F switches it
 FOUNDATION_EXPORT NSString *const PKDictationKey;          // 語音輸入: holding the right ⌥ records, and what was said is typed
 
 // The dictionary and context models the engine uses, and where the settings window puts a

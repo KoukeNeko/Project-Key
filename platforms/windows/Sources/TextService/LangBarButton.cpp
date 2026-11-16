@@ -20,6 +20,8 @@ constexpr DWORD kSinkCookie = 1;
 // The taskbar's input mode item; the SDK documents it but declares it in no header.
 constexpr GUID kInputModeItem = {0x2c77a81e, 0x41cc, 0x4178, {0xa3, 0xa7, 0x5f, 0x8a, 0x98, 0x75, 0x68, 0xe6}};
 constexpr UINT kMenuSettings = 1;
+constexpr UINT kMenuSimplified = 2;
+constexpr UINT kMenuFullWidth = 3;
 
 // Whether the taskbar is light, where the icon has to be dark.
 bool LightTaskbar() {
@@ -132,6 +134,9 @@ STDMETHODIMP LangBarButton::OnClick(TfLBIClick click, POINT point, const RECT*) 
     return S_OK;
   }
   HMENU menu = CreatePopupMenu();
+  AppendMenuW(menu, MF_STRING | (simplified_ ? MF_CHECKED : 0), kMenuSimplified, L"簡體中文");
+  AppendMenuW(menu, MF_STRING | (fullWidth_ ? MF_CHECKED : 0), kMenuFullWidth, L"全形");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, kMenuSettings, L"設定…");
   HWND owner = GetForegroundWindow();
   UINT chosen = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, point.x, point.y, 0, owner, nullptr);
@@ -141,12 +146,18 @@ STDMETHODIMP LangBarButton::OnClick(TfLBIClick click, POINT point, const RECT*) 
 }
 
 STDMETHODIMP LangBarButton::InitMenu(ITfMenu* menu) {
+  menu->AddMenuItem(kMenuSimplified, simplified_ ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, L"簡體中文", 4, nullptr);
+  menu->AddMenuItem(kMenuFullWidth, fullWidth_ ? TF_LBMENUF_CHECKED : 0, nullptr, nullptr, L"全形", 2, nullptr);
+  menu->AddMenuItem(0, TF_LBMENUF_SEPARATOR, nullptr, nullptr, nullptr, 0, nullptr);
   menu->AddMenuItem(kMenuSettings, 0, nullptr, nullptr, L"設定…", 4, nullptr);
   return S_OK;
 }
 
 STDMETHODIMP LangBarButton::OnMenuSelect(UINT id) {
-  if (id == kMenuSettings && service_) service_->showSettings();
+  if (!service_) return S_OK;
+  if (id == kMenuSettings) service_->showSettings();
+  if (id == kMenuSimplified) service_->toggleSimplified();
+  if (id == kMenuFullWidth) service_->toggleFullWidth();
   return S_OK;
 }
 
@@ -178,9 +189,10 @@ STDMETHODIMP LangBarButton::UnadviseSink(DWORD cookie) {
   return S_OK;
 }
 
-void LangBarButton::update(bool englishMode, bool fullWidth) {
+void LangBarButton::update(bool englishMode, bool fullWidth, bool simplified) {
   englishMode_ = englishMode;
   fullWidth_ = fullWidth;
+  simplified_ = simplified;
   if (sink_) sink_->OnUpdate(TF_LBI_ICON | TF_LBI_TEXT | TF_LBI_TOOLTIP);
 }
 

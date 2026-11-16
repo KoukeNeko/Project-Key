@@ -79,6 +79,9 @@ class TextService : public ITfTextInputProcessorEx,
 
   // From the language bar button.
   void toggleMode();
+  // The language bar's menu.
+  void toggleSimplified();
+  void toggleFullWidth();
   bool englishMode() const { return englishMode_; }
   // Asks the server to open the settings window: an app in a sandbox could
   // only start it inside the sandbox.
@@ -105,6 +108,8 @@ class TextService : public ITfTextInputProcessorEx,
   void keyUp(ITfContext* context, WPARAM wParam, LPARAM lParam, BOOL* eaten);
   void candidateClicked(const Metrics::PanelHit& hit);
   void updateLangBar();
+  // A request from the language bar, for the document in focus, or for the server alone without one.
+  void requestForFocus(const Protocol::Message& message);
   // The advanced model (Protocol::Request::kPause, kRanked): after each key the pause starts again;
   // once it lasts, the server starts the model, and is asked for its choice until it has one.
   void waitForPause();
@@ -139,6 +144,7 @@ class TextService : public ITfTextInputProcessorEx,
   LangBarButton* langBar_ = nullptr;
   bool englishMode_ = false;
   bool fullWidth_ = false;
+  bool simplified_ = false;
   int appearance_ = 0;
   // OnTestKeyDown already sent this key; OnKeyDown applies the reply.
   std::optional<Protocol::Reply> pending_;

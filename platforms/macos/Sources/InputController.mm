@@ -536,12 +536,27 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 
 - (NSMenu *)menu {
   NSMenu *menu = [[NSMenu alloc] init];
+  NSMenuItem *simplified = [menu addItemWithTitle:@"簡體中文" action:@selector(toggleSimplified:) keyEquivalent:@""];
+  simplified.state = SharedEnvironment().settings->flag(ProjectKey::Setting::kSimplified) ? NSControlStateValueOn : NSControlStateValueOff;
+  NSMenuItem *fullWidth = [menu addItemWithTitle:@"全形" action:@selector(toggleFullWidth:) keyEquivalent:@""];
+  fullWidth.state = SharedEnvironment().fullWidth ? NSControlStateValueOn : NSControlStateValueOff;
+  [menu addItem:NSMenuItem.separatorItem];
   [menu addItemWithTitle:@"設定…" action:@selector(showSettings:) keyEquivalent:@""];
   if (!SharedEnvironment().userPhrasesPath.empty()) {
     [menu addItemWithTitle:@"編輯自訂詞…" action:@selector(editUserPhrases:) keyEquivalent:@""];
     [menu addItemWithTitle:@"編輯排除詞…" action:@selector(editExcludedPhrases:) keyEquivalent:@""];
   }
   return menu;
+}
+
+- (void)toggleSimplified:(id)sender {
+  _client->client = [self client];
+  _controller->toggleSimplified();
+}
+
+- (void)toggleFullWidth:(id)sender {
+  _client->client = [self client];
+  _controller->toggleFullWidth();
 }
 
 - (void)editUserPhrases:(id)sender {
@@ -598,6 +613,13 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
     return NO;
   }
   if (event.type != NSEventTypeKeyDown) return NO;
+  NSEventModifierFlags held = event.modifierFlags & (NSEventModifierFlagControl | NSEventModifierFlagOption | NSEventModifierFlagShift |
+                                                     NSEventModifierFlagCommand);
+  if (event.keyCode == kVK_ANSI_F && held == (NSEventModifierFlagControl | NSEventModifierFlagShift) &&
+      SharedEnvironment().settings->flag(ProjectKey::Setting::kSimplifiedToggle)) {
+    _controller->toggleSimplified();
+    return YES;
+  }
   BOOL handled = _controller->handleKey(KeyEventFrom(event));
   [self waitForPause];
   return handled;

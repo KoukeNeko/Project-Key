@@ -44,6 +44,10 @@ enum class Request : uint8_t {
   // still transcribing. A server without them answers neither as handled: the key stays an Alt.
   kDictationKey = 17,
   kDictated = 18,
+  // 簡體中文 (Setting::kSimplified) switched: down from Ctrl+Shift+F, handled only while its shortcut is
+  // on (Setting::kSimplifiedToggle); else from the language bar's menu. A server without it leaves the key to the app.
+  kToggleSimplified = 19,
+  kToggleFullWidth = 20,  // the language bar's menu
 };
 
 // What the text service does with the document and windows, in order.
@@ -201,7 +205,7 @@ inline PanelContent ReadPanel(Reader& r) {
 struct Message {
   Request type = Request::kState;
   KeyEvent key;         // kKeyDown
-  bool down = false;    // kShift, kDictationKey
+  bool down = false;    // kShift, kDictationKey, kToggleSimplified
   std::string context;  // kKeyDown: text before the caret, for Tab in 英 and for a composition the key may start in 中
   int row = 0, index = 0;  // kClickCandidate
 };
@@ -247,6 +251,7 @@ struct Reply {
   int appearance = 0;  // Setting::kAppearance
   int columns = kGridColumns;  // PanelContent::columns of every panel here; sent after the operations, so a text service without it still reads the reply
   bool fullWidth = false;      // sent last, likewise
+  bool simplified = false;     // Setting::kSimplified, after the excluding flag; absent from older servers
   std::vector<Operation> operations;
 };
 
@@ -272,6 +277,7 @@ inline std::string WriteReply(const Reply& reply) {
   w.boolean(reply.fullWidth);
   // Not in each panel, so the panels' layout, which kVersion covers, stays as it was.
   w.boolean(std::any_of(reply.operations.begin(), reply.operations.end(), [](const Operation& o) { return o.panel.excluding; }));
+  w.boolean(reply.simplified);
   return w.bytes();
 }
 
@@ -299,6 +305,7 @@ inline bool ReadReply(const std::string& bytes, Reply& reply) {
   if (r.more()) reply.fullWidth = r.boolean();  // and from one from before full-width
   bool excluding = r.more() && r.boolean();  // and the one before the question of excluding a word
   for (Operation& o : reply.operations) o.panel.excluding = excluding;
+  if (r.more()) reply.simplified = r.boolean();
   for (Operation& o : reply.operations) o.panel.columns = reply.columns;
   return r.ok();
 }

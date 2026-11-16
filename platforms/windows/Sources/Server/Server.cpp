@@ -465,6 +465,12 @@ void Serve(HANDLE pipe) {
           }
           break;
         case Protocol::Request::kToggleMode: controller->toggleMode(); break;
+        case Protocol::Request::kToggleSimplified:
+          if (message.down && !gSettings.flag(Setting::kSimplifiedToggle)) break;  // the shortcut is off: the app's Ctrl+Shift+F
+          controller->toggleSimplified();
+          recorder.reply.handled = true;
+          break;
+        case Protocol::Request::kToggleFullWidth: controller->toggleFullWidth(); break;
         case Protocol::Request::kClickCandidate: controller->clickCandidate(message.row, message.index); break;
         case Protocol::Request::kToggleGrid: controller->toggleGrid(); break;
         case Protocol::Request::kShowMode: controller->showMode(); break;
@@ -473,6 +479,7 @@ void Serve(HANDLE pipe) {
       }
       recorder.reply.englishMode = gEnvironment.englishMode;
       recorder.reply.fullWidth = gEnvironment.fullWidth;
+      recorder.reply.simplified = gSettings.flag(Setting::kSimplified);
       recorder.reply.appearance = gSettings.get(Setting::kAppearance);
       reply = Protocol::WriteReply(recorder.reply);
     }

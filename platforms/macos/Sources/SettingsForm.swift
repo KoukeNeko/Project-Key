@@ -16,6 +16,8 @@ struct SettingsForm: View {
   @AppStorage(PKEnglishToZhuyinKey) private var englishToZhuyin = true
   @AppStorage(PKZhuyinToEnglishKey) private var zhuyinToEnglish = true
   @AppStorage(PKDictationKey) private var dictation = false
+  @AppStorage(PKSimplifiedKey) private var simplified = false
+  @AppStorage(PKSimplifiedToggleKey) private var simplifiedToggle = false
   @AppStorage(PKAppearanceKey) private var appearance = 3
   @AppStorage(PKProofPreviewKey) private var proofPreview = 1
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
@@ -82,6 +84,7 @@ struct SettingsForm: View {
               Text("開啟時數字鍵盤直接選字；主鍵盤的數字仍是注音")
             }
             Toggle("記住選過的字", isOn: $rememberChoices)
+            Toggle("簡體中文", isOn: $simplified)
             LabeledContent("選字紀錄") {
               Button("清除") {
                 clearChoices()
@@ -144,6 +147,7 @@ struct SettingsForm: View {
             Toggle("⇧ Space 切換全形", isOn: $fullWidthToggle)
             Toggle("⇥ 英文轉注音", isOn: $englishToZhuyin)
             Toggle("⇥ 注音轉英文", isOn: $zhuyinToEnglish)
+            Toggle("⌃⇧F 切換繁簡", isOn: $simplifiedToggle)
             if speech.supported {
               Toggle(isOn: $dictation) {
                 Text("語音輸入（Alpha）")
