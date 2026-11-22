@@ -434,6 +434,7 @@ static BOOL gShowsPreview = YES;  // kCharacterPreviewKey
   // The system passes touches on fully transparent pixels to the app behind, so a
   // swipe that starts between candidates never arrived.
   self.inputView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.001];
+  self.inputView.clipsToBounds = YES;  // the scrolled grid's rows would show in the strip iOS adds above
   self.view = self.inputView;
 }
 
