@@ -29,8 +29,7 @@ struct ContentView: View {
   @AppStorage("IOS18Style", store: sharedDefaults) private var ios18Style = false  // the keyboard's kIOS18StyleKey
   @AppStorage("Haptics", store: sharedDefaults) private var haptics = 1  // kHapticsKey: 0 off, 1 light, 2 medium, 3 heavy
   @AppStorage("CharacterPreview", store: sharedDefaults) private var characterPreview = true  // kCharacterPreviewKey
-  // One item a line, with the keyboard's defaults (kShortcutsKey, kCustomSymbolsKey).
-  @AppStorage("Shortcuts", store: sharedDefaults) private var shortcuts = "。\n？\n！\n、\n「\n」\n：\n…"
+  // One item a line, with the keyboard's default (kCustomSymbolsKey).
   @AppStorage("CustomSymbols", store: sharedDefaults) private var customSymbols =
     "(´・ω・`)\n(╯°□°)╯︵ ┻━┻\n¯\\_(ツ)_/¯\n(｡•̀ᴗ-)✧\nಠ_ಠ"
 
@@ -46,7 +45,7 @@ struct ContentView: View {
         } header: {
           Text("啟用鍵盤")
         } footer: {
-          Text("完整取用只用來讀取下列設定，鍵盤不連網路。")
+          Text("完整取用用來讀寫下列設定，以及從 GIPHY 載入 GIF；只有打開 GIF 面板時才會連網。")
         }
         Section {
           Toggle(isOn: $omitTones) {
@@ -77,11 +76,6 @@ struct ContentView: View {
             Text("重").tag(3)
           }
           Toggle("字元預覽", isOn: $characterPreview)
-          NavigationLink {
-            ItemListView(title: "快捷列", lines: $shortcuts)
-          } label: {
-            LabeledContent("快捷列", value: "\(splitLines(shortcuts).count) 項")
-          }
           NavigationLink {
             ItemListView(title: "自訂符號", lines: $customSymbols)
           } label: {

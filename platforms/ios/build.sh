@@ -26,5 +26,5 @@ xcodegen generate --quiet
 # system gives up on the keyboard and shows its own. Signed to run locally, so
 # the simulator honors the app group that carries the settings.
 xcodebuild -project ProjectKey.xcodeproj -scheme ProjectKey -sdk iphonesimulator -configuration Release \
-  -derivedDataPath $BUILD/derived CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- -quiet build
+  -derivedDataPath $BUILD/derived CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- GIPHY_API_KEY="${GIPHY_API_KEY:-}" -quiet build
 echo "built $BUILD/derived/Build/Products/Release-iphonesimulator/ProjectKey.app"

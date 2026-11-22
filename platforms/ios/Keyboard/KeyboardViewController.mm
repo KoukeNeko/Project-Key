@@ -4,6 +4,8 @@
 // key it stands on, as a hardware keyboard would.
 #import <UIKit/UIKit.h>
 
+#import "GIFPanel.h"
+
 #include <algorithm>
 #include <memory>
 #include <optional>
@@ -40,13 +42,15 @@ NSString *const kClearedChoicesKey = @"ClearedChoices";  // the last request don
 NSString *const kIOS18StyleKey = @"IOS18Style";
 NSString *const kHapticsKey = @"Haptics";  // 0 off, 1 light, 2 medium, 3 heavy; light when unset
 NSString *const kCharacterPreviewKey = @"CharacterPreview";  // on when unset
-// What the bar offers when nothing is typed, and the emoji panel's 自訂 page: one item a line.
-// App/ProjectKeyApp.swift has the same defaults.
-NSString *const kShortcutsKey = @"Shortcuts", *const kDefaultShortcuts = @"。\n？\n！\n、\n「\n」\n：\n…";
+// The 顏文字 page's 自訂 section: one item a line. App/ProjectKeyApp.swift has the same default.
 NSString *const kCustomSymbolsKey = @"CustomSymbols",
              *const kDefaultCustomSymbols = @"(´・ω・`)\n(╯°□°)╯︵ ┻━┻\n¯\\_(ツ)_/¯\n(｡•̀ᴗ-)✧\nಠ_ಠ";
-NSString *const kRecentSymbolsKey = @"RecentSymbols";  // in the keyboard's own defaults, newest first
+// 最近 of the emoji and the 顏文字 pages, in the keyboard's own defaults, newest first.
+NSString *const kRecentSymbolsKey = @"RecentSymbols", *const kRecentKaomojiKey = @"RecentKaomoji";
 constexpr NSUInteger kRecentCount = 32;
+
+// What covers the keyboard, opened from the bar's tools when nothing is typed.
+enum class PanelPage : NSInteger { kNone, kEmoji, kGIF, kKaomoji, kSettings };
 
 NSArray<NSString *> *Lines(NSString *key, NSString *fallback) {
   NSString *text = [SharedDefaults() stringForKey:key] ?: fallback;
@@ -452,6 +456,52 @@ static UIFont *SymbolFont(NSString *symbol) {
 }
 @end
 
+// Rows start at the left, as on the system's emoji keyboard, rather than spread to both edges.
+@interface PKLeftAlignedLayout : UICollectionViewFlowLayout
+@end
+
+@implementation PKLeftAlignedLayout
+- (NSArray<UICollectionViewLayoutAttributes *> *)layoutAttributesForElementsInRect:(CGRect)rect {
+  NSArray<UICollectionViewLayoutAttributes *> *attributes =
+      [[NSArray alloc] initWithArray:[super layoutAttributesForElementsInRect:rect] copyItems:YES];
+  CGFloat x = 0, row = -1;
+  for (UICollectionViewLayoutAttributes *item in attributes) {
+    if (item.representedElementCategory != UICollectionElementCategoryCell) continue;
+    CGRect frame = item.frame;
+    if (fabs(CGRectGetMinY(frame) - row) > 1) {
+      row = CGRectGetMinY(frame);
+      x = self.sectionInset.left;
+    }
+    frame.origin.x = x;
+    item.frame = frame;
+    x += CGRectGetWidth(frame) + self.minimumInteritemSpacing;
+  }
+  return attributes;
+}
+@end
+
+// A section's title in the emoji and 顏文字 pages.
+@interface PKSectionHeader : UICollectionReusableView
+@property(nonatomic, readonly) UILabel *label;
+@end
+
+@implementation PKSectionHeader
+- (instancetype)initWithFrame:(CGRect)frame {
+  if ((self = [super initWithFrame:frame])) {
+    _label = [[UILabel alloc] init];
+    _label.font = [UIFont systemFontOfSize:12];
+    _label.textColor = UIColor.secondaryLabelColor;
+    [self addSubview:_label];
+  }
+  return self;
+}
+
+- (void)layoutSubviews {
+  [super layoutSubviews];
+  _label.frame = CGRectInset(self.bounds, 12, 0);
+}
+@end
+
 @implementation PKKeyboardViewController {
   std::unique_ptr<ClientAdapter> _client;
   std::unique_ptr<ProjectKey::Controller> _controller;
@@ -475,16 +525,22 @@ static UIFont *SymbolFont(NSString *symbol) {
   BOOL _symbols;
   NSTimer *_deleteRepeat;
   UIImpactFeedbackGenerator *_haptics;  // nil when off (kHapticsKey)
-  NSArray<NSString *> *_shortcuts, *_customSymbols;  // kShortcutsKey, kCustomSymbolsKey
-  // The emoji panel, over the keys while _panelOpen: the items of the page _tab, and the
-  // pages' tabs in the bottom row: 自訂, 最近, then the emoji table's groups.
+  NSArray<NSString *> *_customSymbols;  // kCustomSymbolsKey
+  UIButton *_hideKey;  // in ⌄'s place when nothing is typed
+  // The panel over the whole keyboard, showing _page. The emoji and 顏文字 pages scroll
+  // through their sections, which the icons above the bottom row jump to.
+  PanelPage _page;
   UIView *_panel;
   UICollectionView *_symbolGrid;
-  UIScrollView *_tabs;
+  NSArray<NSString *> *_sectionTitles;
+  NSArray<NSArray<NSString *> *> *_sections;
+  UIStackView *_categories, *_pageSwitch;
+  PKGIFPanel *_gifPanel;
+  UIView *_settingsPanel;
+  UILabel *_settingsWarning;
+  UISegmentedControl *_hapticsControl;
+  NSArray<UISwitch *> *_settingSwitches;  // SettingSwitches()' order
   PKKeyButton *_panelBackKey, *_panelDeleteKey;
-  NSArray<NSString *> *_shownSymbols;
-  NSInteger _tab;
-  BOOL _panelOpen;
 }
 
 - (void)loadView {
@@ -611,55 +667,69 @@ static UIFont *SymbolFont(NSString *symbol) {
     for (PKKeyButton *key in row) [key addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
   }
 
-  _panel = [[UIView alloc] init];
-  _panel.hidden = YES;
-  UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
-  layout.minimumInteritemSpacing = layout.minimumLineSpacing = 0;
-  layout.sectionInset = UIEdgeInsetsMake(0, kSideInset, 0, kSideInset);
-  _symbolGrid = [[UICollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
-  _symbolGrid.backgroundColor = UIColor.clearColor;
-  _symbolGrid.showsVerticalScrollIndicator = NO;
-  _symbolGrid.dataSource = self;
-  _symbolGrid.delegate = self;
-  [_symbolGrid registerClass:PKSymbolCell.class forCellWithReuseIdentifier:@"symbol"];
-  _tabs = [[UIScrollView alloc] init];
-  _tabs.showsHorizontalScrollIndicator = NO;
-  if (@available(iOS 26.0, *)) {
-    for (UIScrollView *scroll in @[ _symbolGrid, _tabs ]) {
-      scroll.topEdgeEffect.hidden = scroll.bottomEdgeEffect.hidden = YES;
-      scroll.leftEdgeEffect.hidden = scroll.rightEdgeEffect.hidden = YES;
-    }
-  }
-  NSMutableArray<NSString *> *tabNames = [NSMutableArray arrayWithObjects:@"自訂", @"最近", nil];
-  for (const auto &group : SharedEnvironment().lm->getUnigrams("_emoji_groups")) [tabNames addObject:String(group.value())];
-  for (NSUInteger i = 0; i < tabNames.count; i++) {
-    UIButton *tab = [UIButton buttonWithType:UIButtonTypeSystem];
-    [tab setTitle:tabNames[i] forState:UIControlStateNormal];
-    tab.titleLabel.font = [UIFont systemFontOfSize:14];
-    tab.tintColor = UIColor.secondaryLabelColor;
-    tab.layer.cornerRadius = 8;
-    tab.layer.cornerCurve = kCACornerCurveContinuous;
-    tab.tag = static_cast<NSInteger>(i);
-    [tab addTarget:self action:@selector(pickTab:) forControlEvents:UIControlEventTouchUpInside];
-    [_tabs addSubview:tab];
-  }
-  _panelBackKey = [PKKeyButton keyWithTitle:@"ㄅㄆㄇ" symbol:nil function:YES];
-  [_panelBackKey addTarget:self action:@selector(togglePanel) forControlEvents:UIControlEventTouchUpInside];
-  _panelDeleteKey = [PKKeyButton keyWithTitle:@"" symbol:@"delete.left" function:YES];
-  [_panelDeleteKey addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
-  [_panelDeleteKey addTarget:self action:@selector(startDelete) forControlEvents:UIControlEventTouchDown];
-  [_panelDeleteKey addTarget:self action:@selector(stopDelete) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
-  for (UIView *view in @[ _symbolGrid, _tabs, _panelBackKey, _panelDeleteKey ]) [_panel addSubview:view];
-  [self.view addSubview:_panel];
-
   [self.view addSubview:_grid];
-  _expandKey =[UIButton buttonWithType:UIButtonTypeSystem];
+  _expandKey = [UIButton buttonWithType:UIButtonTypeSystem];
   _expandKey.tintColor = UIColor.labelColor;
   UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(0, 6, 0.5, kChipHeight - 12)];  // between the row and ⌄
   divider.backgroundColor = UIColor.separatorColor;
   [_expandKey addSubview:divider];
   [_expandKey addTarget:self action:@selector(toggleGrid) forControlEvents:UIControlEventTouchUpInside];
   [self.view addSubview:_expandKey];
+
+  _hideKey = [UIButton buttonWithType:UIButtonTypeSystem];
+  [_hideKey setImage:[UIImage systemImageNamed:@"keyboard.chevron.compact.down"] forState:UIControlStateNormal];
+  _hideKey.tintColor = UIColor.secondaryLabelColor;
+  _hideKey.accessibilityLabel = @"隱藏鍵盤";
+  [_hideKey addTarget:self action:@selector(hideKeyboard) forControlEvents:UIControlEventTouchUpInside];
+  [self.view addSubview:_hideKey];
+
+  // The panel: its page above, and the bottom row where the keys' is: ㄅㄆㄇ, the pages, delete.
+  _panel = [[UIView alloc] init];
+  _panel.hidden = YES;
+  UICollectionViewFlowLayout *layout = [[PKLeftAlignedLayout alloc] init];
+  layout.minimumInteritemSpacing = layout.minimumLineSpacing = 0;
+  layout.sectionInset = UIEdgeInsetsMake(0, kSideInset, 6, kSideInset);
+  _symbolGrid = [[UICollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:layout];
+  _symbolGrid.backgroundColor = UIColor.clearColor;
+  _symbolGrid.showsVerticalScrollIndicator = NO;
+  _symbolGrid.dataSource = self;
+  _symbolGrid.delegate = self;
+  [_symbolGrid registerClass:PKSymbolCell.class forCellWithReuseIdentifier:@"symbol"];
+  [_symbolGrid registerClass:PKSectionHeader.class forSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:@"header"];
+  if (@available(iOS 26.0, *)) {
+    _symbolGrid.topEdgeEffect.hidden = _symbolGrid.bottomEdgeEffect.hidden = YES;
+  }
+  _categories = [[UIStackView alloc] init];
+  _categories.distribution = UIStackViewDistributionFillEqually;
+
+  _gifPanel = [[PKGIFPanel alloc] init];
+  __weak PKKeyboardViewController *weakSelf = self;
+  _gifPanel.onTap = ^{ [weakSelf click]; };
+
+  _settingsPanel = [self makeSettingsPanel];
+
+  _panelBackKey = [PKKeyButton keyWithTitle:@"ㄅㄆㄇ" symbol:nil function:YES];
+  _panelBackKey.titleLabel.adjustsFontSizeToFitWidth = YES;  // as on ?123 and ABC
+  _panelBackKey.titleLabel.minimumScaleFactor = 0.7;
+  [_panelBackKey addTarget:self action:@selector(closePanel) forControlEvents:UIControlEventTouchUpInside];
+  _pageSwitch = [[UIStackView alloc] init];
+  _pageSwitch.spacing = 4;
+  _pageSwitch.distribution = UIStackViewDistributionFillEqually;
+  for (UIButton *page in @[ [self tool:@"face.smiling" title:nil label:@"表情符號" page:PanelPage::kEmoji],
+                            [self tool:nil title:@"GIF" label:@"GIF" page:PanelPage::kGIF],
+                            [self tool:nil title:@":-)" label:@"顏文字" page:PanelPage::kKaomoji] ]) {
+    page.layer.cornerRadius = 15;
+    page.layer.cornerCurve = kCACornerCurveContinuous;
+    [_pageSwitch addArrangedSubview:page];
+  }
+  _panelDeleteKey = [PKKeyButton keyWithTitle:@"" symbol:@"delete.left" function:YES];
+  [_panelDeleteKey addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
+  [_panelDeleteKey addTarget:self action:@selector(startDelete) forControlEvents:UIControlEventTouchDown];
+  [_panelDeleteKey addTarget:self action:@selector(stopDelete) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+  for (UIView *view in @[ _symbolGrid, _categories, _gifPanel, _settingsPanel, _panelBackKey, _pageSwitch, _panelDeleteKey ]) {
+    [_panel addSubview:view];
+  }
+  [self.view addSubview:_panel];
 
   // The system takes the keyboard's height from what its content needs, not from a
   // constraint on the view itself, so an invisible column asks for it (applyStyle).
@@ -689,11 +759,7 @@ static UIFont *SymbolFont(NSString *symbol) {
   }
   NSUserDefaults *defaults = SharedDefaults();
   gShowsPreview = [defaults objectForKey:kCharacterPreviewKey] ? [defaults boolForKey:kCharacterPreviewKey] : YES;
-  NSInteger haptics = [defaults objectForKey:kHapticsKey] ? [defaults integerForKey:kHapticsKey] : 1;
-  const UIImpactFeedbackStyle styles[] = {UIImpactFeedbackStyleLight, UIImpactFeedbackStyleMedium, UIImpactFeedbackStyleHeavy};
-  _haptics = haptics >= 1 && haptics <= 3 ? [[UIImpactFeedbackGenerator alloc] initWithStyle:styles[haptics - 1]] : nil;
-  [_haptics prepare];
-  _shortcuts = Lines(kShortcutsKey, kDefaultShortcuts);
+  [self applyHaptics:[defaults objectForKey:kHapticsKey] ? [defaults integerForKey:kHapticsKey] : 1];
   _customSymbols = Lines(kCustomSymbolsKey, kDefaultCustomSymbols);
   [self applyStyle];
   [self.view setNeedsLayout];
@@ -710,7 +776,7 @@ static UIFont *SymbolFont(NSString *symbol) {
 - (void)viewWillDisappear:(BOOL)animated {
   [super viewWillDisappear:animated];
   _controller->deactivate();
-  [self showPanel:NO];
+  [self showPanel:PanelPage::kNone];
 }
 
 - (void)textDidChange:(id<UITextInput>)textInput {
@@ -729,7 +795,7 @@ static UIFont *SymbolFont(NSString *symbol) {
   CGFloat pitch = (CGRectGetHeight(self.view.bounds) - _barHeight - kTopInset - kBottomInset) / (5 - kRowGapShare);
   CGFloat rowGap = round(pitch * kRowGapShare), keyHeight = pitch - rowGap;
   _bar.frame = CGRectMake(0, 0, width - kExpandWidth, _barHeight);
-  _expandKey.frame = CGRectMake(width - kExpandWidth, _chipTop, kExpandWidth, kChipHeight);
+  _expandKey.frame = _hideKey.frame = CGRectMake(width - kExpandWidth, _chipTop, kExpandWidth, kChipHeight);
   _grid.frame = _keys.frame = self.view.bounds;
   if (_expanded) [self reloadCandidates];
   CGFloat y = _barHeight + kTopInset;
@@ -760,21 +826,18 @@ static UIFont *SymbolFont(NSString *symbol) {
     x += w + kKeyGap;
   }
   // The panel's bottom row stands where the keys' does: ㄅㄆㄇ, the tabs, delete.
-  _panel.frame = CGRectMake(0, _barHeight, width, CGRectGetHeight(self.view.bounds) - _barHeight);
-  CGFloat rowTop = y - _barHeight, side = unit * 1.4;
-  _panelBackKey.frame = CGRectMake(kSideInset, rowTop, side, keyHeight);
-  _panelDeleteKey.frame = CGRectMake(width - kSideInset - side, rowTop, side, keyHeight);
-  _tabs.frame = CGRectMake(kSideInset + side + kKeyGap, rowTop, width - 2 * (kSideInset + side + kKeyGap), keyHeight);
-  CGFloat tabX = 0;
-  for (UIButton *tab in _tabs.subviews) {
-    if (![tab isKindOfClass:UIButton.class]) continue;
-    [tab sizeToFit];
-    tab.frame = CGRectMake(tabX, 0, CGRectGetWidth(tab.bounds) + 16, keyHeight);
-    tabX += CGRectGetWidth(tab.frame);
-  }
-  _tabs.contentSize = CGSizeMake(tabX, keyHeight);
-  _symbolGrid.frame = CGRectMake(0, kTopInset, width, rowTop - kTopInset - rowGap);
+  _panel.frame = self.view.bounds;
+  CGFloat side = unit * 1.4, pageTop = y - rowGap;  // the pages end above the bottom row
+  _panelBackKey.frame = CGRectMake(kSideInset, y, side, keyHeight);
+  _panelDeleteKey.frame = CGRectMake(width - kSideInset - side, y, side, keyHeight);
+  CGFloat switchWidth = 3 * 56 + 2 * 4, switchHeight = MIN(keyHeight, 30);
+  _pageSwitch.frame = CGRectMake((width - switchWidth) / 2, y + (keyHeight - switchHeight) / 2, switchWidth, switchHeight);
+  CGFloat categories = MIN(width - 2 * kSideInset, _categories.arrangedSubviews.count * 48.0);  // 顏文字 has two
+  _categories.frame = CGRectMake(kSideInset, pageTop - 32, categories, 32);
+  _symbolGrid.frame = CGRectMake(0, kTopInset, width, CGRectGetMinY(_categories.frame) - kTopInset);
   [_symbolGrid.collectionViewLayout invalidateLayout];
+  _gifPanel.frame = CGRectMake(0, kTopInset, width, pageTop - kTopInset);
+  _settingsPanel.frame = CGRectMake(0, kTopInset, width, pageTop - kTopInset);
   [self updateReturnKey];
 }
 
@@ -970,7 +1033,7 @@ static UIFont *SymbolFont(NSString *symbol) {
   _bar.contentSize = CGSizeZero;
   _bar.contentOffset = CGPointZero;
   const auto &panel = _controller->panel();
-  BOOL choosing = [self choosing];
+  BOOL choosing = [self choosing], idle = NO;
   if (choosing) {
     size_t selected = [self selectedCandidate];
     [self extendBarTo:2 * CGRectGetWidth(_bar.bounds) count:selected + 1];
@@ -988,136 +1051,293 @@ static UIFont *SymbolFont(NSString *symbol) {
       [button addTarget:self action:@selector(pickAssociated:) forControlEvents:UIControlEventTouchUpInside];
       [self addToBar:button];
     }
-  } else if (!_english && !_symbols) {  // those pages have the symbols on their keys
+  } else {
     [self fillIdleBar];
+    idle = YES;
   }
 
   BOOL more = choosing && !panel->pageLabel.empty();
   if (!more) _expanded = NO;
   _expandKey.hidden = !more;
+  _hideKey.hidden = !idle || _page != PanelPage::kNone;
   [self fillGrid];
   if (_expanded != _gridShown) [self showGridAnimated:NO];
   [self updateReturnKey];
 }
 
-// With nothing typed: ☺ for the emoji panel, then the user's shortcuts, a step quieter than candidates.
+// With nothing typed, on every page: the panel's tools, a step quieter than candidates, and
+// hiding the keyboard in ⌄'s place.
 - (void)fillIdleBar {
-  UIButton *emoji = [UIButton buttonWithType:UIButtonTypeSystem];
-  [emoji setImage:[UIImage systemImageNamed:@"face.smiling"] forState:UIControlStateNormal];
-  emoji.accessibilityLabel = @"表情符號";
-  emoji.tintColor = _panelOpen ? UIColor.labelColor : UIColor.secondaryLabelColor;
-  if (_panelOpen) {
-    emoji.backgroundColor = UIColor.tertiarySystemFillColor;
-    emoji.layer.cornerRadius = 8;
-    emoji.layer.cornerCurve = kCACornerCurveContinuous;
-  }
-  [emoji addTarget:self action:@selector(togglePanel) forControlEvents:UIControlEventTouchUpInside];
-  [self addToBar:emoji];
-  if (!_shortcuts.count) return;
-  UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(_barX, _chipTop + 8, 0.5, kChipHeight - 16)];
-  divider.backgroundColor = UIColor.separatorColor;
-  [_bar addSubview:divider];
-  _barX += 4;
-  for (NSString *shortcut in _shortcuts) {
-    UIButton *button = [self candidate:shortcut selected:NO];
-    button.tintColor = UIColor.secondaryLabelColor;
-    [button addTarget:self action:@selector(typeShortcut:) forControlEvents:UIControlEventTouchUpInside];
-    [self addToBar:button];
+  for (UIButton *tool in @[ [self tool:@"face.smiling" title:nil label:@"表情符號" page:PanelPage::kEmoji],
+                            [self tool:nil title:@"GIF" label:@"GIF" page:PanelPage::kGIF],
+                            [self tool:nil title:@":-)" label:@"顏文字" page:PanelPage::kKaomoji],
+                            [self tool:@"gearshape" title:nil label:@"設定" page:PanelPage::kSettings] ]) {
+    [self addToBar:tool];
   }
 }
 
-- (void)typeShortcut:(UIButton *)button {
+- (UIButton *)tool:(NSString *)symbol title:(NSString *)title label:(NSString *)label page:(PanelPage)page {
+  UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+  if (symbol) {
+    UIImageSymbolConfiguration *size = [UIImageSymbolConfiguration configurationWithPointSize:19];
+    [button setImage:[UIImage systemImageNamed:symbol withConfiguration:size] forState:UIControlStateNormal];
+  } else {
+    [button setTitle:title forState:UIControlStateNormal];
+    button.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
+  }
+  button.accessibilityLabel = label;
+  button.tintColor = UIColor.secondaryLabelColor;
+  button.tag = static_cast<NSInteger>(page);
+  [button addTarget:self action:@selector(openPanel:) forControlEvents:UIControlEventTouchUpInside];
+  return button;
+}
+
+- (void)hideKeyboard {
   [self click];
-  [self typeKeepingBar:button.currentTitle];
+  [self dismissKeyboard];
 }
 
-// Types from the bar's shortcuts or the panel; the bar stays scrolled where it was.
-- (void)typeKeepingBar:(NSString *)text {
-  CGPoint offset = _bar.contentOffset;
-  [self typeText:text];
-  _bar.contentOffset = offset;
-}
+#pragma mark - Panel
 
-#pragma mark - Emoji panel
-
-- (void)togglePanel {
+- (void)openPanel:(UIButton *)tool {
   [self click];
-  [self showPanel:!_panelOpen];
+  [self showPanel:static_cast<PanelPage>(tool.tag)];
 }
 
-// Shown at once, in place of the keys; it opens on 最近, or on the first group when none is recent.
-- (void)showPanel:(BOOL)open {
-  if (open == _panelOpen) return;
-  _panelOpen = open;
+- (void)closePanel {
+  [self click];
+  [self showPanel:PanelPage::kNone];
+}
+
+// Shown at once over the bar and the keys, which come back as they were when it closes.
+- (void)showPanel:(PanelPage)page {
+  if (page == _page) return;
+  _page = page;
+  BOOL open = page != PanelPage::kNone, symbols = page == PanelPage::kEmoji || page == PanelPage::kKaomoji;
   _panel.hidden = !open;
-  _keys.hidden = open;
-  if (open) [self showTab:[self recentSymbols].count ? 1 : 2];
+  _keys.hidden = _bar.hidden = open;
+  _symbolGrid.hidden = _categories.hidden = !symbols;
+  _gifPanel.hidden = page != PanelPage::kGIF;
+  _settingsPanel.hidden = page != PanelPage::kSettings;
+  _pageSwitch.hidden = _panelDeleteKey.hidden = page == PanelPage::kSettings;
+  for (UIButton *button in _pageSwitch.arrangedSubviews) {
+    BOOL selected = button.tag == static_cast<NSInteger>(page);
+    button.backgroundColor = selected ? UIColor.tertiarySystemFillColor : nil;
+    button.tintColor = selected ? UIColor.labelColor : UIColor.secondaryLabelColor;
+  }
+  if (symbols) [self loadSections];
+  if (page == PanelPage::kGIF) {
+    _gifPanel.hasFullAccess = self.hasFullAccess;
+    [_gifPanel show];
+  }
+  if (page == PanelPage::kSettings) [self updateSettings];
   [self reloadCandidates];
 }
 
-- (NSArray<NSString *> *)recentSymbols {
-  return [NSUserDefaults.standardUserDefaults stringArrayForKey:kRecentSymbolsKey] ?: @[];
+- (NSString *)recentKey {
+  return _page == PanelPage::kEmoji ? kRecentSymbolsKey : kRecentKaomojiKey;
 }
 
-- (void)pickTab:(UIButton *)tab {
-  [self click];
-  [self showTab:tab.tag];
-}
-
-- (void)showTab:(NSInteger)index {
-  _tab = index;
-  if (index == 0) {
-    _shownSymbols = _customSymbols;
-  } else if (index == 1) {
-    _shownSymbols = [self recentSymbols];
+// 最近, then the emoji table's groups, or the user's 自訂 on the 顏文字 page.
+- (void)loadSections {
+  NSArray<NSString *> *recent = [NSUserDefaults.standardUserDefaults stringArrayForKey:[self recentKey]] ?: @[];
+  NSMutableArray<NSString *> *titles = [NSMutableArray arrayWithObject:@"最近"], *icons = [NSMutableArray arrayWithObject:@"clock"];
+  NSMutableArray<NSArray<NSString *> *> *sections = [NSMutableArray arrayWithObject:recent];
+  if (_page == PanelPage::kEmoji) {
+    NSArray<NSString *> *groupIcons = @[ @"face.smiling", @"person", @"leaf", @"fork.knife", @"car", @"soccerball", @"lightbulb", @"heart", @"flag" ];
+    auto &lm = *SharedEnvironment().lm;
+    auto groups = lm.getUnigrams("_emoji_groups");
+    for (size_t i = 0; i < groups.size(); i++) {
+      [titles addObject:String(groups[i].value())];
+      [icons addObject:i < groupIcons.count ? groupIcons[i] : @"circle"];
+      NSMutableArray<NSString *> *emoji = [NSMutableArray array];
+      for (const auto &unigram : lm.getUnigrams("_emoji_list_" + std::to_string(i))) [emoji addObject:String(unigram.value())];
+      [sections addObject:emoji];
+    }
   } else {
-    NSMutableArray<NSString *> *symbols = [NSMutableArray array];
-    std::string list = "_emoji_list_" + std::to_string(index - 2);
-    for (const auto &unigram : SharedEnvironment().lm->getUnigrams(list)) [symbols addObject:String(unigram.value())];
-    _shownSymbols = symbols;
+    [titles addObject:@"自訂"];
+    [icons addObject:@"star"];
+    [sections addObject:_customSymbols];
   }
-  for (UIButton *tab in _tabs.subviews) {
-    if (![tab isKindOfClass:UIButton.class]) continue;
-    BOOL selected = tab.tag == index;
-    tab.backgroundColor = selected ? UIColor.tertiarySystemFillColor : nil;
-    tab.tintColor = selected ? UIColor.labelColor : UIColor.secondaryLabelColor;
-    if (selected) [_tabs scrollRectToVisible:CGRectInset(tab.frame, -24, 0) animated:NO];
+  _sectionTitles = titles;
+  _sections = sections;
+  for (UIView *view in _categories.arrangedSubviews) [view removeFromSuperview];
+  for (NSUInteger i = 0; i < icons.count; i++) {
+    UIButton *category = [UIButton buttonWithType:UIButtonTypeSystem];
+    UIImageSymbolConfiguration *size = [UIImageSymbolConfiguration configurationWithPointSize:16];
+    [category setImage:[UIImage systemImageNamed:icons[i] withConfiguration:size] forState:UIControlStateNormal];
+    category.accessibilityLabel = titles[i];
+    category.tag = static_cast<NSInteger>(i);
+    [category addTarget:self action:@selector(jumpToSection:) forControlEvents:UIControlEventTouchUpInside];
+    [_categories addArrangedSubview:category];
   }
+  [self.view setNeedsLayout];
   [_symbolGrid reloadData];
   _symbolGrid.contentOffset = CGPointZero;
+  [self highlightCategory:recent.count ? 0 : 1];
+}
+
+- (void)highlightCategory:(NSInteger)section {
+  for (UIButton *category in _categories.arrangedSubviews) {
+    category.tintColor = category.tag == section ? UIColor.labelColor : UIColor.tertiaryLabelColor;
+  }
+}
+
+- (void)jumpToSection:(UIButton *)category {
+  [self click];
+  [_symbolGrid layoutIfNeeded];
+  NSIndexPath *first = [NSIndexPath indexPathForItem:0 inSection:category.tag];
+  UICollectionViewLayoutAttributes *header =
+      [_symbolGrid layoutAttributesForSupplementaryElementOfKind:UICollectionElementKindSectionHeader atIndexPath:first];
+  CGFloat end = MAX(0, _symbolGrid.contentSize.height - CGRectGetHeight(_symbolGrid.bounds));
+  [_symbolGrid setContentOffset:CGPointMake(0, MIN(end, CGRectGetMinY(header.frame))) animated:NO];
+  [self highlightCategory:category.tag];
+}
+
+// While the finger scrolls, the icon of the section at the top lights.
+- (void)followCategory {
+  CGFloat top = _symbolGrid.contentOffset.y + 30;
+  NSInteger section = -1;
+  for (NSIndexPath *path in _symbolGrid.indexPathsForVisibleItems) {
+    UICollectionViewLayoutAttributes *item = [_symbolGrid layoutAttributesForItemAtIndexPath:path];
+    if (CGRectGetMaxY(item.frame) > top && (section < 0 || path.section < section)) section = path.section;
+  }
+  if (section >= 0) [self highlightCategory:section];
+}
+
+- (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
+  return static_cast<NSInteger>(_sections.count);
 }
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
-  return static_cast<NSInteger>(_shownSymbols.count);
+  return static_cast<NSInteger>(_sections[static_cast<NSUInteger>(section)].count);
+}
+
+- (NSString *)symbolAt:(NSIndexPath *)indexPath {
+  return _sections[static_cast<NSUInteger>(indexPath.section)][static_cast<NSUInteger>(indexPath.item)];
 }
 
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
   PKSymbolCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"symbol" forIndexPath:indexPath];
-  NSString *symbol = _shownSymbols[static_cast<NSUInteger>(indexPath.item)];
+  NSString *symbol = [self symbolAt:indexPath];
   cell.label.text = symbol;
   cell.label.font = SymbolFont(symbol);
   return cell;
 }
 
+- (UICollectionReusableView *)collectionView:(UICollectionView *)collectionView viewForSupplementaryElementOfKind:(NSString *)kind atIndexPath:(NSIndexPath *)indexPath {
+  PKSectionHeader *header = [collectionView dequeueReusableSupplementaryViewOfKind:kind withReuseIdentifier:@"header" forIndexPath:indexPath];
+  header.label.text = _sectionTitles[static_cast<NSUInteger>(indexPath.section)];
+  return header;
+}
+
+// An empty section, 最近 before anything is typed from the page, has no title either.
+- (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)layout referenceSizeForHeaderInSection:(NSInteger)section {
+  return _sections[static_cast<NSUInteger>(section)].count ? CGSizeMake(CGRectGetWidth(collectionView.bounds), 26) : CGSizeZero;
+}
+
 // Eight emoji a row; a longer item takes the width it needs.
 - (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)layout sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
   CGFloat width = CGRectGetWidth(collectionView.bounds) - 2 * kSideInset, cell = floor(width / 8);
-  NSString *symbol = _shownSymbols[static_cast<NSUInteger>(indexPath.item)];
+  NSString *symbol = [self symbolAt:indexPath];
+  if ([symbol rangeOfComposedCharacterSequenceAtIndex:0].length == symbol.length) return CGSizeMake(cell, 44);
   CGFloat text = ceil([symbol sizeWithAttributes:@{NSFontAttributeName : SymbolFont(symbol)}].width) + 20;
   return CGSizeMake(MIN(width, MAX(cell, text)), 44);
 }
 
-// Typed, and kept first among 最近; the page shown stays as it is under the finger.
+// Typed, and kept first among 最近, which shows it when the page next opens: the page
+// stays as it is under the finger.
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
   [collectionView deselectItemAtIndexPath:indexPath animated:NO];
   [self click];
-  NSString *symbol = _shownSymbols[static_cast<NSUInteger>(indexPath.item)];
-  [self typeKeepingBar:symbol];
-  NSMutableArray<NSString *> *recent = [[self recentSymbols] mutableCopy];
+  NSString *symbol = [self symbolAt:indexPath];
+  [self typeText:symbol];
+  NSMutableArray<NSString *> *recent = [([NSUserDefaults.standardUserDefaults stringArrayForKey:[self recentKey]] ?: @[]) mutableCopy];
   [recent removeObject:symbol];
   [recent insertObject:symbol atIndex:0];
   if (recent.count > kRecentCount) [recent removeObjectsInRange:NSMakeRange(kRecentCount, recent.count - kRecentCount)];
-  [NSUserDefaults.standardUserDefaults setObject:recent forKey:kRecentSymbolsKey];
+  [NSUserDefaults.standardUserDefaults setObject:recent forKey:[self recentKey]];
+}
+
+#pragma mark - Settings
+
+// The app's settings that matter while typing, set from the keyboard. Writing them needs full
+// access, as reading them does.
+- (UIView *)makeSettingsPanel {
+  UIStackView *rows = [[UIStackView alloc] init];
+  rows.axis = UILayoutConstraintAxisVertical;
+  rows.layoutMargins = UIEdgeInsetsMake(0, 16, 0, 16);
+  rows.layoutMarginsRelativeArrangement = YES;
+  _settingsWarning = [[UILabel alloc] init];
+  _settingsWarning.text = @"未開啟完整取用，設定無法儲存";
+  _settingsWarning.font = [UIFont systemFontOfSize:13];
+  _settingsWarning.textColor = UIColor.secondaryLabelColor;
+  [_settingsWarning.heightAnchor constraintEqualToConstant:28].active = YES;
+  [rows addArrangedSubview:_settingsWarning];
+  _hapticsControl = [[UISegmentedControl alloc] initWithItems:@[ @"關閉", @"輕", @"中", @"重" ]];
+  [_hapticsControl.widthAnchor constraintEqualToConstant:200].active = YES;
+  [_hapticsControl addTarget:self action:@selector(changeHaptics) forControlEvents:UIControlEventValueChanged];
+  [rows addArrangedSubview:[self settingRow:@"觸覺回饋" control:_hapticsControl]];
+  NSMutableArray<UISwitch *> *switches = [NSMutableArray array];
+  for (NSString *title in @[ @"字元預覽", @"聯想詞", @"簡拼", @"近似音" ]) {
+    UISwitch *control = [[UISwitch alloc] init];
+    control.tag = static_cast<NSInteger>(switches.count);
+    [control addTarget:self action:@selector(changeSwitch:) forControlEvents:UIControlEventValueChanged];
+    [switches addObject:control];
+    [rows addArrangedSubview:[self settingRow:title control:control]];
+  }
+  _settingSwitches = switches;
+  return rows;
+}
+
+- (UIView *)settingRow:(NSString *)title control:(UIControl *)control {
+  UILabel *label = [[UILabel alloc] init];
+  label.text = title;
+  label.font = [UIFont systemFontOfSize:16];
+  UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[ label, control ]];
+  row.alignment = UIStackViewAlignmentCenter;
+  [label setContentHuggingPriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+  [row.heightAnchor constraintEqualToConstant:44].active = YES;
+  return row;
+}
+
+// The engine's settings behind 聯想詞, 簡拼 and 近似音, the switches after 字元預覽.
+static const ProjectKey::Setting kSwitchSettings[] = {ProjectKey::Setting::kAssociatedPhrases, ProjectKey::Setting::kAbbreviated,
+                                                      ProjectKey::Setting::kFuzzySounds};
+
+- (void)updateSettings {
+  BOOL access = self.hasFullAccess;
+  _settingsWarning.hidden = access;
+  NSUserDefaults *defaults = SharedDefaults();
+  _hapticsControl.selectedSegmentIndex = [defaults objectForKey:kHapticsKey] ? [defaults integerForKey:kHapticsKey] : 1;
+  _hapticsControl.enabled = access;
+  _settingSwitches[0].on = gShowsPreview;
+  for (NSUInteger i = 1; i < _settingSwitches.count; i++) {
+    _settingSwitches[i].on = SharedEnvironment().settings->flag(kSwitchSettings[i - 1]);
+  }
+  for (UISwitch *control in _settingSwitches) control.enabled = access;
+}
+
+- (void)changeHaptics {
+  NSInteger haptics = _hapticsControl.selectedSegmentIndex;
+  [SharedDefaults() setInteger:haptics forKey:kHapticsKey];
+  [self applyHaptics:haptics];
+  [self click];  // how it now feels
+}
+
+- (void)changeSwitch:(UISwitch *)control {
+  if (control.tag == 0) {
+    gShowsPreview = control.on;
+    [SharedDefaults() setBool:control.on forKey:kCharacterPreviewKey];
+  } else {
+    SharedEnvironment().settings->set(kSwitchSettings[control.tag - 1], control.on ? 1 : 0);
+  }
+}
+
+- (void)applyHaptics:(NSInteger)haptics {
+  const UIImpactFeedbackStyle styles[] = {UIImpactFeedbackStyleLight, UIImpactFeedbackStyleMedium, UIImpactFeedbackStyleHeavy};
+  _haptics = haptics >= 1 && haptics <= 3 ? [[UIImpactFeedbackGenerator alloc] initWithStyle:styles[haptics - 1]] : nil;
+  [_haptics prepare];
 }
 
 // Opens or folds the grid as _expanded says. Open, it covers the keys; it unfolds down from
@@ -1239,6 +1459,10 @@ static CGFloat ChipWidth(UIButton *button) {
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
+  if (scrollView == _symbolGrid) {
+    if (scrollView.isDragging || scrollView.isDecelerating) [self followCategory];  // a jump lights its own
+    return;
+  }
   if (![self choosing]) return;
   if (scrollView == _bar) {
     [self extendBarTo:_bar.contentOffset.x + 2 * CGRectGetWidth(_bar.bounds) count:0];

@@ -72,6 +72,7 @@ targets:
       - sdk: UIKit.framework
       - sdk: QuartzCore.framework
       - sdk: CoreGraphics.framework
+      - sdk: ImageIO.framework  # plays the GIF panel's previews
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.projectkey.ios.keyboard
@@ -81,3 +82,5 @@ targets:
         INFOPLIST_FILE: Keyboard/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Project Key
         APPLICATION_EXTENSION_API_ONLY: YES
+        # The GIF panel's GIPHY key, given on the command line (GIPHY_API_KEY=...); without it the panel loads nothing.
+        GIPHY_API_KEY: ""
