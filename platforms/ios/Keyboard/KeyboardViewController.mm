@@ -122,6 +122,7 @@ ProjectKey::Environment &SharedEnvironment() {
     if (!env->personalPath.empty()) env->personal->load(env->personalPath);
     static DefaultsSettings settings;
     env->settings = &settings;
+    env->candidatesAlwaysOpen = true;  // the bar lists them as soon as a syllable is typed
     return env;
   }();
   return *environment;
@@ -1038,11 +1039,8 @@ static UIFont *SymbolFont(NSString *symbol) {
   const auto &panel = _controller->panel();
   BOOL choosing = [self choosing], idle = NO;
   if (choosing) {
-    size_t selected = [self selectedCandidate];
-    [self extendBarTo:2 * CGRectGetWidth(_bar.bounds) count:selected + 1];
-    if (selected < _barCount) {  // the word as typed can be past the edge
-      [_bar scrollRectToVisible:[_bar viewWithTag:kCandidateTag + static_cast<NSInteger>(selected)].frame animated:NO];
-    }
+    // The bar starts at the first candidate, even when the word as typed is further on.
+    [self extendBarTo:2 * CGRectGetWidth(_bar.bounds) count:0];
   } else if (!_client->marked.empty()) {
     UIButton *button = [self candidate:String(_client->marked) selected:NO];
     [button addTarget:self action:@selector(typeReturn) forControlEvents:UIControlEventTouchUpInside];

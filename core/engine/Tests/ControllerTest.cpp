@@ -265,6 +265,26 @@ int main(int argc, char** argv) {
   Type(controller, "l");
   assert(client.marked == "ㄋㄧㄠ" && client.panel.pendingReading.empty());
   EscapeAll(controller, client);
+  // Where the candidates are always open, the syllable still open keeps its Zhuyin among them.
+  env.candidatesAlwaysOpen = true;
+  Type(controller, "su");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && client.marked == "ㄋㄧ");
+  Type(controller, "c");  // ㄋㄧ ends as its word; ㄏ is open
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)) && HasSuffix(client.marked, "ㄏ"));
+  EscapeAll(controller, client);
+  // There the first candidate, the likeliest, is the one selected, not the word in the sentence:
+  // with 好 chosen alone, the candidates up to the cursor still start with 你好.
+  settings.set(Setting::kCandidatePosition, 1);
+  Type(controller, "su3cl");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const std::vector<std::string>& ending = controller.candidates();
+  controller.choose(static_cast<int>(std::find(ending.begin(), ending.end(), "好") - ending.begin()));
+  if (controller.panel() && controller.panel()->selectedRow >= 0) controller.handleKey(Special(ProjectKey::Key::kEscape));
+  assert(client.marked == "你好" && controller.handleKey(Special(ProjectKey::Key::kDown)));
+  assert(controller.candidates()[0] == "你好" && client.panel.rows[client.panel.selectedRow][client.panel.selection] == "你好");
+  EscapeAll(controller, client);
+  settings.remove(Setting::kCandidatePosition);
+  env.candidatesAlwaysOpen = false;
   size_t before = client.committed.size();
 
   // Typed twice, the sentence has two doubtful 城市 (choices not remembered, so

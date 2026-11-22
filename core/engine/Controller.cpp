@@ -1227,7 +1227,8 @@ void Controller::startChoosingAt(size_t start) {
   candidates_ = std::move(candidates);
   pack(candidates_, &rowStarts_, &columns_);
   auto current = std::find(candidates_.begin(), candidates_.end(), segment->text);
-  selection_ = current == candidates_.end() ? 0 : static_cast<int>(current - candidates_.begin());
+  // Always open, the candidates start at the likeliest, which the word as typed need not be.
+  selection_ = current == candidates_.end() || env_.candidatesAlwaysOpen ? 0 : static_cast<int>(current - candidates_.begin());
   refresh();
 }
 
@@ -1588,8 +1589,9 @@ void Controller::refresh() {
   uint32_t caret = 0;
   // The syllable still open without a tone shows as its Zhuyin, so what is being typed
   // stays visible (and Enter sends it so); its word shows once the syllable closes, and
-  // in the candidates. Not while choosing, where the text is what is chosen.
-  std::u16string open = choosing_ ? u"" : ToUtf16(composer_->shownReading());
+  // in the candidates. Not while choosing, where the text is what is chosen, unless the
+  // candidates are always open.
+  std::u16string open = choosing_ && !env_.candidatesAlwaysOpen ? u"" : ToUtf16(composer_->shownReading());
   uint32_t openGrowth = 0;
   // That word is a guess, so the proof row shows it marked in the sentence. With no syllable
   // open, the word just typed takes its place, so the panel stays up from one syllable to the
@@ -1624,6 +1626,7 @@ void Controller::refresh() {
       text.replace(at, 1, open);
       openGrowth = static_cast<uint32_t>(open.size()) - 1;
       caret += openGrowth;  // the open syllable is always before the cursor
+      if (hasActive && activeStart == marked.size()) activeLength += openGrowth;  // chosen, it is chosen as its Zhuyin
     }
     marked += text;
   }

@@ -160,6 +160,9 @@ struct Environment {
   // While a syllable is open, the Tab hint goes to Client::showHint and the panel keeps
   // the guess in its proof row.
   bool hintWindow = false;
+  // The candidates stay open while typing (iOS): the syllable still open shows as its Zhuyin even
+  // while choosing, and choosing starts at the first candidate.
+  bool candidatesAlwaysOpen = false;
 };
 
 // The badge's text: the language and the width, ㄅ半 or Ａ全. Ａ is full-width so both letters are as wide.
