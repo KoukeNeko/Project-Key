@@ -640,6 +640,7 @@ static UIFont *SymbolFont(NSString *symbol) {
   [_pageKey addTarget:self action:@selector(switchPage) forControlEvents:UIControlEventTouchUpInside];
   _modeKey = [PKKeyButton keyWithTitle:@"ABC" symbol:nil function:YES];
   [_modeKey addTarget:self action:@selector(switchMode) forControlEvents:UIControlEventTouchUpInside];
+  _modeKey.hidden = YES;  // the English page is set aside until it types well; layout leaves it out
   for (PKKeyButton *key in @[ _pageKey, _modeKey ]) {
     key.titleLabel.adjustsFontSizeToFitWidth = YES;  // ㄅㄆㄇ is wider than ?123
     key.titleLabel.minimumScaleFactor = 0.7;
@@ -815,9 +816,11 @@ static UIFont *SymbolFont(NSString *symbol) {
   // Bottom row in key widths; the space bar takes what is left.
   BOOL globe = self.needsInputModeSwitchKey;
   _globeKey.hidden = !globe;
-  NSArray<PKKeyButton *> *bottom = globe ? @[ _pageKey, _modeKey, _commaKey, _globeKey, _spaceKey, _erKey, _deleteKey, _returnKey ]
-                                         : @[ _pageKey, _modeKey, _commaKey, _spaceKey, _erKey, _deleteKey, _returnKey ];
-  NSDictionary<NSValue *, NSNumber *> *wide = @{[NSValue valueWithNonretainedObject:_pageKey] : @1.4, [NSValue valueWithNonretainedObject:_returnKey] : @1.4};
+  NSArray<PKKeyButton *> *bottom = globe ? @[ _pageKey, _commaKey, _globeKey, _spaceKey, _erKey, _deleteKey, _returnKey ]
+                                         : @[ _pageKey, _commaKey, _spaceKey, _erKey, _deleteKey, _returnKey ];
+  NSDictionary<NSValue *, NSNumber *> *wide = @{[NSValue valueWithNonretainedObject:_pageKey] : @1.4,
+                                                [NSValue valueWithNonretainedObject:_deleteKey] : @1.4,
+                                                [NSValue valueWithNonretainedObject:_returnKey] : @1.4};
   CGFloat fixed = 0;
   for (PKKeyButton *key in bottom) {
     if (key != _spaceKey) fixed += unit * ([wide[[NSValue valueWithNonretainedObject:key]] doubleValue] ?: 1);
