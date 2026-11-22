@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <sstream>
 
 #include "InputMacro.h"
@@ -363,6 +364,11 @@ std::vector<Formosa::Gramambular2::LanguageModel::Unigram> Lexicon::getUnigrams(
   return unigrams;
 }
 
+bool Lexicon::isUserPhrase(const std::string& reading, const std::string& value) {
+  auto own = userPhrases_.getUnigrams(reading);
+  return std::any_of(own.begin(), own.end(), [&](const auto& unigram) { return unigram.value() == value; });
+}
+
 bool Lexicon::hasUnigrams(const std::string& key) {
   if (key == kEmojiGroups) return !emojiGroups_.empty();
   if (key.rfind(kEmojiList, 0) == 0) return std::strtoul(key.c_str() + sizeof(kEmojiList) - 1, nullptr, 10) < emojiGroups_.size();
@@ -656,6 +662,7 @@ void Composer::clear() {
   endReading();
   grid_.clear();
   segments_.clear();
+  segmentWords_.clear();
   rankable_.clear();
   ranked_.clear();
   version_++;
@@ -951,6 +958,7 @@ void Composer::walk() {
   // A word is doubtful when another word of the same node scores within the gap
   // in the same context.
   segments_.clear();
+  segmentWords_.clear();
   auto idAt = [&](long i) {
     return i == -1 ? opening : i < 0 ? kNoWord : i >= static_cast<long>(path.size()) ? boundary : choices[path[i]].id;
   };
@@ -973,19 +981,34 @@ void Composer::walk() {
       }
       return total;
     };
-    bool doubtful = false;
-    if (!choice.node->isOverridden() && !learned(i > 0 ? path[i - 1] : -1, choice)) {
-      double chosen = local(choice.id, choice.unigramScore, choice.chars);
-      const auto& unigrams = choice.node->unigrams();
-      for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()) && !doubtful; k++) {
-        if (unigrams[k].value() != choice.value) {
-          const std::string& value = unigrams[k].value();
-          std::vector<uint32_t> chars = scoresChars() ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
-          doubtful = chosen - local(idOf(value), unigrams[k].score(), chars) < kDoubtfulScoreGap;
-        }
-      }
+    // The node's top words, best in this context first: the candidates' order (choices()). The
+    // walk's word leads unless a pick the user made, or the sentence model, chose it; the
+    // user's own words lead anyway.
+    double chosen = local(choice.id, choice.unigramScore, choice.chars);
+    std::vector<std::pair<double, std::string>> words{{chosen, choice.value}};
+    const auto& unigrams = choice.node->unigrams();
+    for (size_t k = 0; k < std::min(kWordsPerNode, unigrams.size()); k++) {
+      const std::string& value = unigrams[k].value();
+      if (value == choice.value) continue;
+      std::vector<uint32_t> chars = scoresChars() ? CharModel::CodePoints(value) : std::vector<uint32_t>{};
+      words.emplace_back(local(idOf(value), unigrams[k].score(), chars), value);
     }
+    // Doubtful when another word scores within the gap in the same context.
+    bool doubtful = !choice.node->isOverridden() && !learned(i > 0 ? path[i - 1] : -1, choice) &&
+                    std::any_of(words.begin(), words.end(), [&](const auto& word) {
+                      return word.second != choice.value && chosen - word.first < kDoubtfulScoreGap;
+                    });
+    Lexicon& lexicon = static_cast<Lexicon&>(*lm_);
+    for (auto& [score, value] : words) {
+      if (lexicon.isUserPhrase(choice.node->reading(), value)) score = std::numeric_limits<double>::infinity();
+    }
+    std::stable_sort(words.begin(), words.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
     segments_.push_back({choice.value, choice.node->reading(), choice.start, choice.length, doubtful});
+    // Punctuation's and the symbol lists' words keep their table's order.
+    std::vector<std::string>& order = segmentWords_.emplace_back();
+    if (choice.node->reading()[0] != '_') {
+      for (auto& [score, value] : words) order.push_back(std::move(value));
+    }
   }
 }
 
@@ -1010,9 +1033,21 @@ std::vector<std::pair<size_t, ReadingGrid::Candidate>> Composer::choices(const S
   auto add = [&](size_t from, size_t to) {
     std::string typed = readings[from];
     for (size_t i = from + 1; i < to; i++) typed += grid_.readingSeparator() + readings[i];
+    std::vector<ReadingGrid::Candidate> own;
     for (const ReadingGrid::Candidate& candidate : grid_.candidatesAt(from)) {
-      if (candidate.reading == typed) found.emplace_back(from, candidate);
+      if (candidate.reading == typed) own.push_back(candidate);
     }
+    // A segment's own words come as the walk ranked them in context, the rest after them as before.
+    std::vector<ptrdiff_t> ranks(own.size(), 0);
+    for (size_t i = 0; i < segments_.size(); i++) {
+      if (segments_[i].start != from || segments_[i].start + segments_[i].length != to) continue;
+      const std::vector<std::string>& order = segmentWords_[i];
+      for (size_t k = 0; k < own.size(); k++) ranks[k] = std::find(order.begin(), order.end(), own[k].value) - order.begin();
+    }
+    std::vector<size_t> byRank(own.size());
+    for (size_t k = 0; k < own.size(); k++) byRank[k] = k;
+    std::stable_sort(byRank.begin(), byRank.end(), [&](size_t a, size_t b) { return ranks[a] < ranks[b]; });
+    for (size_t k : byRank) found.emplace_back(from, own[k]);
     std::string anyTone = AnyTone(typed);
     if (typed.find('_') != std::string::npos || anyTone == typed) return;  // punctuation, or already in any tone
     for (const auto& [reading, unigram] : static_cast<TonelessModel&>(*dictionary_).matches(anyTone)) {

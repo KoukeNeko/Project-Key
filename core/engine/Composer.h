@@ -53,6 +53,8 @@ class Lexicon : public McBopomofo::McBopomofoLM {
   // The "reading word score" rows whose reading starts with `prefix`, then the user's
   // readings that do, each a row of the reading alone.
   std::vector<std::string_view> rowsStartingWith(const std::string& prefix) const;
+  // Whether `value` is one of the user's own words (loadUserPhrases) for the exact `reading`.
+  bool isUserPhrase(const std::string& reading, const std::string& value);
 
  private:
   McBopomofo::MemoryMappedFile file_;
@@ -237,6 +239,8 @@ class Composer {
   bool readingShown_ = false;  // the open syllable is in the grid, toneless, right before the cursor
   std::string hanBefore_;      // the Han characters right before the composition, at most kWordBeforeLength
   std::vector<Segment> segments_;
+  // Each segment's word, then its node's other top words, best in context first (walk()).
+  std::vector<std::vector<std::string>> segmentWords_;
 };
 
 }  // namespace ProjectKey

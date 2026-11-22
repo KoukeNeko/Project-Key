@@ -1,6 +1,7 @@
 #include "Controller.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 
@@ -1506,6 +1507,27 @@ void Controller::commitWithAssociated(const std::string& text) {
             : env_.lm->findAssociatedPhrasesV2(last.text.substr(0, first), {});
     for (const auto& phrase : found) {
       if (phrase.value.size() > last.text.size() && phrase.value.starts_with(last.text)) phrases.push_back(phrase.value.substr(last.text.size()));
+    }
+    // The table ranks the whole phrases by how common each is; the character model, with what
+    // the user typed, ranks what follows by how likely it is to follow this text.
+    if (env_.chars) {
+      std::vector<uint32_t> before = CharModel::CodePoints(text);
+      std::vector<std::pair<double, std::string>> scored;
+      for (std::string& phrase : phrases) {
+        uint32_t first = before.size() > 1 ? before[before.size() - 2] : CharModel::kBoundary;
+        uint32_t second = before.empty() ? CharModel::kBoundary : before.back();
+        double log10P = 0;
+        for (uint32_t next : CharModel::CodePoints(phrase)) {
+          double p = env_.chars->probability(first, second, next);
+          if (env_.personal) p = env_.personal->blend(p, first, second, next);
+          log10P += std::log10(p);
+          first = second;
+          second = next;
+        }
+        scored.emplace_back(log10P, std::move(phrase));
+      }
+      std::stable_sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+      for (size_t i = 0; i < scored.size(); i++) phrases[i] = std::move(scored[i].second);
     }
     phrases.resize(firstRowSize(phrases));
   }
