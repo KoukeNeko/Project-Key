@@ -37,6 +37,9 @@ NSUserDefaults *SharedDefaults() {
 // The app asks to clear the choices by raising this count; the keyboard clears them when it next shows.
 NSString *const kClearChoicesRequestKey = @"ClearChoicesRequest";
 NSString *const kClearedChoicesKey = @"ClearedChoices";  // the last request done, in the keyboard's own defaults
+NSString *const kIOS18StyleKey = @"IOS18Style";
+NSString *const kHapticsKey = @"Haptics";  // 0 off, 1 light, 2 medium, 3 heavy; light when unset
+NSString *const kCharacterPreviewKey = @"CharacterPreview";  // on when unset
 
 class DefaultsSettings : public ProjectKey::Settings {
  public:
@@ -181,11 +184,12 @@ NSArray<NSArray<NSString *> *> *SymbolRows() {
 constexpr CGFloat kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 2, kBottomInset = 2;
 // A row gap is this share of a row's pitch, so the rows keep their shape at any height.
 constexpr CGFloat kRowGapShare = 0.12;
-// The candidate bar takes one row of keys: a key's height and the gap below it.
-constexpr CGFloat kBarHeight = kKeyHeight / (1 - kRowGapShare);
-// A candidate's box, shorter than a key, at the top: after a switch from Apple's English keyboard, iOS 26
-// and 27 add a strip of about 17pt above the extension (FB21449121), and the bar's rest below the box matches it.
-constexpr CGFloat kChipHeight = 34, kChipTop = 0;
+// The candidate bar takes one row of keys: a key's height and the gap below it, with a candidate's box,
+// shorter than a key, at the top. After a switch from Apple's English keyboard, iOS 26 and 27 add a strip
+// of about 17pt above the extension (FB21449121), and the bar's rest below the box matches it.
+constexpr CGFloat kBarHeight = kKeyHeight / (1 - kRowGapShare), kChipHeight = 34;
+// The iOS 18 style (kIOS18StyleKey) leaves the strip be: a shorter bar, the box in its middle.
+constexpr CGFloat kShortBarHeight = 40;
 constexpr CGFloat kExpandWidth = 44, kGridRowHeight = 44;
 using ProjectKey::kGridColumns;  // the engine packs rows to the same width
 // Candidate buttons are tagged from here with their index, so viewWithTag: never finds the view itself (tag 0).
@@ -222,7 +226,13 @@ UIColor *PressedColor(BOOL function) {
 @property(nonatomic, strong) UILabel *hintLabel;
 @property(nonatomic) BOOL previews;  // shows what it types above the finger, as the system's letter keys do
 @property(nonatomic, strong) UILabel *preview;
+@property(nonatomic, weak) PKKeyButton *tracked;  // the key under the finger, which may have slid off this one
 @end
+
+// The character key a finger is on. As on the system keyboard, it types when the next key goes
+// down rather than on release, so two thumbs typing fast keep the order and show one preview.
+static __weak PKKeyButton *gHeld;
+static BOOL gShowsPreview = YES;  // kCharacterPreviewKey
 
 @implementation PKKeyButton
 
@@ -271,7 +281,7 @@ UIColor *PressedColor(BOOL function) {
 
 - (void)pressDown {
   self.backgroundColor = PressedColor(self.function);
-  if (!self.previews) return;
+  if (!self.previews || !gShowsPreview) return;
   if (!self.preview) {
     self.preview = [[UILabel alloc] init];
     self.preview.font = [UIFont systemFontOfSize:32];
@@ -301,10 +311,70 @@ UIColor *PressedColor(BOOL function) {
   [self.preview removeFromSuperview];
 }
 
+// Character keys track the finger themselves: the press follows it across the
+// character keys and the key under it on release is the one typed.
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+  [gHeld commit];
+  if (!self.previews) return [super touchesBegan:touches withEvent:event];
+  gHeld = self;
+  self.tracked = self;
+  [self sendActionsForControlEvents:UIControlEventTouchDown];
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+  if (!self.previews) return [super touchesMoved:touches withEvent:event];
+  if (gHeld != self) return;
+  CGPoint point = [touches.anyObject locationInView:self.superview];
+  for (UIView *view in self.superview.subviews) {
+    if (![view isKindOfClass:PKKeyButton.class] || view.hidden || view.alpha < 0.01) continue;
+    PKKeyButton *key = (PKKeyButton *)view;
+    if (!key.previews || key == self.tracked || !CGRectContainsPoint(key.frame, point)) continue;
+    [self.tracked pressUp];
+    self.tracked = key;
+    [key pressDown];
+    break;
+  }
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+  if (!self.previews) return [super touchesEnded:touches withEvent:event];
+  if (gHeld == self) [self commit];
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+  if (!self.previews) return [super touchesCancelled:touches withEvent:event];
+  if (gHeld != self) return;
+  gHeld = nil;
+  [self.tracked pressUp];
+}
+
+- (void)commit {
+  gHeld = nil;
+  for (UIGestureRecognizer *press in self.gestureRecognizers) {  // a finger left down must not long-press too
+    press.enabled = NO;
+    press.enabled = YES;
+  }
+  // The target registered for touch-up also takes the press off.
+  [self.tracked sendActionsForControlEvents:UIControlEventTouchUpInside];
+}
+
+@end
+
+// The keys, over the whole keyboard and above the candidate bar so the top row's previews
+// show over it; a touch on no key passes to the bar.
+@interface PKKeysView : UIView
+@end
+
+@implementation PKKeysView
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+  UIView *hit = [super hitTest:point withEvent:event];
+  return hit == self ? nil : hit;
+}
 @end
 
 // The system keyboard's background, and its click sound.
 @interface PKKeyboardView : UIInputView <UIInputViewAudioFeedback>
+@property(nonatomic, weak) UIView *keys;
 @end
 
 @implementation PKKeyboardView
@@ -315,11 +385,12 @@ UIColor *PressedColor(BOOL function) {
 // A touch in the gap between keys goes to the nearest key, as on the system keyboard, rather than nowhere.
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
   UIView *hit = [super hitTest:point withEvent:event];
-  if (hit != self) return hit;
+  if (hit != self || self.keys.alpha < 0.01) return hit;
+  point = [self convertPoint:point toView:self.keys];
   constexpr CGFloat kReach = 8;  // a gap is 6pt wide; farther than this is no key's
   PKKeyButton *nearest = nil;
   CGFloat best = kReach * kReach;
-  for (UIView *view in self.subviews) {
+  for (UIView *view in self.keys.subviews) {
     if (![view isKindOfClass:PKKeyButton.class] || view.hidden || view.alpha < 0.01) continue;
     CGRect frame = view.frame;
     CGFloat dx = MAX(0, MAX(CGRectGetMinX(frame) - point.x, point.x - CGRectGetMaxX(frame)));
@@ -337,8 +408,13 @@ UIColor *PressedColor(BOOL function) {
   std::unique_ptr<ClientAdapter> _client;
   std::unique_ptr<ProjectKey::Controller> _controller;
   UIScrollView *_bar, *_grid;
+  UIView *_keys;  // masked while the grid unfolds over it
   UIButton *_expandKey;
   BOOL _expanded;  // the candidates spread over the keys
+  BOOL _gridShown;  // what the views last showed of _expanded
+  BOOL _sliding;  // the grid opening or folding
+  CGFloat _barHeight, _chipTop;  // by the style, kIOS18StyleKey
+  NSLayoutConstraint *_height;
   // How far the bar and the grid are filled: a lone symbol has over a thousand candidates,
   // too many to make at once, so they are made as the view scrolls toward them.
   size_t _barCount, _gridCount;
@@ -350,6 +426,7 @@ UIColor *PressedColor(BOOL function) {
   BOOL _shift;    // the next letter is a capital
   BOOL _symbols;
   NSTimer *_deleteRepeat;
+  UIImpactFeedbackGenerator *_haptics;  // nil when off (kHapticsKey)
 }
 
 - (void)loadView {
@@ -381,6 +458,9 @@ UIColor *PressedColor(BOOL function) {
     }
   }
   [self.view addSubview:_bar];
+  _keys = [[PKKeysView alloc] init];
+  ((PKKeyboardView *)self.view).keys = _keys;
+  [self.view addSubview:_keys];
 
   NSMutableArray *zhuyin = [NSMutableArray array];
   for (const auto &row : kRows) {
@@ -393,7 +473,7 @@ UIColor *PressedColor(BOOL function) {
       [key addTarget:self action:@selector(typeZhuyin:) forControlEvents:UIControlEventTouchUpInside];
       [self addLongPress:key];
       [keys addObject:key];
-      [self.view addSubview:key];
+      [_keys addSubview:key];
     }
     [zhuyin addObject:keys];
   }
@@ -409,7 +489,7 @@ UIColor *PressedColor(BOOL function) {
       [key addTarget:self action:@selector(typeSymbol:) forControlEvents:UIControlEventTouchUpInside];
       key.hidden = YES;
       [keys addObject:key];
-      [self.view addSubview:key];
+      [_keys addSubview:key];
     }
     [symbols addObject:keys];
   }
@@ -431,7 +511,7 @@ UIColor *PressedColor(BOOL function) {
       }
       key.hidden = YES;
       [keys addObject:key];
-      [self.view addSubview:key];
+      [_keys addSubview:key];
     }
     [english addObject:keys];
   }
@@ -466,7 +546,7 @@ UIColor *PressedColor(BOOL function) {
   [_returnKey addTarget:self action:@selector(typeReturn) forControlEvents:UIControlEventTouchUpInside];
   for (PKKeyButton *key in @[ _pageKey, _modeKey, _commaKey, _globeKey, _spaceKey, _erKey, _deleteKey, _returnKey ]) {
     [key addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
-    [self.view addSubview:key];
+    [_keys addSubview:key];
   }
   for (NSArray<PKKeyButton *> *row in [[_zhuyinRows arrayByAddingObjectsFromArray:_englishRows] arrayByAddingObjectsFromArray:_symbolRows]) {
     for (PKKeyButton *key in row) [key addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
@@ -475,28 +555,29 @@ UIColor *PressedColor(BOOL function) {
   [self.view addSubview:_grid];
   _expandKey = [UIButton buttonWithType:UIButtonTypeSystem];
   _expandKey.tintColor = UIColor.labelColor;
-  UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(0, kChipTop + 6, 0.5, kChipHeight - 12)];  // between the row and ⌄
+  UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(0, 6, 0.5, kChipHeight - 12)];  // between the row and ⌄
   divider.backgroundColor = UIColor.separatorColor;
   [_expandKey addSubview:divider];
   [_expandKey addTarget:self action:@selector(toggleGrid) forControlEvents:UIControlEventTouchUpInside];
   [self.view addSubview:_expandKey];
 
   // The system takes the keyboard's height from what its content needs, not from a
-  // constraint on the view itself, so an invisible column asks for it.
-  CGFloat pitch = kKeyHeight / (1 - kRowGapShare);
+  // constraint on the view itself, so an invisible column asks for it (applyStyle).
   UIView *strut = [[UIView alloc] init];
   strut.translatesAutoresizingMaskIntoConstraints = NO;
   strut.userInteractionEnabled = NO;
   [self.view insertSubview:strut atIndex:0];
-  NSLayoutConstraint *height = [strut.heightAnchor constraintEqualToConstant:kBarHeight + kTopInset + (5 - kRowGapShare) * pitch + kBottomInset];
-  height.priority = UILayoutPriorityRequired - 1;  // a height the system insists on still wins
+  _height = [strut.heightAnchor constraintEqualToConstant:0];
+  _height.priority = UILayoutPriorityRequired - 1;  // a height the system insists on still wins
+  [self applyStyle];
   [NSLayoutConstraint activateConstraints:@[
-    height, [strut.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+    _height, [strut.topAnchor constraintEqualToAnchor:self.view.topAnchor],
     [strut.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
     [strut.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor], [strut.widthAnchor constraintEqualToConstant:0]
   ]];
 
   [self reloadCandidates];
+  [self showGridAnimated:NO];  // folded
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -506,6 +587,25 @@ UIColor *PressedColor(BOOL function) {
     ProjectKey::ClearChoices(SharedEnvironment());
     [NSUserDefaults.standardUserDefaults setInteger:request forKey:kClearedChoicesKey];
   }
+  NSUserDefaults *defaults = SharedDefaults();
+  gShowsPreview = [defaults objectForKey:kCharacterPreviewKey] ? [defaults boolForKey:kCharacterPreviewKey] : YES;
+  NSInteger haptics = [defaults objectForKey:kHapticsKey] ? [defaults integerForKey:kHapticsKey] : 1;
+  const UIImpactFeedbackStyle styles[] = {UIImpactFeedbackStyleLight, UIImpactFeedbackStyleMedium, UIImpactFeedbackStyleHeavy};
+  _haptics = haptics >= 1 && haptics <= 3 ? [[UIImpactFeedbackGenerator alloc] initWithStyle:styles[haptics - 1]] : nil;
+  [_haptics prepare];
+  CGFloat barHeight = _barHeight;
+  [self applyStyle];
+  if (_barHeight != barHeight) {
+    [self.view setNeedsLayout];
+    [self reloadCandidates];
+  }
+}
+
+- (void)applyStyle {
+  BOOL ios18 = [SharedDefaults() boolForKey:kIOS18StyleKey];
+  _barHeight = ios18 ? kShortBarHeight : kBarHeight;
+  _chipTop = ios18 ? (kShortBarHeight + kTopInset - kChipHeight) / 2 : 0;
+  _height.constant = _barHeight + kTopInset + (5 - kRowGapShare) * kKeyHeight / (1 - kRowGapShare) + kBottomInset;
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -520,16 +620,19 @@ UIColor *PressedColor(BOOL function) {
 
 - (void)viewDidLayoutSubviews {
   [super viewDidLayoutSubviews];
+  // Moving the grid asks for layout, which would set the grid's frame back mid-slide;
+  // the slide lays out again when it ends.
+  if (_sliding) return;
   CGFloat width = CGRectGetWidth(self.view.bounds);
   CGFloat unit = (width - 2 * kSideInset - 9 * kKeyGap) / 10;
   // Rows share the height the system gave, which can differ from the one asked for.
-  CGFloat pitch = (CGRectGetHeight(self.view.bounds) - kBarHeight - kTopInset - kBottomInset) / (5 - kRowGapShare);
+  CGFloat pitch = (CGRectGetHeight(self.view.bounds) - _barHeight - kTopInset - kBottomInset) / (5 - kRowGapShare);
   CGFloat rowGap = round(pitch * kRowGapShare), keyHeight = pitch - rowGap;
-  _bar.frame = CGRectMake(0, 0, width - kExpandWidth, kBarHeight);
-  _expandKey.frame = CGRectMake(width - kExpandWidth, 0, kExpandWidth, 2 * kChipTop + kChipHeight);
-  _grid.frame = self.view.bounds;
+  _bar.frame = CGRectMake(0, 0, width - kExpandWidth, _barHeight);
+  _expandKey.frame = CGRectMake(width - kExpandWidth, _chipTop, kExpandWidth, kChipHeight);
+  _grid.frame = _keys.frame = self.view.bounds;
   if (_expanded) [self reloadCandidates];
-  CGFloat y = kBarHeight + kTopInset;
+  CGFloat y = _barHeight + kTopInset;
   for (NSUInteger r = 0; r < 4; r++) {
     for (NSUInteger c = 0; c < 10; c++) {
       CGRect frame = CGRectMake(kSideInset + c * (unit + kKeyGap), y, unit, keyHeight);
@@ -563,6 +666,8 @@ UIColor *PressedColor(BOOL function) {
 
 - (void)click {
   [UIDevice.currentDevice playInputClick];
+  [_haptics impactOccurred];
+  [_haptics prepare];  // keeps the next one prompt
 }
 
 - (BOOL)choosing {
@@ -772,13 +877,57 @@ UIColor *PressedColor(BOOL function) {
   BOOL more = choosing && !panel->pageLabel.empty();
   if (!more) _expanded = NO;
   _expandKey.hidden = !more;
-  [_expandKey setImage:[UIImage systemImageNamed:_expanded ? @"chevron.up" : @"chevron.down"] forState:UIControlStateNormal];
   [self fillGrid];
-  _grid.hidden = !_expanded;
-  for (UIView *view in self.view.subviews) {
-    if (view != _grid && view != _expandKey) view.alpha = _expanded ? 0 : 1;
-  }
+  if (_expanded != _gridShown) [self showGridAnimated:NO];
   [self updateReturnKey];
+}
+
+// Opens or folds the grid as _expanded says. Open, it covers the keys; it unfolds down from
+// the bar, its first row, over keys that stay where they are, hidden above its edge, and
+// folds back up the same way.
+- (void)showGridAnimated:(BOOL)animated {
+  BOOL open = _expanded;
+  _gridShown = open;
+  [_expandKey setImage:[UIImage systemImageNamed:open ? @"chevron.up" : @"chevron.down"] forState:UIControlStateNormal];
+  CGRect full = self.view.bounds, folded = CGRectMake(0, 0, CGRectGetWidth(full), _barHeight);
+  // What of the keys shows: below the grid's edge.
+  CGRect keysFolded = CGRectMake(0, _barHeight, CGRectGetWidth(full), CGRectGetHeight(full) - _barHeight);
+  CGRect keysCovered = CGRectMake(0, CGRectGetHeight(full), CGRectGetWidth(full), 0);
+  void (^settle)(void) = ^{
+    self->_grid.frame = full;
+    self->_grid.hidden = !open;
+    self->_bar.alpha = open ? 0 : 1;
+    self->_keys.maskView = nil;
+    self->_keys.alpha = open ? 0 : 1;
+  };
+  // A slide under way stops; its completion then reports unfinished.
+  [_grid.layer removeAllAnimations];
+  [_keys.maskView.layer removeAllAnimations];
+  if (!animated) {
+    settle();
+    _sliding = NO;
+    [self.view setNeedsLayout];
+    return;
+  }
+  _sliding = YES;
+  _grid.hidden = NO;
+  _grid.frame = open ? folded : full;
+  _bar.alpha = 0;  // the grid's first row stands in for it
+  UIView *mask = [[UIView alloc] initWithFrame:open ? keysFolded : keysCovered];
+  mask.backgroundColor = UIColor.blackColor;
+  _keys.maskView = mask;
+  _keys.alpha = 1;
+  [UIView animateWithDuration:0.25 delay:0 options:UIViewAnimationOptionCurveEaseOut
+    animations:^{
+      self->_grid.frame = open ? full : folded;
+      mask.frame = open ? keysCovered : keysFolded;
+    }
+    completion:^(BOOL finished) {
+      if (!finished) return;  // stopped by the next opening or folding, which sets the views
+      settle();
+      self->_sliding = NO;
+      [self.view setNeedsLayout];
+    }];
 }
 
 // Adds candidates to the bar until it reaches `right` and holds the first `count`.
@@ -801,10 +950,10 @@ static CGFloat ChipWidth(UIButton *button) {
 
 - (void)addToBar:(UIButton *)button {
   CGFloat w = ChipWidth(button);
-  button.frame = CGRectMake(_barX, kChipTop, w, kChipHeight);
+  button.frame = CGRectMake(_barX, _chipTop, w, kChipHeight);
   [_bar addSubview:button];
   _barX += w + 4;
-  _bar.contentSize = CGSizeMake(_barX + 6, kBarHeight);
+  _bar.contentSize = CGSizeMake(_barX + 6, _barHeight);
 }
 
 - (void)fillGrid {
@@ -812,7 +961,7 @@ static CGFloat ChipWidth(UIButton *button) {
   _gridCount = 0;
   _gridRow = _gridColumn = 0;
   _gridX = 10;
-  if (_expanded) [self extendGridTo:2 * CGRectGetHeight(_grid.bounds)];
+  if (_expanded) [self extendGridTo:2 * CGRectGetHeight(self.view.bounds)];  // the grid itself may be mid-slide
 }
 
 // The first row is the bar as it was, so expanding and folding leave those
@@ -825,14 +974,14 @@ static CGFloat ChipWidth(UIButton *button) {
   const auto &panel = _controller->panel();
   const std::string &current = panel->rows[panel->selectedRow][panel->selection];
   const auto &candidates = _controller->candidates();
-  for (; _gridCount < candidates.size() && kBarHeight + (_gridRow - 1) * kGridRowHeight < bottom; _gridCount++) {
+  for (; _gridCount < candidates.size() && _barHeight + (_gridRow - 1) * kGridRowHeight < bottom; _gridCount++) {
     UIButton *button = [self candidate:String(candidates[_gridCount]) selected:candidates[_gridCount] == current];
     button.tag = kCandidateTag + static_cast<NSInteger>(_gridCount);
     [button addTarget:self action:@selector(pickCandidate:) forControlEvents:UIControlEventTouchUpInside];
     [_grid addSubview:button];
     CGFloat w = ChipWidth(button);
     if (_gridRow == 0 && _gridX + w <= width - kExpandWidth) {
-      button.frame = CGRectMake(_gridX, kChipTop, w, kChipHeight);
+      button.frame = CGRectMake(_gridX, _chipTop, w, kChipHeight);
       _gridX += w + 4;
       continue;
     }
@@ -840,15 +989,15 @@ static CGFloat ChipWidth(UIButton *button) {
     if (_gridRow == 0 || _gridColumn + span > kGridColumns) {
       _gridRow++;
       _gridColumn = 0;
-      CGFloat top = kBarHeight + (_gridRow - 1) * kGridRowHeight;
+      CGFloat top = _barHeight + (_gridRow - 1) * kGridRowHeight;
       UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(0, top - line, width, line)];
       separator.backgroundColor = UIColor.separatorColor;
       [_grid addSubview:separator];
     }
-    button.frame = CGRectMake(_gridColumn * cell, kBarHeight + (_gridRow - 1) * kGridRowHeight, span * cell, kGridRowHeight);
+    button.frame = CGRectMake(_gridColumn * cell, _barHeight + (_gridRow - 1) * kGridRowHeight, span * cell, kGridRowHeight);
     _gridColumn += span;
   }
-  _grid.contentSize = CGSizeMake(width, kBarHeight + _gridRow * kGridRowHeight);
+  _grid.contentSize = CGSizeMake(width, _barHeight + _gridRow * kGridRowHeight);
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
@@ -890,8 +1039,11 @@ static CGFloat ChipWidth(UIButton *button) {
 - (void)toggleGrid {
   [self click];
   _expanded = !_expanded;
-  _grid.contentOffset = CGPointZero;
-  [self reloadCandidates];
+  if (_expanded) {
+    _grid.contentOffset = CGPointZero;
+    [self fillGrid];
+  }  // folding keeps the grid's candidates to slide away
+  [self showGridAnimated:YES];
 }
 
 @end

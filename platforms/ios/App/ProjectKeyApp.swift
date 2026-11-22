@@ -26,6 +26,9 @@ struct ContentView: View {
   @AppStorage("FuzzySounds", store: sharedDefaults) private var fuzzySounds = false
   @AppStorage("AssociatedPhrases", store: sharedDefaults) private var associatedPhrases = true
   @AppStorage("RememberChoices", store: sharedDefaults) private var rememberChoices = true
+  @AppStorage("IOS18Style", store: sharedDefaults) private var ios18Style = false  // the keyboard's kIOS18StyleKey
+  @AppStorage("Haptics", store: sharedDefaults) private var haptics = 1  // kHapticsKey: 0 off, 1 light, 2 medium, 3 heavy
+  @AppStorage("CharacterPreview", store: sharedDefaults) private var characterPreview = true  // kCharacterPreviewKey
 
   var body: some View {
     NavigationStack {
@@ -59,6 +62,17 @@ struct ContentView: View {
             Text("開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」")
           }
           Toggle("記住選過的字", isOn: $rememberChoices)
+          Toggle(isOn: $ios18Style) {
+            Text("iOS 18 樣式")
+            Text("開啟時縮短候選字下方的空間；iOS 26 起從其他鍵盤切換過來時，上方可能多出一條空白")
+          }
+          Picker("觸覺回饋", selection: $haptics) {
+            Text("關閉").tag(0)
+            Text("輕").tag(1)
+            Text("中").tag(2)
+            Text("重").tag(3)
+          }
+          Toggle("字元預覽", isOn: $characterPreview)
           LabeledContent("選字紀錄") {
             Button("清除") {
               sharedDefaults?.set((sharedDefaults?.integer(forKey: "ClearChoicesRequest") ?? 0) + 1, forKey: "ClearChoicesRequest")
