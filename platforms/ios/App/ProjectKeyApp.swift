@@ -20,9 +20,9 @@ struct ContentView: View {
   @State private var text = ""
   @State private var cleared = false
   // The names and defaults of the engine's settings (core/engine/Controller.cpp, Settings::Name and
-  // DefaultValue), except 聯想詞, on by default here as the keyboard has it.
+  // DefaultValue), except 簡拼 and 聯想詞, on by default here as the keyboard has them.
   @AppStorage("OmitTones", store: sharedDefaults) private var omitTones = true
-  @AppStorage("Abbreviated", store: sharedDefaults) private var abbreviated = false
+  @AppStorage("Abbreviated", store: sharedDefaults) private var abbreviated = true
   @AppStorage("FuzzySounds", store: sharedDefaults) private var fuzzySounds = false
   @AppStorage("AssociatedPhrases", store: sharedDefaults) private var associatedPhrases = true
   @AppStorage("RememberChoices", store: sharedDefaults) private var rememberChoices = true

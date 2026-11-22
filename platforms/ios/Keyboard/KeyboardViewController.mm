@@ -45,8 +45,9 @@ class DefaultsSettings : public ProjectKey::Settings {
     if (setting == ProjectKey::Setting::kCandidatePosition) return 1;
     NSString *name = @(Name(setting));
     if (![SharedDefaults() objectForKey:name]) {
-      // A pick commits, so what follows it is offered, as on the system keyboard.
-      if (setting == ProjectKey::Setting::kAssociatedPhrases) return 1;
+      // A pick commits, so what follows it is offered, as on the system keyboard; and on a phone's
+      // small keys, fewer of them: 簡拼.
+      if (setting == ProjectKey::Setting::kAssociatedPhrases || setting == ProjectKey::Setting::kAbbreviated) return 1;
       return std::nullopt;
     }
     return static_cast<int>([SharedDefaults() integerForKey:name]);
@@ -309,6 +310,26 @@ UIColor *PressedColor(BOOL function) {
 @implementation PKKeyboardView
 - (BOOL)enableInputClicksWhenVisible {
   return YES;
+}
+
+// A touch in the gap between keys goes to the nearest key, as on the system keyboard, rather than nowhere.
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+  UIView *hit = [super hitTest:point withEvent:event];
+  if (hit != self) return hit;
+  constexpr CGFloat kReach = 8;  // a gap is 6pt wide; farther than this is no key's
+  PKKeyButton *nearest = nil;
+  CGFloat best = kReach * kReach;
+  for (UIView *view in self.subviews) {
+    if (![view isKindOfClass:PKKeyButton.class] || view.hidden || view.alpha < 0.01) continue;
+    CGRect frame = view.frame;
+    CGFloat dx = MAX(0, MAX(CGRectGetMinX(frame) - point.x, point.x - CGRectGetMaxX(frame)));
+    CGFloat dy = MAX(0, MAX(CGRectGetMinY(frame) - point.y, point.y - CGRectGetMaxY(frame)));
+    if (dx * dx + dy * dy <= best) {
+      best = dx * dx + dy * dy;
+      nearest = (PKKeyButton *)view;
+    }
+  }
+  return nearest ?: hit;
 }
 @end
 
