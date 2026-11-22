@@ -342,7 +342,7 @@ UIColor *PressedColor(BOOL function) {
   // How far the bar and the grid are filled: a lone symbol has over a thousand candidates,
   // too many to make at once, so they are made as the view scrolls toward them.
   size_t _barCount, _gridCount;
-  CGFloat _barX;
+  CGFloat _barX, _gridX;
   int _gridRow, _gridColumn;
   NSArray<NSArray<PKKeyButton *> *> *_zhuyinRows, *_englishRows, *_symbolRows;
   PKKeyButton *_pageKey, *_modeKey, *_commaKey, *_globeKey, *_spaceKey, *_erKey, *_deleteKey, *_returnKey, *_shiftKey;
@@ -794,9 +794,13 @@ UIColor *PressedColor(BOOL function) {
   }
 }
 
-- (void)addToBar:(UIButton *)button {
+static CGFloat ChipWidth(UIButton *button) {
   [button sizeToFit];
-  CGFloat w = MAX(40, CGRectGetWidth(button.bounds) + 20);
+  return MAX(40, CGRectGetWidth(button.bounds) + 20);
+}
+
+- (void)addToBar:(UIButton *)button {
+  CGFloat w = ChipWidth(button);
   button.frame = CGRectMake(_barX, kChipTop, w, kChipHeight);
   [_bar addSubview:button];
   _barX += w + 4;
@@ -807,34 +811,44 @@ UIColor *PressedColor(BOOL function) {
   for (UIView *view in _grid.subviews) [view removeFromSuperview];
   _gridCount = 0;
   _gridRow = _gridColumn = 0;
+  _gridX = 10;
   if (_expanded) [self extendGridTo:2 * CGRectGetHeight(_grid.bounds)];
 }
 
-// Like the system keyboard: six columns with lines between the rows, the
-// first row leaving room for ⌃, a long word taking more than one column.
+// The first row is the bar as it was, so expanding and folding leave those
+// candidates where they are; below it, like the system keyboard, six columns
+// with lines between the rows, a long word taking more than one column.
 // Adds candidates until the grid's rows reach `bottom`.
 - (void)extendGridTo:(CGFloat)bottom {
   CGFloat width = CGRectGetWidth(self.view.bounds), cell = width / kGridColumns;
   CGFloat line = 1 / self.traitCollection.displayScale;
+  const auto &panel = _controller->panel();
+  const std::string &current = panel->rows[panel->selectedRow][panel->selection];
   const auto &candidates = _controller->candidates();
-  for (; _gridCount < candidates.size() && _gridRow * kGridRowHeight < bottom; _gridCount++) {
-    UIButton *button = [self candidate:String(candidates[_gridCount]) selected:NO];
-    [button sizeToFit];
-    int span = MIN(kGridColumns, static_cast<int>(ceil((CGRectGetWidth(button.bounds) + 16) / cell)));
-    if (_gridColumn + span > (_gridRow == 0 ? kGridColumns - 1 : kGridColumns)) {
-      _gridRow++;
-      _gridColumn = 0;
-      UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(0, _gridRow * kGridRowHeight - line, width, line)];
-      separator.backgroundColor = UIColor.separatorColor;
-      [_grid addSubview:separator];
-    }
-    button.frame = CGRectMake(_gridColumn * cell, _gridRow * kGridRowHeight, span * cell, kGridRowHeight);
+  for (; _gridCount < candidates.size() && kBarHeight + (_gridRow - 1) * kGridRowHeight < bottom; _gridCount++) {
+    UIButton *button = [self candidate:String(candidates[_gridCount]) selected:candidates[_gridCount] == current];
     button.tag = kCandidateTag + static_cast<NSInteger>(_gridCount);
     [button addTarget:self action:@selector(pickCandidate:) forControlEvents:UIControlEventTouchUpInside];
     [_grid addSubview:button];
+    CGFloat w = ChipWidth(button);
+    if (_gridRow == 0 && _gridX + w <= width - kExpandWidth) {
+      button.frame = CGRectMake(_gridX, kChipTop, w, kChipHeight);
+      _gridX += w + 4;
+      continue;
+    }
+    int span = MIN(kGridColumns, static_cast<int>(ceil((CGRectGetWidth(button.bounds) + 16) / cell)));
+    if (_gridRow == 0 || _gridColumn + span > kGridColumns) {
+      _gridRow++;
+      _gridColumn = 0;
+      CGFloat top = kBarHeight + (_gridRow - 1) * kGridRowHeight;
+      UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(0, top - line, width, line)];
+      separator.backgroundColor = UIColor.separatorColor;
+      [_grid addSubview:separator];
+    }
+    button.frame = CGRectMake(_gridColumn * cell, kBarHeight + (_gridRow - 1) * kGridRowHeight, span * cell, kGridRowHeight);
     _gridColumn += span;
   }
-  _grid.contentSize = CGSizeMake(width, (_gridRow + 1) * kGridRowHeight);
+  _grid.contentSize = CGSizeMake(width, kBarHeight + _gridRow * kGridRowHeight);
 }
 
 - (void)scrollViewDidScroll:(UIScrollView *)scrollView {
