@@ -29,6 +29,10 @@ struct ContentView: View {
   @AppStorage("IOS18Style", store: sharedDefaults) private var ios18Style = false  // the keyboard's kIOS18StyleKey
   @AppStorage("Haptics", store: sharedDefaults) private var haptics = 1  // kHapticsKey: 0 off, 1 light, 2 medium, 3 heavy
   @AppStorage("CharacterPreview", store: sharedDefaults) private var characterPreview = true  // kCharacterPreviewKey
+  // One item a line, with the keyboard's defaults (kShortcutsKey, kCustomSymbolsKey).
+  @AppStorage("Shortcuts", store: sharedDefaults) private var shortcuts = "。\n？\n！\n、\n「\n」\n：\n…"
+  @AppStorage("CustomSymbols", store: sharedDefaults) private var customSymbols =
+    "(´・ω・`)\n(╯°□°)╯︵ ┻━┻\n¯\\_(ツ)_/¯\n(｡•̀ᴗ-)✧\nಠ_ಠ"
 
   var body: some View {
     NavigationStack {
@@ -73,6 +77,16 @@ struct ContentView: View {
             Text("重").tag(3)
           }
           Toggle("字元預覽", isOn: $characterPreview)
+          NavigationLink {
+            ItemListView(title: "快捷列", lines: $shortcuts)
+          } label: {
+            LabeledContent("快捷列", value: "\(splitLines(shortcuts).count) 項")
+          }
+          NavigationLink {
+            ItemListView(title: "自訂符號", lines: $customSymbols)
+          } label: {
+            LabeledContent("自訂符號", value: "\(splitLines(customSymbols).count) 項")
+          }
           LabeledContent("選字紀錄") {
             Button("清除") {
               sharedDefaults?.set((sharedDefaults?.integer(forKey: "ClearChoicesRequest") ?? 0) + 1, forKey: "ClearChoicesRequest")
@@ -89,5 +103,41 @@ struct ContentView: View {
       }
       .navigationTitle("Project Key")
     }
+  }
+}
+
+private func splitLines(_ lines: String) -> [String] {
+  lines.isEmpty ? [] : lines.components(separatedBy: "\n")
+}
+
+// A list the keyboard reads one item a line: added at the bottom, removed and reordered in Edit.
+struct ItemListView: View {
+  let title: String
+  @Binding var lines: String
+  @State private var newItem = ""
+
+  var body: some View {
+    List {
+      ForEach(splitLines(lines), id: \.self) { Text($0) }
+        .onDelete { offsets in
+          var items = splitLines(lines)
+          items.remove(atOffsets: offsets)
+          lines = items.joined(separator: "\n")
+        }
+        .onMove { offsets, destination in
+          var items = splitLines(lines)
+          items.move(fromOffsets: offsets, toOffset: destination)
+          lines = items.joined(separator: "\n")
+        }
+      TextField("新增項目", text: $newItem)
+        .onSubmit {
+          let item = newItem.trimmingCharacters(in: .whitespacesAndNewlines)
+          newItem = ""
+          guard !item.isEmpty, !splitLines(lines).contains(item) else { return }  // an item is its own id
+          lines = (splitLines(lines) + [item]).joined(separator: "\n")
+        }
+    }
+    .navigationTitle(title)
+    .toolbar { EditButton() }
   }
 }

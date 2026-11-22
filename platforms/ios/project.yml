@@ -60,6 +60,10 @@ targets:
         buildPhase: resources
       - path: build/models
         buildPhase: resources
+      - path: ../../core/data/emoji.txt  # the emoji panel's groups and the emoji a word offers
+        buildPhase: resources
+      - path: ../../core/data/EMOJI-NOTICE.txt
+        buildPhase: resources
     entitlements:
       path: build/Keyboard.entitlements
       properties:
