@@ -1234,6 +1234,14 @@ void Controller::choose(int index) {
   if (choosing_ && index >= 0 && index < static_cast<int>(candidates_.size())) pick(index);
 }
 
+void Controller::chooseAndCommit(int index) {
+  if (!choosing_ || index < 0 || index >= static_cast<int>(candidates_.size())) return;
+  pick(index, /*moveOn=*/false);
+  if (composer_->isEmpty()) return;  // the Zhuyin itself, which already sent the composition
+  composer_->endOpenSyllable();
+  commitWithAssociated(composer_->text() + composer_->pendingReading());
+}
+
 bool Controller::openSymbolList(const std::string& reading) {
   if (!composer_->insertSymbols(reading)) return false;
   startChoosingAt(composer_->cursor() - 1);

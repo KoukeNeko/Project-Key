@@ -2,6 +2,7 @@
 // user does: type a sentence, fix a doubtful word, commit.
 // Usage: ControllerTest <path to data.txt>, with associated-phrases-v2.txt beside it
 #undef NDEBUG
+#include <algorithm>
 #include <cassert>
 #include <climits>
 #include <cstdio>
@@ -1181,6 +1182,20 @@ int main(int argc, char** argv) {
   assert(controller.handleKey(Special(ProjectKey::Key::kTab)) && HasSuffix(client.committed, "我們"));
   assert(client.panelVisible && client.panel.rows[0][0] == "的");
   assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && !client.panelVisible);
+  // A touch screen's pick, as on iOS (candidates for the word before the cursor), sends the
+  // sentence with the word picked, and the row follows it.
+  settings.set(Setting::kCandidatePosition, 1);
+  before = client.committed.size();
+  Type(controller, "gj bj4");
+  assert(controller.handleKey(Special(ProjectKey::Key::kDown)));
+  const auto pickedAt = std::find(controller.candidates().begin(), controller.candidates().end(), "輸入");
+  assert(pickedAt != controller.candidates().end());
+  controller.chooseAndCommit(static_cast<int>(pickedAt - controller.candidates().begin()));
+  assert(client.committed.substr(before) == "輸入" && client.marked.empty());
+  assert(client.panelVisible && client.panel.rows[0] == following);
+  controller.clickCandidate(0, 0);
+  assert(client.committed.substr(before) == "輸入法" && !client.panelVisible);
+  settings.remove(Setting::kCandidatePosition);
   settings.remove(Setting::kAssociatedPhrases);
 
   // A click from anywhere, the server's pipe on Windows included, picks nothing it should not.

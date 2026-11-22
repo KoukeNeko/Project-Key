@@ -26,17 +26,33 @@ std::string Std(NSString *s) {
   return s.UTF8String ?: "";
 }
 
+// The settings the app writes (App/ProjectKeyApp.swift), in the app group named in Info.plist.
+// Without full access the keyboard cannot read the group, and the defaults serve.
+NSUserDefaults *SharedDefaults() {
+  static NSUserDefaults *defaults = [[NSUserDefaults alloc]
+      initWithSuiteName:[NSBundle bundleForClass:PKKeyboardViewController.class].infoDictionary[@"PKAppGroup"]];
+  return defaults;
+}
+
+// The app asks to clear the choices by raising this count; the keyboard clears them when it next shows.
+NSString *const kClearChoicesRequestKey = @"ClearChoicesRequest";
+NSString *const kClearedChoicesKey = @"ClearedChoices";  // the last request done, in the keyboard's own defaults
+
 class DefaultsSettings : public ProjectKey::Settings {
  public:
   std::optional<int> stored(ProjectKey::Setting setting) const override {
     // Candidates are for the word just typed, as on the system keyboard.
     if (setting == ProjectKey::Setting::kCandidatePosition) return 1;
     NSString *name = @(Name(setting));
-    if (![NSUserDefaults.standardUserDefaults objectForKey:name]) return std::nullopt;
-    return static_cast<int>([NSUserDefaults.standardUserDefaults integerForKey:name]);
+    if (![SharedDefaults() objectForKey:name]) {
+      // A pick commits, so what follows it is offered, as on the system keyboard.
+      if (setting == ProjectKey::Setting::kAssociatedPhrases) return 1;
+      return std::nullopt;
+    }
+    return static_cast<int>([SharedDefaults() integerForKey:name]);
   }
   void set(ProjectKey::Setting setting, int value) override {
-    [NSUserDefaults.standardUserDefaults setInteger:value forKey:@(Name(setting))];
+    [SharedDefaults() setInteger:value forKey:@(Name(setting))];
   }
 };
 
@@ -49,6 +65,9 @@ ProjectKey::Environment &SharedEnvironment() {
     NSString *data = [bundle pathForResource:@"data" ofType:@"txt"];
     env->lm->loadLanguageModel(data.fileSystemRepresentation);
     if (!env->lm->isDataModelLoaded()) NSLog(@"Project Key: cannot load %@", data);
+    NSString *associated = [bundle pathForResource:@"associated-phrases-v2" ofType:@"txt"];
+    env->lm->loadAssociatedPhrasesV2(associated.fileSystemRepresentation);
+    if (!env->lm->isAssociatedPhrasesV2Loaded()) NSLog(@"Project Key: cannot load %@", associated);
     if (NSString *path = [bundle pathForResource:@"bigram" ofType:@"bin"]) {
       auto bigram = std::make_shared<ProjectKey::Bigram>();
       if (bigram->load(path.fileSystemRepresentation)) {
@@ -138,6 +157,16 @@ const KeySpec kRows[4][10] = {
      {@"ㄙ", @"n", @"n"}, {@"ㄩ", @"m", @"m"}, {@"ㄝ", @",", @"…"}, {@"ㄡ", @".", @"！"}, {@"ㄥ", @"/", @"？"}},
 };
 
+// The English page, typed as they are; its last row starts with Shift.
+NSArray<NSArray<NSString *> *> *EnglishRows() {
+  return @[
+    @[ @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9", @"0" ],
+    @[ @"q", @"w", @"e", @"r", @"t", @"y", @"u", @"i", @"o", @"p" ],
+    @[ @"a", @"s", @"d", @"f", @"g", @"h", @"j", @"k", @"l", @"'" ],
+    @[ @"", @"z", @"x", @"c", @"v", @"b", @"n", @"m", @"?", @"!" ],
+  ];
+}
+
 // The ?123 page: typed as they are, after what is composed.
 NSArray<NSArray<NSString *> *> *SymbolRows() {
   return @[
@@ -182,6 +211,8 @@ UIColor *PressedColor(BOOL function) {
 @property(nonatomic, copy) NSString *keys;
 @property(nonatomic, copy) NSString *hint;
 @property(nonatomic, strong) UILabel *hintLabel;
+@property(nonatomic) BOOL previews;  // shows what it types above the finger, as the system's letter keys do
+@property(nonatomic, strong) UILabel *preview;
 @end
 
 @implementation PKKeyButton
@@ -231,10 +262,33 @@ UIColor *PressedColor(BOOL function) {
 
 - (void)pressDown {
   self.backgroundColor = PressedColor(self.function);
+  if (!self.previews) return;
+  if (!self.preview) {
+    self.preview = [[UILabel alloc] init];
+    self.preview.font = [UIFont systemFontOfSize:32];
+    self.preview.textAlignment = NSTextAlignmentCenter;
+    self.preview.textColor = UIColor.labelColor;
+    self.preview.backgroundColor = KeyColor(NO);
+    self.preview.layer.cornerRadius = 10;
+    self.preview.layer.cornerCurve = kCACornerCurveContinuous;
+    self.preview.layer.shadowColor = UIColor.blackColor.CGColor;
+    self.preview.layer.shadowOffset = CGSizeMake(0, 1);
+    self.preview.layer.shadowRadius = 2;
+    self.preview.layer.shadowOpacity = 0.3;
+    self.preview.userInteractionEnabled = NO;
+  }
+  self.preview.text = [self titleForState:UIControlStateNormal];
+  // Above the key, within the keyboard; the top row's reaches over the candidate bar.
+  CGRect key = self.frame;
+  CGFloat width = CGRectGetWidth(key) + 16, height = CGRectGetHeight(key) + 4;
+  CGFloat x = MIN(MAX(CGRectGetMidX(key) - width / 2, 0), CGRectGetWidth(self.superview.bounds) - width);
+  self.preview.frame = CGRectMake(x, MAX(0, CGRectGetMinY(key) - height), width, height);
+  [self.superview addSubview:self.preview];
 }
 
 - (void)pressUp {
   self.backgroundColor = KeyColor(self.function);
+  [self.preview removeFromSuperview];
 }
 
 @end
@@ -260,8 +314,10 @@ UIColor *PressedColor(BOOL function) {
   size_t _barCount, _gridCount;
   CGFloat _barX;
   int _gridRow, _gridColumn;
-  NSArray<NSArray<PKKeyButton *> *> *_zhuyinRows, *_symbolRows;
-  PKKeyButton *_pageKey, *_commaKey, *_globeKey, *_spaceKey, *_erKey, *_deleteKey, *_returnKey;
+  NSArray<NSArray<PKKeyButton *> *> *_zhuyinRows, *_englishRows, *_symbolRows;
+  PKKeyButton *_pageKey, *_modeKey, *_commaKey, *_globeKey, *_spaceKey, *_erKey, *_deleteKey, *_returnKey, *_shiftKey;
+  BOOL _english;  // the letters page in place of Zhuyin's
+  BOOL _shift;    // the next letter is a capital
   BOOL _symbols;
   NSTimer *_deleteRepeat;
 }
@@ -303,6 +359,7 @@ UIColor *PressedColor(BOOL function) {
       PKKeyButton *key = [PKKeyButton keyWithTitle:spec.label symbol:nil function:NO];
       key.keys = spec.keys;
       key.hint = spec.hint;
+      key.previews = YES;
       [key addTarget:self action:@selector(typeZhuyin:) forControlEvents:UIControlEventTouchUpInside];
       [self addLongPress:key];
       [keys addObject:key];
@@ -318,6 +375,7 @@ UIColor *PressedColor(BOOL function) {
     for (NSString *text in row) {
       PKKeyButton *key = [PKKeyButton keyWithTitle:text symbol:nil function:NO];
       key.keys = text;
+      key.previews = YES;
       [key addTarget:self action:@selector(typeSymbol:) forControlEvents:UIControlEventTouchUpInside];
       key.hidden = YES;
       [keys addObject:key];
@@ -327,8 +385,36 @@ UIColor *PressedColor(BOOL function) {
   }
   _symbolRows = symbols;
 
+  NSMutableArray *english = [NSMutableArray array];
+  for (NSArray<NSString *> *row in EnglishRows()) {
+    NSMutableArray *keys = [NSMutableArray array];
+    for (NSString *text in row) {
+      PKKeyButton *key;
+      if (text.length) {
+        key = [PKKeyButton keyWithTitle:text symbol:nil function:NO];
+        key.keys = text;
+        key.previews = YES;
+        [key addTarget:self action:@selector(typeLetter:) forControlEvents:UIControlEventTouchUpInside];
+      } else {
+        key = _shiftKey = [PKKeyButton keyWithTitle:@"" symbol:@"shift" function:YES];
+        [key addTarget:self action:@selector(toggleShift) forControlEvents:UIControlEventTouchUpInside];
+      }
+      key.hidden = YES;
+      [keys addObject:key];
+      [self.view addSubview:key];
+    }
+    [english addObject:keys];
+  }
+  _englishRows = english;
+
   _pageKey = [PKKeyButton keyWithTitle:@"?123" symbol:nil function:YES];
   [_pageKey addTarget:self action:@selector(switchPage) forControlEvents:UIControlEventTouchUpInside];
+  _modeKey = [PKKeyButton keyWithTitle:@"ABC" symbol:nil function:YES];
+  [_modeKey addTarget:self action:@selector(switchMode) forControlEvents:UIControlEventTouchUpInside];
+  for (PKKeyButton *key in @[ _pageKey, _modeKey ]) {
+    key.titleLabel.adjustsFontSizeToFitWidth = YES;  // ㄅㄆㄇ is wider than ?123
+    key.titleLabel.minimumScaleFactor = 0.7;
+  }
   _commaKey = [PKKeyButton keyWithTitle:@"，" symbol:nil function:YES];
   _commaKey.keys = @"<";  // Shift+, is the full-width comma
   _commaKey.hint = @"。";
@@ -341,17 +427,18 @@ UIColor *PressedColor(BOOL function) {
   [_spaceKey addTarget:self action:@selector(typeSpace) forControlEvents:UIControlEventTouchUpInside];
   _erKey = [PKKeyButton keyWithTitle:@"ㄦ" symbol:nil function:NO];
   _erKey.keys = @"-";
-  [_erKey addTarget:self action:@selector(typeZhuyin:) forControlEvents:UIControlEventTouchUpInside];
+  _erKey.previews = YES;
+  [_erKey addTarget:self action:@selector(typeEr) forControlEvents:UIControlEventTouchUpInside];
   _deleteKey = [PKKeyButton keyWithTitle:@"" symbol:@"delete.left" function:YES];
   [_deleteKey addTarget:self action:@selector(startDelete) forControlEvents:UIControlEventTouchDown];
   [_deleteKey addTarget:self action:@selector(stopDelete) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
   _returnKey = [PKKeyButton keyWithTitle:@"" symbol:@"return.left" function:YES];
   [_returnKey addTarget:self action:@selector(typeReturn) forControlEvents:UIControlEventTouchUpInside];
-  for (PKKeyButton *key in @[ _pageKey, _commaKey, _globeKey, _spaceKey, _erKey, _deleteKey, _returnKey ]) {
+  for (PKKeyButton *key in @[ _pageKey, _modeKey, _commaKey, _globeKey, _spaceKey, _erKey, _deleteKey, _returnKey ]) {
     [key addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
     [self.view addSubview:key];
   }
-  for (NSArray<PKKeyButton *> *row in [_zhuyinRows arrayByAddingObjectsFromArray:_symbolRows]) {
+  for (NSArray<PKKeyButton *> *row in [[_zhuyinRows arrayByAddingObjectsFromArray:_englishRows] arrayByAddingObjectsFromArray:_symbolRows]) {
     for (PKKeyButton *key in row) [key addTarget:self action:@selector(click) forControlEvents:UIControlEventTouchDown];
   }
 
@@ -382,6 +469,15 @@ UIColor *PressedColor(BOOL function) {
   [self reloadCandidates];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
+  NSInteger request = [SharedDefaults() integerForKey:kClearChoicesRequestKey];
+  if (request != [NSUserDefaults.standardUserDefaults integerForKey:kClearedChoicesKey]) {
+    ProjectKey::ClearChoices(SharedEnvironment());
+    [NSUserDefaults.standardUserDefaults setInteger:request forKey:kClearedChoicesKey];
+  }
+}
+
 - (void)viewWillDisappear:(BOOL)animated {
   [super viewWillDisappear:animated];
   _controller->deactivate();
@@ -408,6 +504,7 @@ UIColor *PressedColor(BOOL function) {
     for (NSUInteger c = 0; c < 10; c++) {
       CGRect frame = CGRectMake(kSideInset + c * (unit + kKeyGap), y, unit, keyHeight);
       _zhuyinRows[r][c].frame = frame;
+      _englishRows[r][c].frame = frame;
       _symbolRows[r][c].frame = frame;
     }
     y += pitch;
@@ -415,8 +512,8 @@ UIColor *PressedColor(BOOL function) {
   // Bottom row in key widths; the space bar takes what is left.
   BOOL globe = self.needsInputModeSwitchKey;
   _globeKey.hidden = !globe;
-  NSArray<PKKeyButton *> *bottom = globe ? @[ _pageKey, _commaKey, _globeKey, _spaceKey, _erKey, _deleteKey, _returnKey ]
-                                         : @[ _pageKey, _commaKey, _spaceKey, _erKey, _deleteKey, _returnKey ];
+  NSArray<PKKeyButton *> *bottom = globe ? @[ _pageKey, _modeKey, _commaKey, _globeKey, _spaceKey, _erKey, _deleteKey, _returnKey ]
+                                         : @[ _pageKey, _modeKey, _commaKey, _spaceKey, _erKey, _deleteKey, _returnKey ];
   NSDictionary<NSValue *, NSNumber *> *wide = @{[NSValue valueWithNonretainedObject:_pageKey] : @1.4, [NSValue valueWithNonretainedObject:_returnKey] : @1.4};
   CGFloat fixed = 0;
   for (PKKeyButton *key in bottom) {
@@ -472,10 +569,39 @@ UIColor *PressedColor(BOOL function) {
 }
 
 - (void)typeComma {
-  [self send:Press("<", Key::kCharacter, true)];
+  if (_english) {
+    [self typeText:@","];
+  } else {
+    [self send:Press("<", Key::kCharacter, true)];
+  }
 }
 
+- (void)typeEr {
+  if (_english) {
+    [self typeText:@"."];
+  } else {
+    [self typeZhuyin:_erKey];
+  }
+}
+
+- (void)typeLetter:(PKKeyButton *)key {
+  [self typeText:_shift ? key.keys.uppercaseString : key.keys];
+  if (_shift) [self toggleShift];
+}
+
+- (void)toggleShift {
+  _shift = !_shift;
+  [self updatePage];
+}
+
+// Space takes the candidate in the gray box, as a tap on it does; it gives tone 1 while a syllable is typed.
 - (void)typeSpace {
+  if ([self choosing] && !_controller->isTypingSyllable()) {
+    _expanded = NO;
+    _controller->chooseAndCommit(static_cast<int>([self selectedCandidate]));
+    [self reloadCandidates];
+    return;
+  }
   [self send:Press(" ", Key::kSpace)];
 }
 
@@ -484,8 +610,13 @@ UIColor *PressedColor(BOOL function) {
 }
 
 - (void)typeSymbol:(PKKeyButton *)key {
+  [self typeText:key.keys];
+}
+
+// Text as it is, after what is composed.
+- (void)typeText:(NSString *)text {
   _controller->deactivate();
-  [self.textDocumentProxy insertText:key.keys];
+  [self.textDocumentProxy insertText:text];
   [self reloadCandidates];
 }
 
@@ -501,13 +632,11 @@ UIColor *PressedColor(BOOL function) {
   if (press.state != UIGestureRecognizerStateBegan) return;
   PKKeyButton *key = (PKKeyButton *)press.view;
   [key pressUp];
-  if (key == _commaKey) {
+  if (key == _commaKey && !_english) {
     [self send:Press(">", Key::kCharacter, true)];  // Shift+. is 。
     return;
   }
-  _controller->deactivate();
-  [self.textDocumentProxy insertText:key.hint];
-  [self reloadCandidates];
+  [self typeText:key.hint];
 }
 
 - (void)startDelete {
@@ -529,10 +658,37 @@ UIColor *PressedColor(BOOL function) {
 - (void)switchPage {
   _controller->deactivate();
   _symbols = !_symbols;
-  for (NSArray<PKKeyButton *> *row in _zhuyinRows) for (PKKeyButton *key in row) key.hidden = _symbols;
-  for (NSArray<PKKeyButton *> *row in _symbolRows) for (PKKeyButton *key in row) key.hidden = !_symbols;
-  [_pageKey setTitle:_symbols ? @"ㄅㄆㄇ" : @"?123" forState:UIControlStateNormal];
+  [self updatePage];
   [self reloadCandidates];
+}
+
+// ABC and ㄅㄆㄇ switch between the letters and Zhuyin, from the symbols too.
+- (void)switchMode {
+  _controller->deactivate();
+  _english = !_english;
+  _symbols = _shift = NO;
+  [self updatePage];
+  [self reloadCandidates];
+}
+
+- (void)updatePage {
+  for (NSArray<PKKeyButton *> *row in _zhuyinRows) for (PKKeyButton *key in row) key.hidden = _symbols || _english;
+  for (NSArray<PKKeyButton *> *row in _englishRows) {
+    for (PKKeyButton *key in row) {
+      key.hidden = _symbols || !_english;
+      if (key.keys) [key setTitle:_shift ? key.keys.uppercaseString : key.keys forState:UIControlStateNormal];
+    }
+  }
+  for (NSArray<PKKeyButton *> *row in _symbolRows) for (PKKeyButton *key in row) key.hidden = !_symbols;
+  UIImageSymbolConfiguration *style = [_shiftKey imageForState:UIControlStateNormal].symbolConfiguration;
+  [_shiftKey setImage:[UIImage systemImageNamed:_shift ? @"shift.fill" : @"shift" withConfiguration:style] forState:UIControlStateNormal];
+  NSString *letters = _english ? @"ABC" : @"ㄅㄆㄇ";
+  [_pageKey setTitle:_symbols ? letters : @"?123" forState:UIControlStateNormal];
+  [_modeKey setTitle:_english ? @"ㄅㄆㄇ" : @"ABC" forState:UIControlStateNormal];
+  [_commaKey setTitle:_english ? @"," : @"，" forState:UIControlStateNormal];
+  _commaKey.hint = _english ? @";" : @"。";
+  [_erKey setTitle:_english ? @"." : @"ㄦ" forState:UIControlStateNormal];
+  [_spaceKey setTitle:_english ? @"English" : @"注音" forState:UIControlStateNormal];
 }
 
 - (void)updateReturnKey {
@@ -545,11 +701,21 @@ UIColor *PressedColor(BOOL function) {
 
 #pragma mark - Candidates
 
+// Where the candidate the Controller selects is among all of them; they are distinct, so it is found by its text.
+- (size_t)selectedCandidate {
+  const auto &panel = _controller->panel();
+  const auto &candidates = _controller->candidates();
+  return std::find(candidates.begin(), candidates.end(), panel->rows[panel->selectedRow][panel->selection]) - candidates.begin();
+}
+
 // While choosing: every candidate in one row that scrolls sideways, tapped
 // to pick, and ⌄ to spread them over the keys. While composing: the
 // sentence, tapped to commit.
 - (void)reloadCandidates {
   if (!_bar) return;
+  CATransition *fade = [CATransition animation];
+  fade.duration = 0.12;
+  [_bar.layer addAnimation:fade forKey:@"fade"];
   for (UIView *view in _bar.subviews) [view removeFromSuperview];
   _barCount = 0;
   _barX = 10;  // inset so the gray box stays inside the keyboard's rounded corner
@@ -558,18 +724,22 @@ UIColor *PressedColor(BOOL function) {
   const auto &panel = _controller->panel();
   BOOL choosing = [self choosing];
   if (choosing) {
-    // Candidates are distinct, so the one the Controller selects is found by its text.
-    const std::string &current = panel->rows[panel->selectedRow][panel->selection];
-    const auto &candidates = _controller->candidates();
-    size_t selected = std::find(candidates.begin(), candidates.end(), current) - candidates.begin();
+    size_t selected = [self selectedCandidate];
     [self extendBarTo:2 * CGRectGetWidth(_bar.bounds) count:selected + 1];
-    if (selected < _barCount) {  // Space moved it past the edge
+    if (selected < _barCount) {  // the word as typed can be past the edge
       [_bar scrollRectToVisible:[_bar viewWithTag:kCandidateTag + static_cast<NSInteger>(selected)].frame animated:NO];
     }
   } else if (!_client->marked.empty()) {
     UIButton *button = [self candidate:String(_client->marked) selected:NO];
     [button addTarget:self action:@selector(typeReturn) forControlEvents:UIControlEventTouchUpInside];
     [self addToBar:button];
+  } else if (panel && !panel->rows.empty()) {  // 聯想詞, after a commit
+    for (size_t i = 0; i < panel->rows[0].size(); i++) {
+      UIButton *button = [self candidate:String(panel->rows[0][i]) selected:NO];
+      button.tag = kCandidateTag + static_cast<NSInteger>(i);
+      [button addTarget:self action:@selector(pickAssociated:) forControlEvents:UIControlEventTouchUpInside];
+      [self addToBar:button];
+    }
   }
 
   BOOL more = choosing && !panel->pageLabel.empty();
@@ -666,8 +836,13 @@ UIColor *PressedColor(BOOL function) {
 - (void)pickCandidate:(UIButton *)button {
   [self click];
   _expanded = NO;
-  _controller->choose(static_cast<int>(button.tag - kCandidateTag));
-  [self showCandidates];
+  _controller->chooseAndCommit(static_cast<int>(button.tag - kCandidateTag));
+  [self reloadCandidates];
+}
+
+- (void)pickAssociated:(UIButton *)button {
+  [self click];
+  _controller->clickCandidate(0, static_cast<int>(button.tag - kCandidateTag));
   [self reloadCandidates];
 }
 
@@ -675,6 +850,9 @@ UIColor *PressedColor(BOOL function) {
   [self click];
   _expanded = !_expanded;
   _grid.contentOffset = CGPointZero;
+  CATransition *fade = [CATransition animation];  // the grid and the keys cross over
+  fade.duration = 0.2;
+  [self.view.layer addAnimation:fade forKey:@"fade"];
   [self reloadCandidates];
 }
 

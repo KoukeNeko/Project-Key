@@ -1,4 +1,4 @@
-// The host app: how to turn the keyboard on, and a field to try it in.
+// The host app: how to turn the keyboard on, its settings, and a field to try it in.
 import SwiftUI
 
 @main
@@ -8,18 +8,66 @@ struct ProjectKeyApp: App {
   }
 }
 
+// The app group the keyboard reads its settings from, as the keyboard's Info.plist names it.
+private let sharedDefaults: UserDefaults? = {
+  guard let keyboard = Bundle.main.builtInPlugInsURL?.appendingPathComponent("Keyboard.appex"),
+    let group = Bundle(url: keyboard)?.object(forInfoDictionaryKey: "PKAppGroup") as? String
+  else { return nil }
+  return UserDefaults(suiteName: group)
+}()
+
 struct ContentView: View {
   @State private var text = ""
+  @State private var cleared = false
+  // The names and defaults of the engine's settings (core/engine/Controller.cpp, Settings::Name and
+  // DefaultValue), except 聯想詞, on by default here as the keyboard has it.
+  @AppStorage("OmitTones", store: sharedDefaults) private var omitTones = true
+  @AppStorage("Abbreviated", store: sharedDefaults) private var abbreviated = false
+  @AppStorage("FuzzySounds", store: sharedDefaults) private var fuzzySounds = false
+  @AppStorage("AssociatedPhrases", store: sharedDefaults) private var associatedPhrases = true
+  @AppStorage("RememberChoices", store: sharedDefaults) private var rememberChoices = true
 
   var body: some View {
     NavigationStack {
       Form {
-        Section("啟用鍵盤") {
+        Section {
           Text("設定 > 一般 > 鍵盤 > 鍵盤 > 新增鍵盤 > Project Key")
+          Text("設定 > 一般 > 鍵盤 > 鍵盤 > Project Key > 允許完整取用")
           Button("打開設定") {
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
           }
+        } header: {
+          Text("啟用鍵盤")
+        } footer: {
+          Text("完整取用只用來讀取下列設定，鍵盤不連網路。")
         }
+        Section {
+          Toggle(isOn: $omitTones) {
+            Text("省略聲調")
+            Text("開啟時拼完整音節可直接打下一個，ㄕㄉㄜ 為「是的」；關閉時按到已有注音的位置會換掉它，ㄋㄧ 再按 ㄨ 為 ㄋㄨ")
+          }
+          Toggle(isOn: $abbreviated) {
+            Text("簡拼")
+            Text("開啟時 ㄨㄇ 為「我們」，可省略聲調連打；關閉時同一般注音")
+          }
+          Toggle(isOn: $fuzzySounds) {
+            Text("近似音")
+            Text("開啟時，ㄓ/ㄗ、ㄔ/ㄘ、ㄕ/ㄙ、ㄣ/ㄥ、ㄢ/ㄤ 的字也會列出，排在原音之後")
+          }
+          Toggle(isOn: $associatedPhrases) {
+            Text("聯想詞")
+            Text("開啟時，送出後列出常接在後面的詞，如「輸入」之後的「法」")
+          }
+          Toggle("記住選過的字", isOn: $rememberChoices)
+          LabeledContent("選字紀錄") {
+            Button("清除") {
+              sharedDefaults?.set((sharedDefaults?.integer(forKey: "ClearChoicesRequest") ?? 0) + 1, forKey: "ClearChoicesRequest")
+              cleared = true
+            }
+            .disabled(cleared)
+          }
+        }
+        .disabled(sharedDefaults == nil)
         Section("試打") {
           TextField("輸入文字", text: $text, axis: .vertical)
             .lineLimit(3...8)

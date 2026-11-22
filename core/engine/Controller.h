@@ -283,6 +283,9 @@ class Controller {
   // touch screen grid that shows them all, past the rows the panel holds.
   const std::vector<std::string>& candidates() const { return candidates_; }
   void choose(int index);
+  // A touch screen's pick: the candidate at that index, then the whole composition committed, with
+  // the phrases that follow its last word offered as after Enter (Setting::kAssociatedPhrases).
+  void chooseAndCommit(int index);
   // A click on the candidate window: the candidate at PanelContent::rows[row][index], picked
   // as the keypad's digits pick from the row shown while typing, or the chevron.
   void clickCandidate(int row, int index);
