@@ -182,8 +182,9 @@ constexpr CGFloat kKeyHeight = 46, kKeyGap = 6, kSideInset = 3, kTopInset = 2, k
 constexpr CGFloat kRowGapShare = 0.12;
 // The candidate bar takes one row of keys: a key's height and the gap below it.
 constexpr CGFloat kBarHeight = kKeyHeight / (1 - kRowGapShare);
-// A candidate's box: shorter than a key, midway between the keyboard's top and the keys.
-constexpr CGFloat kChipHeight = 34, kChipTop = (kBarHeight + kTopInset - kChipHeight) / 2;
+// A candidate's box, shorter than a key, at the top: after a switch from Apple's English keyboard, iOS 26
+// and 27 add a strip of about 17pt above the extension (FB21449121), and the bar's rest below the box matches it.
+constexpr CGFloat kChipHeight = 34, kChipTop = 0;
 constexpr CGFloat kExpandWidth = 44, kGridRowHeight = 44;
 using ProjectKey::kGridColumns;  // the engine packs rows to the same width
 // Candidate buttons are tagged from here with their index, so viewWithTag: never finds the view itself (tag 0).
@@ -196,6 +197,13 @@ UIColor *KeyColor(BOOL function) {
       return [UIColor colorWithWhite:1 alpha:function ? 0.12 : 0.30];
     }
     return function ? [UIColor colorWithRed:0.67 green:0.70 blue:0.74 alpha:1] : UIColor.whiteColor;
+  }];
+}
+
+// A character key's color drawn over the keyboard's background, for what floats over other keys.
+UIColor *OpaqueKeyColor() {
+  return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *traits) {
+    return traits.userInterfaceStyle == UIUserInterfaceStyleDark ? [UIColor colorWithWhite:0.35 alpha:1] : UIColor.whiteColor;
   }];
 }
 
@@ -268,7 +276,6 @@ UIColor *PressedColor(BOOL function) {
     self.preview.font = [UIFont systemFontOfSize:32];
     self.preview.textAlignment = NSTextAlignmentCenter;
     self.preview.textColor = UIColor.labelColor;
-    self.preview.backgroundColor = KeyColor(NO);
     self.preview.layer.cornerRadius = 10;
     self.preview.layer.cornerCurve = kCACornerCurveContinuous;
     self.preview.layer.shadowColor = UIColor.blackColor.CGColor;
@@ -278,6 +285,8 @@ UIColor *PressedColor(BOOL function) {
     self.preview.userInteractionEnabled = NO;
   }
   self.preview.text = [self titleForState:UIControlStateNormal];
+  // On the layer, which the corners round; a label's own background ignores them.
+  self.preview.layer.backgroundColor = [OpaqueKeyColor() resolvedColorWithTraitCollection:self.traitCollection].CGColor;
   // Above the key, within the keyboard; the top row's reaches over the candidate bar.
   CGRect key = self.frame;
   CGFloat width = CGRectGetWidth(key) + 16, height = CGRectGetHeight(key) + 4;
@@ -713,9 +722,6 @@ UIColor *PressedColor(BOOL function) {
 // sentence, tapped to commit.
 - (void)reloadCandidates {
   if (!_bar) return;
-  CATransition *fade = [CATransition animation];
-  fade.duration = 0.12;
-  [_bar.layer addAnimation:fade forKey:@"fade"];
   for (UIView *view in _bar.subviews) [view removeFromSuperview];
   _barCount = 0;
   _barX = 10;  // inset so the gray box stays inside the keyboard's rounded corner
@@ -850,9 +856,6 @@ UIColor *PressedColor(BOOL function) {
   [self click];
   _expanded = !_expanded;
   _grid.contentOffset = CGPointZero;
-  CATransition *fade = [CATransition animation];  // the grid and the keys cross over
-  fade.duration = 0.2;
-  [self.view.layer addAnimation:fade forKey:@"fade"];
   [self reloadCandidates];
 }
 
