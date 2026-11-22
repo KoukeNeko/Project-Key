@@ -966,10 +966,10 @@ static CGFloat ChipWidth(UIButton *button) {
 
 // The first row is the bar as it was, so expanding and folding leave those
 // candidates where they are; below it, like the system keyboard, six columns
-// with lines between the rows, a long word taking more than one column.
-// Adds candidates until the grid's rows reach `bottom`.
+// with lines between the rows, a long word taking more than one column, all left
+// of the ⌃ column. Adds candidates until the grid's rows reach `bottom`.
 - (void)extendGridTo:(CGFloat)bottom {
-  CGFloat width = CGRectGetWidth(self.view.bounds), cell = width / kGridColumns;
+  CGFloat width = CGRectGetWidth(self.view.bounds), cell = (width - kExpandWidth) / kGridColumns;
   CGFloat line = 1 / self.traitCollection.displayScale;
   const auto &panel = _controller->panel();
   const std::string &current = panel->rows[panel->selectedRow][panel->selection];
@@ -990,7 +990,7 @@ static CGFloat ChipWidth(UIButton *button) {
       _gridRow++;
       _gridColumn = 0;
       CGFloat top = _barHeight + (_gridRow - 1) * kGridRowHeight;
-      UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(0, top - line, width, line)];
+      UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(0, top - line, width - kExpandWidth, line)];
       separator.backgroundColor = UIColor.separatorColor;
       [_grid addSubview:separator];
     }
