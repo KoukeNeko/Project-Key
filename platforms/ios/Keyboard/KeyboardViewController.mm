@@ -135,10 +135,13 @@ class ClientAdapter : public ProjectKey::Client {
   id<UITextDocumentProxy> proxy() { return owner.textDocumentProxy; }
 
   void insertText(const std::string &text) override {
-    // Marking the text and ending the mark puts it in place of the composition everywhere.
-    [proxy() setMarkedText:String(text) selectedRange:NSMakeRange(text.empty() ? 0 : String(text).length, 0)];
-    [proxy() unmarkText];
-    marked.clear();
+    // Committing through a mark leaves the text underlined in some apps, so drop the mark and insert plain text.
+    if (!marked.empty()) {
+      [proxy() setMarkedText:@"" selectedRange:NSMakeRange(0, 0)];
+      [proxy() unmarkText];
+      marked.clear();
+    }
+    if (!text.empty()) [proxy() insertText:String(text)];
   }
 
   void setComposition(const ProjectKey::Composition &composition) override {
