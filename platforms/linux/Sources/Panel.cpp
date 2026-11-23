@@ -325,9 +325,16 @@ float Panel::proofWidth(const PanelContent& c) const {
 
 float Panel::fittingWidth() const {
   float result = content_->showsProof ? proofWidth(*content_) : 0;
-  if (!content_->rows.empty()) {
+  if (content_->rows.empty()) return result;
+  if (!content_->pageLabel.empty()) {
     float row = kRowLeft + content_->columns * (columnWidth_ + kCellGap);
-    result = std::max(result, row + tailWidth());
+    return std::max(result, row + tailWidth());
+  }
+  // A single page fits its candidates, the same from typing to choosing.
+  for (const std::vector<int>& row : spans_) {
+    int cells = 0;
+    for (int span : row) cells += span;
+    if (cells > 0) result = std::max(result, kRowLeft + cells * columnWidth_ + (cells - 1) * kCellGap + kRowLeft);
   }
   return result;
 }
