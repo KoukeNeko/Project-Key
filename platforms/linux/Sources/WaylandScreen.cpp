@@ -185,6 +185,9 @@ class WaylandScreen final : public Screen {
   // niri, on smithay too, moves the popup below the caret itself.
   // shortcut: niri told by XDG_CURRENT_DESKTOP; add any other smithay compositor that moves its popups.
   bool placesBelow_ = false;
+  // Smithay keeps one popup per input method, the newest: only it follows the caret and moves
+  // to the window typed in. The window showing makes its popup the newest again (WaylandWindow::map).
+  WaylandWindow* newestPopup_ = nullptr;
   int caretHeight_ = 0;
   std::unordered_map<wl_display*, Globals> connections_;
   std::vector<WaylandWindow*> windows_;
@@ -504,11 +507,12 @@ void WaylandWindow::map(fcitx::InputContext& ic) {
     for (Buffer& buffer : buffers_) buffer.window = this;
   }
   // Fcitx5 has one input method object for each seat; the popup goes with it.
-  if (im != im_) {
+  if (im != im_ || screen_.newestPopup_ != this) {
     if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
     popup_ = zwp_input_method_v2_get_input_popup_surface(im, surface_);
     zwp_input_popup_surface_v2_add_listener(popup_, &kPopupListener, this);
     im_ = im;
+    screen_.newestPopup_ = this;
   }
   mapped = true;
 }
@@ -530,6 +534,7 @@ void WaylandWindow::release() {
   blurRegion_ = {};
   inputRegion_ = {};
   if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
+  if (screen_.newestPopup_ == this) screen_.newestPopup_ = nullptr;
   if (fractionalScale_) wp_fractional_scale_v1_destroy(fractionalScale_);
   if (viewport_) wp_viewport_destroy(viewport_);
   if (surface_) wl_surface_destroy(surface_);
