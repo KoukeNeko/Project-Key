@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>整句輸入、依上下文選字的注音輸入法。</strong><br>
-  整句連續輸入後再一併選字，引擎依上下文排序候選，並標示可能選錯之處。
+  整句輸入後一併選字，並標示可能選錯之處。
   macOS、Windows、Linux（Fcitx5）與 iOS 共用同一套組字引擎。
 </p>
 
@@ -54,11 +54,11 @@ scoop install koukeneko/project-key
 curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh
 ```
 
-請以一般使用者身分執行，毋須加上 `sudo`；需要管理員權限時，系統將提示輸入密碼（於終端機中透過 `sudo`，無終端機時透過 `pkexec` 驗證視窗）。安裝程序將安裝所需套件、將 Fcitx5 設為輸入法框架並啟用 Project Key。GNOME 使用者須登出後重新登入方可生效。
+以一般使用者執行，不加 `sudo`；需要管理員權限時，以 `sudo`（終端機）或 `pkexec`（無終端機）要求密碼。安裝程序安裝所需套件、將 Fcitx5 設為輸入法框架並啟用 Project Key。GNOME 須重新登入後生效。
 
 **iOS 17 以上：** 從原始碼建置，見 [platforms/ios](platforms/ios/README.md)。
 
-安裝完成後開啟歡迎視窗：按「加入」將 Project Key 加入系統輸入法，切換後即可於視窗中試打（Linux 的安裝指令已加入 Project Key，並自動開啟歡迎視窗）。歡迎視窗另自動下載最新的選字模型，進階模型（約 1.3 GB）則按「下載」才下載。亦可於系統的輸入法設定中自行加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
+安裝後開啟歡迎視窗，按「加入」將 Project Key 加入系統輸入法（Linux 的安裝指令已自動加入，並開啟歡迎視窗）。歡迎視窗自動下載最新的選字模型；進階模型（約 1.3 GB）按「下載」後才下載。亦可於系統的輸入法設定手動加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
 
 <details>
 <summary><strong>其他安裝方式</strong></summary>
@@ -68,8 +68,6 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 - **從原始碼建置：** 見[從原始碼建置](#從原始碼建置)與各平台 README
 
 </details>
-
-發行版附有[上下文模型](#上下文模型)與補充詞彙後的詞庫，選字依上下文排序。這些資料檔另有授權（CC BY-SA 4.0 與 LGPL-2.1-or-later），詳見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 功能
 
@@ -102,7 +100,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 - **自訂詞**：選字時按 `+`，將反白的候選加入 `phrases.txt`；近似音的字不可加入。組字時以 Shift+←、Shift+→ 選取兩個以上已有聲調的音節，按 Enter 即將其加入為詞。
 - **排除詞**：選字時按兩次 Delete（無 Delete 鍵的鍵盤可按 Shift+Backspace），將反白的候選寫入 `exclude-phrases.txt`，此後不再列出。
 - **還原**：以 `+` 加入或排除後，立即按 Backspace 即撤銷該次變更。
-- **進階模型**（選用；macOS、Windows、Linux）：於設定的「關於」下載進階模型（刪去詞表的 Gemma 4 E2B，約 1.3 GB）後，打字停頓 0.3 秒時由它重選整句，於本機的 CPU 執行；不下載時選字與先前相同。
+- **進階模型**（選用；macOS、Windows、Linux）：於設定的「關於」下載進階模型（刪去詞表的 Gemma 4 E2B，約 1.3 GB）後，打字停頓 0.3 秒時由它重選整句，於本機的 CPU 執行；未下載時不影響選字。
 - **語音輸入**（選用；macOS、Windows、Linux）：於設定的「關於」下載語音模型（Qwen3-ASR 0.6B，約 1 GB）並開啟「按鍵」的「語音輸入」後，按住右 Alt（macOS 為右 Option；Linux 可於「語音輸入鍵」改用其他鍵）說話，放開後所說的話即轉為繁體中文輸入，於本機的 CPU 執行，錄音不離開電腦。句首與分句處的「嗯、呃、欸」不輸入；自訂詞一併提供給模型，使其採用相同寫法。macOS 第一次使用時須允許麥克風。
 - **記住選過的字**：相同上下文下優先選取曾選過的字，並自送出的文字學習常用說法；學習結果隨輸入量增加逐步淡化。資料僅存於本機，詳見各平台 README。
 
@@ -226,10 +224,10 @@ flowchart TB
 ```bash
 platforms/macos/build.sh            # 先建置一次，取得 McBopomofo 的詞庫
 tools/bigram-trainer/train.sh       # 下載訓練文字並訓練，約 10 分鐘
-platforms/macos/build.sh            # 再建置一次，把模型放進 App
+platforms/macos/build.sh            # 再建置一次，將模型納入 App
 ```
 
-`tools/bigram-trainer/fetch-models.sh` 下載發行版所用的同一組檔案，無須自行訓練。新模型發布後，可於 macOS、Windows、Linux 設定的「關於 > 選字模型」下載，無須重新安裝。
+`tools/bigram-trainer/fetch-models.sh` 下載發行版所用的同一組檔案，無須自行訓練。
 
 選字評測工具位於 [tools/corpus-evaluator](tools/corpus-evaluator/)。
 
@@ -266,7 +264,7 @@ flowchart LR
 
 ### 整句模型（選用）
 
-詞模型僅依據前兩個詞評分，出現次數極少的詞對可能取得過高的分數，例如將「網頁太單調了」選為「網液態單調了」。`sentence.bin` 為約 1,400 萬參數的字元級 GPT-2；組字器取分數最高的 10 個整句候選，依此模型評估整句的語言機率後重新排序。此檔案與上述兩個模型置於同一資料夾，建置時若存在即一併納入，發行版與 `fetch-models.sh` 亦包含此檔案；未提供時，選字結果與先前相同。
+詞模型僅依據前兩個詞評分，出現次數極少的詞對可能取得過高的分數，例如將「網頁太單調了」選為「網液態單調了」。`sentence.bin` 為約 1,400 萬參數的字元級 GPT-2；組字器取分數最高的 10 個整句候選，依此模型評估整句的語言機率後重新排序。此檔案與上述兩個模型置於同一資料夾，建置時若存在即一併納入，發行版與 `fetch-models.sh` 亦包含此檔案；未提供時不重新排序。
 
 ```bash
 tools/bigram-trainer/train.sh                                               # 產生訓練文字
