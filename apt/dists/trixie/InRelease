@@ -4,25 +4,25 @@ Hash: SHA512
 Origin: Project Key
 Label: Project Key
 Codename: trixie
-Date: Mon, 23 Nov 2026 12:20:07 UTC
+Date: Mon, 23 Nov 2026 14:37:52 UTC
 Architectures: amd64
 Components: main
 MD5Sum:
- 9d615d679ac9db837fb34403547d8c99 1367 main/binary-amd64/Packages
- 37902c79fb70e44b3cea39aacb10fcea 751 main/binary-amd64/Packages.gz
+ 6af4be8ce06d0c49a38bbbd2bc36bb2c 1367 main/binary-amd64/Packages
+ d0538b0c6d3d0d7a4959c454c1f4290a 755 main/binary-amd64/Packages.gz
  3d983cefd907751fc7be098599d00958 75 main/binary-amd64/Release
 SHA1:
- 44e81fe449655097f7af00a5280d8b7000470de1 1367 main/binary-amd64/Packages
- fc5a40faccad8cef11eb8c2e48cacab02f1526c6 751 main/binary-amd64/Packages.gz
+ 194f4a12dbacd8d1452a6d70681084c7726dfb1f 1367 main/binary-amd64/Packages
+ cdda569f647f5ba6e9ae90434ca61ab7619f46f9 755 main/binary-amd64/Packages.gz
  98c05fe6c462b0ac1e1450f7884cf3c9658a1e92 75 main/binary-amd64/Release
 SHA256:
- bfc25cc2a3a9a142f010418f147868806a8d6077b1dbf39fe2ae6b618c698950 1367 main/binary-amd64/Packages
- 1d9f840c1f9528e16abf038aebd8bac3c3f0a637ac9fcbd9753ec37cb561bf35 751 main/binary-amd64/Packages.gz
+ c618301491191a3bc9bf4c9ca456f3f2aba79241dbf2158cfe2259a6fb0b813b 1367 main/binary-amd64/Packages
+ 318bc865640f4a4afe6388b242e14c1f5a1915ac10daad27ba940a07600318a1 755 main/binary-amd64/Packages.gz
  3607a1a94c098b2a50fa62f3eafdc0469ef9aebeca7ff087027fed92e1e491a8 75 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iHUEARYKAB0WIQRBmIkPCjqsUPEXNb/gmbtexz/r/gUCawQvdwAKCRDgmbtexz/r
-/nVbAP0VrXqxdf0xY7xhAsYKayCZrPdkfIlU6AJJPppvJgQbbwEA8rd95/64Gdrk
-RZD/gE7EqphNtxk4kmQR/n3S3QeQGQg=
-=TI/A
+iHUEARYKAB0WIQRBmIkPCjqsUPEXNb/gmbtexz/r/gUCawRPwAAKCRDgmbtexz/r
+/gZKAP9+Rg8MylQ1ttttt4kKdSLEAi3icVRFCmAitDXlcl5jWAD/S+x+N/LnlGMT
+TWB0jlBEN24NSx4Cqzn+i8zoRoxl1gw=
+=ymVK
 -----END PGP SIGNATURE-----
