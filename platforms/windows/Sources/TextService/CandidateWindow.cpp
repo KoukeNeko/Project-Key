@@ -168,8 +168,11 @@ void RegisterClassOnce(const wchar_t* name, WNDPROC proc, UINT style) {
 // MARK: Candidate window
 
 CandidateWindow::~CandidateWindow() {
-  target_.Reset();
-  if (hwnd_) DestroyWindow(hwnd_);
+  close();
+}
+
+void CandidateWindow::close() {
+  if (hwnd_) DestroyWindow(hwnd_);  // WM_NCDESTROY forgets it
 }
 
 LRESULT CALLBACK CandidateWindow::WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -222,6 +225,18 @@ LRESULT CALLBACK CandidateWindow::WindowProc(HWND hwnd, UINT message, WPARAM wPa
       return DefWindowProcW(hwnd, message, TRUE, lParam);
     case WM_MOUSEACTIVATE:
       return MA_NOACTIVATE;
+    case WM_NCDESTROY:
+      // Also when the app destroys the owner, which takes its owned windows along.
+      if (self) {
+        self->hwnd_ = nullptr;
+        self->target_.Reset();
+        self->content_.reset();
+        self->oldContent_.reset();
+        self->sliding_ = self->resizing_ = self->fading_ = self->hiding_ = self->cloaked_ = false;
+        self->announced_.clear();
+      }
+      SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+      break;
   }
   return DefWindowProcW(hwnd, message, wParam, lParam);
 }
@@ -784,7 +799,11 @@ ModeBadge::~ModeBadge() {
     DeleteDC(dc_);
   }
   if (bitmap_) DeleteObject(bitmap_);
-  if (hwnd_) DestroyWindow(hwnd_);
+  close();
+}
+
+void ModeBadge::close() {
+  if (hwnd_) DestroyWindow(hwnd_);  // WM_NCDESTROY forgets it
 }
 
 LRESULT CALLBACK ModeBadge::WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -811,6 +830,14 @@ LRESULT CALLBACK ModeBadge::WindowProc(HWND hwnd, UINT message, WPARAM wParam, L
       return HTTRANSPARENT;
     case WM_MOUSEACTIVATE:
       return MA_NOACTIVATE;
+    case WM_NCDESTROY:
+      if (self) {
+        self->hwnd_ = nullptr;
+        self->target_.Reset();
+        self->cloaked_ = false;
+      }
+      SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+      break;
   }
   return DefWindowProcW(hwnd, message, wParam, lParam);
 }

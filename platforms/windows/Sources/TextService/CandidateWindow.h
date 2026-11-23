@@ -27,6 +27,8 @@ class CandidateWindow {
   // The Tab hint's own window: next to `panel`, on the side away from the text.
   void showBeside(const PanelContent& content, const CandidateWindow& panel, HWND owner, int appearance);
   void hide();
+  // Destroys the window; the next show makes a new one. On the thread that showed it.
+  void close();
   bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !cloaked_ && !hiding_; }
   RECT frame() const;
   const std::optional<PanelContent>& content() const { return content_; }
@@ -106,6 +108,7 @@ class ModeBadge {
   // Moves a showing badge to a new anchor without restarting its fade.
   void follow(const RECT& anchor, const RECT* avoid);
   void hide();
+  void close();  // as the candidate window's
   bool visible() const { return hwnd_ && IsWindowVisible(hwnd_) && !cloaked_; }
 
  private:

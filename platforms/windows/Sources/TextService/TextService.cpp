@@ -196,9 +196,11 @@ STDMETHODIMP TextService::Deactivate() {
   SafeRelease(dictationContext_);
   if (pausedService_ == this) pausedService_ = nullptr;
   if (composition_) request(compositionContext_, {Protocol::Request::kDeactivate});
-  candidates_.hide();
-  hint_.hide();
-  badge_.hide();
+  // Destroyed here, on the app's thread, not when TSF lets go of this object, which may be later
+  // or on another thread, where DestroyWindow fails and the windows stay in the app.
+  candidates_.close();
+  hint_.close();
+  badge_.close();
   ITfSource* source = nullptr;
   if (threadMgr_ && SUCCEEDED(threadMgr_->QueryInterface(IID_ITfSource, reinterpret_cast<void**>(&source)))) {
     source->UnadviseSink(threadMgrCookie_);
