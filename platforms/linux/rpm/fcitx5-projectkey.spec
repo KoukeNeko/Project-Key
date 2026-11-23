@@ -10,7 +10,7 @@ Source0:        pk.tar.gz
 BuildRequires:  cmake, ninja-build, gcc-c++, python3, git, curl, pkgconf-pkg-config
 BuildRequires:  fcitx5-devel, enchant2-devel, libxcb-devel, cairo-devel, pango-devel, wayland-devel
 BuildRequires:  qt6-qtbase-devel, libadwaita-devel, libsoup3-devel, json-glib-devel
-Requires:       fcitx5, hunspell-en-US, fcitx5-projectkey-data = %{data_version}-2
+Requires:       fcitx5, hunspell-en-US, fcitx5-projectkey-data = %{data_version}-3
 Recommends:     google-noto-sans-cjk-fonts
 
 %global debug_package %{nil}
@@ -24,9 +24,9 @@ for Fcitx5 on GNOME, KDE and other desktops.
 %package data
 Summary:        Dictionary and context models for Project Key
 Version:        %{data_version}
-# 2: the release that gave the emoji to the program package; rpm has no Replaces, so a data
-# package that still holds them is updated in the same transaction.
-Release:        2
+# 3: the release that gave OpenCC's table to the program package, as 2 did the emoji; rpm has no
+# Replaces, so a data package that still holds them is updated in the same transaction.
+Release:        3
 License:        CC-BY-SA-4.0 AND LGPL-2.1-or-later
 BuildArch:      noarch
 
@@ -60,9 +60,14 @@ rm -f %{buildroot}/usr/share/icons/hicolor/icon-theme.cache
 /usr/share/icons/hicolor/scalable/apps/fcitx-projectkey*.svg
 /usr/share/fcitx5/projectkey/emoji.txt
 /usr/share/fcitx5/projectkey/EMOJI-NOTICE.txt
+/usr/share/fcitx5/projectkey/TSCharacters.txt
+/usr/share/fcitx5/projectkey/OPENCC-LICENSE.txt
 
 %files data
 /usr/share/fcitx5/projectkey
-# The emoji change with the program, not with the models and McBopomofo that version this package.
+# The emoji and OpenCC's table change with the program, not with the models and McBopomofo that
+# version this package.
 %exclude /usr/share/fcitx5/projectkey/emoji.txt
 %exclude /usr/share/fcitx5/projectkey/EMOJI-NOTICE.txt
+%exclude /usr/share/fcitx5/projectkey/TSCharacters.txt
+%exclude /usr/share/fcitx5/projectkey/OPENCC-LICENSE.txt
