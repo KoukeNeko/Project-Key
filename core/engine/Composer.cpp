@@ -346,7 +346,9 @@ std::vector<Formosa::Gramambular2::LanguageModel::Unigram> Lexicon::getUnigrams(
     return unigrams;
   };
   if (key == kEmojiGroups) {
+    // What ~ types without the list (～) goes first, as the list takes its key.
     std::vector<std::string> names;
+    for (const Unigram& symbol : McBopomofoLM::getUnigrams("_punctuation_~")) names.push_back(symbol.value());
     for (const auto& group : emojiGroups_) names.push_back(group.first);
     return list(names);
   }

@@ -1030,8 +1030,8 @@ bool Controller::handleChoosing(const KeyEvent& event) {
       } else if (symbolReading_.rfind("_emoji_list_", 0) == 0) {  // back to the groups, on the one it was
         int group = std::atoi(symbolReading_.c_str() + std::strlen("_emoji_list_"));
         composer_->backspace();
-        if (openSymbolList("_emoji_groups") && choosing_ && group < static_cast<int>(candidates_.size())) {
-          selection_ = group;
+        if (openSymbolList("_emoji_groups") && choosing_ && group < static_cast<int>(env_.lm->emojiGroupCount())) {
+          selection_ = static_cast<int>(candidates_.size() - env_.lm->emojiGroupCount()) + group;  // after ～
           refresh();
         }
         return true;
@@ -1409,10 +1409,14 @@ void Controller::toggleGrid() {
 }
 
 void Controller::pick(int index, bool moveOn) {
-  if (symbolReading_ == "_emoji_groups") {  // a group: its emoji take the place of the groups
-    composer_->backspace();
-    openSymbolList("_emoji_list_" + std::to_string(index));
-    return;
+  if (symbolReading_ == "_emoji_groups") {
+    // The symbols before the groups (～) are picked as any; a group's emoji take the place of the groups.
+    int symbols = static_cast<int>(candidates_.size() - env_.lm->emojiGroupCount());
+    if (index >= symbols) {
+      composer_->backspace();
+      openSymbolList("_emoji_list_" + std::to_string(index - symbols));
+      return;
+    }
   }
   excludeConfirm_ = false;
   notice_.clear();
