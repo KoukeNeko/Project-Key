@@ -97,7 +97,7 @@ add_library(projectkey MODULE Sources/ProjectKey.cpp Sources/Panel.cpp Sources/X
 target_include_directories(projectkey PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(projectkey PRIVATE engine Fcitx5::Core Fcitx5::Utils Fcitx5::Module::DBus Fcitx5::Module::Wayland Fcitx5::Module::Notifications
   PkgConfig::ENCHANT PkgConfig::PANEL)
-target_compile_definitions(projectkey PRIVATE PROJECTKEY_DATA_DIR="${DATA_DIR}" FCITX_GETTEXT_DOMAIN="fcitx5-projectkey"
+target_compile_definitions(projectkey PRIVATE PROJECTKEY_DATA_DIR="${DATA_DIR}" PROJECTKEY_VERSION="${PROJECT_VERSION}" FCITX_GETTEXT_DOMAIN="fcitx5-projectkey"
   PROJECTKEY_SETTINGS="${CMAKE_INSTALL_FULL_BINDIR}/projectkey-settings")
 set_target_properties(projectkey PROPERTIES PREFIX "")
 

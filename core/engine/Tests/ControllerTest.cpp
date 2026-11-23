@@ -22,6 +22,7 @@
 
 #include "Controller.h"
 #include "Models.h"
+#include "Update.h"
 
 using namespace ProjectKey;
 
@@ -1277,6 +1278,14 @@ int main(int argc, char** argv) {
   assert(Contains(client.marked, clicked));
   controller.clickCandidate(5, 0);  // nothing there
   EscapeAll(controller, client);
+
+  // The update check: a newer tag only, number by number, and never a tag that is no version.
+  assert(ProjectKey::NewerRelease(R"({"url": "x", "tag_name": "v0.10.1", "name": "Project Key 0.10.1"})", "0.10.0") == "0.10.1");
+  assert(ProjectKey::NewerRelease(R"({"tag_name":"v0.10.0"})", "0.9.3") == "0.10.0");
+  assert(!ProjectKey::NewerRelease(R"({"tag_name": "v0.9.3"})", "0.10.0"));
+  assert(!ProjectKey::NewerRelease(R"({"tag_name": "v0.10.0"})", "0.10.0"));
+  assert(!ProjectKey::NewerRelease(R"({"tag_name": "v0.11.0-beta"})", "0.10.0"));
+  assert(!ProjectKey::NewerRelease(R"({"message": "API rate limit exceeded"})", "0.10.0"));
 
   std::printf("ControllerTest passed\n");
   return 0;

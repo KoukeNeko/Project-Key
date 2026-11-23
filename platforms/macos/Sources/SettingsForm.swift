@@ -18,6 +18,7 @@ struct SettingsForm: View {
   @AppStorage(PKDictationKey) private var dictation = false
   @AppStorage(PKSimplifiedKey) private var simplified = false
   @AppStorage(PKSimplifiedToggleKey) private var simplifiedToggle = false
+  @AppStorage(PKCheckForUpdatesKey) private var checkForUpdates = true
   @AppStorage(PKAppearanceKey) private var appearance = 3
   @AppStorage(PKProofPreviewKey) private var proofPreview = 1
   @AppStorage(PKChoosingProofKey) private var choosingProof = 1
@@ -173,6 +174,7 @@ struct SettingsForm: View {
               case .failed: Text("無法檢查")
               }
             }
+            Toggle("自動檢查更新", isOn: $checkForUpdates)
             LabeledContent("選字模型") { ModelsState(updater: models) }
             if advanced.supported {
               LabeledContent("進階模型") {

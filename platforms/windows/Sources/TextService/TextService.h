@@ -145,6 +145,7 @@ class TextService : public ITfTextInputProcessorEx,
   bool englishMode_ = false;
   bool fullWidth_ = false;
   bool simplified_ = false;
+  std::string update_;  // Reply::update
   int appearance_ = 0;
   // OnTestKeyDown already sent this key; OnKeyDown applies the reply.
   std::optional<Protocol::Reply> pending_;

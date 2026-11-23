@@ -6,6 +6,8 @@
 #include <objbase.h>
 #include <sddl.h>
 #include <spellcheck.h>
+#include <winhttp.h>
+#include <winver.h>
 #include <wrl/client.h>
 
 #include <algorithm>
@@ -30,6 +32,7 @@
 #endif
 #include "Controller.h"
 #include "Models.h"
+#include "Update.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace ProjectKey;
@@ -136,6 +139,72 @@ std::wstring UserData() {
   wchar_t local[MAX_PATH];
   DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
   return length > 0 && length < MAX_PATH ? std::wstring(local, length) + L"\\Project Key\\" : L"";
+}
+
+// A newer release than this one, for the language bar's menu; empty for none.
+std::mutex gUpdateLock;
+std::string gUpdate;
+
+// ProjectKey.dll's product version, as the settings app shows it; empty without one.
+std::string InstalledVersion() {
+  std::wstring path = ModuleDirectory(nullptr) + L"ProjectKey.dll";
+  DWORD size = GetFileVersionInfoSizeW(path.c_str(), nullptr);
+  std::vector<char> data(size);
+  VS_FIXEDFILEINFO* info = nullptr;
+  UINT length = 0;
+  if (!size || !GetFileVersionInfoW(path.c_str(), 0, size, data.data()) ||
+      !VerQueryValueW(data.data(), L"\\", reinterpret_cast<void**>(&info), &length) || !info) {
+    return {};
+  }
+  return std::to_string(HIWORD(info->dwProductVersionMS)) + "." + std::to_string(LOWORD(info->dwProductVersionMS)) + "." +
+         std::to_string(HIWORD(info->dwProductVersionLS));
+}
+
+// GitHub's latest-release JSON; empty when it cannot be had.
+std::string FetchLatestRelease() {
+  constexpr size_t kMaxReleaseBytes = 1 << 20;  // the JSON is a few kilobytes; more is not GitHub's
+  std::wstring url = Widen(kLatestRelease);
+  URL_COMPONENTS parts{sizeof(parts)};
+  parts.dwHostNameLength = parts.dwUrlPathLength = static_cast<DWORD>(-1);
+  if (!WinHttpCrackUrl(url.c_str(), 0, 0, &parts)) return {};
+  std::wstring host(parts.lpszHostName, parts.dwHostNameLength), path(parts.lpszUrlPath, parts.dwUrlPathLength);
+  std::string body;
+  HINTERNET session = WinHttpOpen(L"ProjectKey", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+  HINTERNET connection = session ? WinHttpConnect(session, host.c_str(), parts.nPort, 0) : nullptr;
+  HINTERNET request = connection ? WinHttpOpenRequest(connection, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER,
+                                                      WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE)
+                                 : nullptr;
+  DWORD status = 0, size = sizeof(status);
+  if (request && WinHttpSendRequest(request, L"Accept: application/vnd.github+json", static_cast<DWORD>(-1), WINHTTP_NO_REQUEST_DATA, 0, 0, 0) &&
+      WinHttpReceiveResponse(request, nullptr) &&
+      WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &status, &size,
+                          WINHTTP_NO_HEADER_INDEX) &&
+      status == 200) {
+    char buffer[8192];
+    DWORD read = 0;
+    while (body.size() < kMaxReleaseBytes && WinHttpReadData(request, buffer, sizeof(buffer), &read) && read > 0) body.append(buffer, read);
+  }
+  if (request) WinHttpCloseHandle(request);
+  if (connection) WinHttpCloseHandle(connection);
+  if (session) WinHttpCloseHandle(session);
+  return body;
+}
+
+// At start and every kUpdateCheckInterval while the setting is on; one that fails, offline at sign-in
+// say, is retried within the hour.
+void CheckForUpdates() {
+  std::string current = InstalledVersion();
+  if (current.empty()) return;
+  std::optional<std::chrono::steady_clock::time_point> checked;
+  for (;; std::this_thread::sleep_for(std::chrono::hours(1))) {
+    auto now = std::chrono::steady_clock::now();
+    if (!gSettings.flag(Setting::kCheckForUpdates) || (checked && now - *checked < kUpdateCheckInterval)) continue;
+    std::string release = FetchLatestRelease();
+    if (release.empty()) continue;
+    checked = now;
+    std::lock_guard lock(gUpdateLock);
+    gUpdate = NewerRelease(release, current).value_or("");
+  }
 }
 
 // Switches to the newest of the installed models and those the settings app downloaded.
@@ -481,6 +550,10 @@ void Serve(HANDLE pipe) {
       recorder.reply.fullWidth = gEnvironment.fullWidth;
       recorder.reply.simplified = gSettings.flag(Setting::kSimplified);
       recorder.reply.appearance = gSettings.get(Setting::kAppearance);
+      if (gSettings.flag(Setting::kCheckForUpdates)) {  // turning it off takes the menu item away at once
+        std::lock_guard update(gUpdateLock);
+        recorder.reply.update = gUpdate;
+      }
       reply = Protocol::WriteReply(recorder.reply);
     }
     if (showSettings) {
@@ -554,6 +627,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   if (SUCCEEDED(CoCreateInstance(__uuidof(SpellCheckerFactory), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&spelling)))) {
     spelling->CreateSpellChecker(L"en-US", &gSpellChecker);
   }
+  std::thread(CheckForUpdates).detach();
 
   std::wstring name = PipeName();
   DWORD first = FILE_FLAG_FIRST_PIPE_INSTANCE;  // no one else may own the name

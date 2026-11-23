@@ -32,8 +32,10 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -53,6 +55,7 @@
 #include "SpeechModel.h"
 #endif
 #include "Controller.h"
+#include "Update.h"
 #include "Panel.h"
 #include "../Settings/Rows.h"
 
@@ -63,6 +66,7 @@ namespace {
 constexpr char kConfigPath[] = "conf/projectkey.conf";
 // How long the typing pauses before the advanced model chooses the sentence (AdvancedRanker).
 constexpr uint64_t kPauseUs = 300000;
+constexpr uint64_t kFirstUpdateCheckUs = 60000000;  // a minute after Fcitx5 starts
 
 enum class ProofMode { Always, WhenDoubtful, Off };
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(ProofMode, N_("永遠"), N_("有可疑字時"), N_("關閉"));
@@ -121,6 +125,7 @@ FCITX_CONFIGURATION(
     fcitx::Option<fcitx::Key, fcitx::KeyConstrain> simplifiedKey{
         this, "SimplifiedKey", "繁簡切換鍵", fcitx::Key("Control+Shift+F"), fcitx::KeyConstrain(fcitx::KeyConstrainFlag::AllowModifierLess)};
     fcitx::Option<bool> dictation{this, "Dictation", "語音輸入", DefaultFlag(Setting::kDictation)};
+    fcitx::Option<bool> checkForUpdates{this, "CheckForUpdates", "自動檢查更新", DefaultFlag(Setting::kCheckForUpdates)};
     // Held to dictate: a modifier alone, or a key that types nothing (Settings/Gtk.cpp and Qt.cpp record it).
     fcitx::Option<fcitx::Key, fcitx::KeyConstrain> dictationKey{
         this, "DictationKey", "語音輸入鍵", fcitx::Key(FcitxKey_Alt_R),
@@ -158,6 +163,7 @@ class ConfigSettings : public Settings {
       case Setting::kDictation: return *config_.dictation;
       case Setting::kSimplified: return *config_.simplified;
       case Setting::kSimplifiedToggle: return *config_.simplifiedToggle;
+      case Setting::kCheckForUpdates: return *config_.checkForUpdates;
     }
     return std::nullopt;
   }
@@ -524,6 +530,44 @@ class Session : public fcitx::InputContextProperty, public Client {
   Controller controller;  // after the members it calls back into
 };
 
+// Setting::kCheckForUpdates: GitHub's latest release, fetched by curl on a thread of its own so Fcitx5
+// never waits on the network; a newer one is handed back on Fcitx5's thread.
+// shortcut: needs the curl command, which the install instructions use too; link libcurl if a desktop lacks it.
+class UpdateCheck {
+ public:
+  explicit UpdateCheck(fcitx::EventLoop& loop) { dispatcher_.attach(&loop); }
+  ~UpdateCheck() {
+    if (thread_.joinable()) thread_.join();
+    dispatcher_.detach();
+  }
+  // found(version) once the release is newer; nothing when it is not, or the check failed. A check
+  // still going is left to finish.
+  void run(std::function<void(const std::string&)> found) {
+    if (running_) return;
+    if (thread_.joinable()) thread_.join();
+    running_ = true;
+    thread_ = std::thread([this, found = std::move(found)] {
+      std::string release;
+      std::string command = std::string("curl -fsSL --max-time 20 -H 'User-Agent: ProjectKey' ") + kLatestRelease + " 2>/dev/null";
+      if (FILE* pipe = popen(command.c_str(), "r")) {
+        char buffer[4096];
+        for (size_t n; (n = fread(buffer, 1, sizeof buffer, pipe)) > 0;) release.append(buffer, n);
+        pclose(pipe);
+      }
+      std::optional<std::string> newer = NewerRelease(release, PROJECTKEY_VERSION);
+      dispatcher_.schedule([this, newer, found] {
+        running_ = false;
+        if (newer) found(*newer);
+      });
+    });
+  }
+
+ private:
+  fcitx::EventDispatcher dispatcher_;
+  std::thread thread_;
+  bool running_ = false;  // on Fcitx5's thread only
+};
+
 // The advanced model (core/engine/AdvancedModel.h) the settings windows download: loaded and asked
 // on a thread of its own, so typing never waits for it, and its answers handed back on Fcitx5's
 // thread. Built without llama.cpp, there is never one to load.
@@ -819,6 +863,18 @@ class Engine : public fcitx::InputMethodEngineV2 {
       syncMenu(ic);
     });
     instance_->userInterfaceManager().registerAction("projectkey-fullwidth", &fullWidthAction_);
+    // A newer release, found in the background (checkForUpdate), offered first in the menu; the settings
+    // window's 關於 updates to it.
+    updateAction_.connect<fcitx::SimpleAction::Activated>([](fcitx::InputContext*) { fcitx::startProcess({PROJECTKEY_SETTINGS}); });
+    instance_->userInterfaceManager().registerAction("projectkey-update", &updateAction_);
+    // Not at once: Fcitx5 starts with the session, often before the network is up.
+    updateTimer_ = instance_->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC, fcitx::now(CLOCK_MONOTONIC) + kFirstUpdateCheckUs, 0, [this](fcitx::EventSourceTime* timer, uint64_t) {
+          checkForUpdate();
+          timer->setNextInterval(std::chrono::duration_cast<std::chrono::microseconds>(kUpdateCheckInterval).count());
+          timer->setOneShot();
+          return true;
+        });
     checkAction_.setShortText("檢查 Project Key 安裝");
     checkAction_.connect<fcitx::SimpleAction::Activated>([this](fcitx::InputContext* ic) { checkInstall(ic); });
     instance_->userInterfaceManager().registerAction("projectkey-check", &checkAction_);
@@ -974,6 +1030,9 @@ class Engine : public fcitx::InputMethodEngineV2 {
   }
 
   void activate(const fcitx::InputMethodEntry&, fcitx::InputContextEvent& event) override {
+    if (!newerRelease_.empty() && settings_.flag(Setting::kCheckForUpdates)) {
+      event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &updateAction_);
+    }
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &simplifiedAction_);
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &fullWidthAction_);
     event.inputContext()->statusArea().addAction(fcitx::StatusGroup::InputMethod, &settingsAction_);
@@ -1011,6 +1070,18 @@ class Engine : public fcitx::InputMethodEngineV2 {
     fullWidthAction_.setChecked(environment_.fullWidth);
     simplifiedAction_.update(ic);
     fullWidthAction_.update(ic);
+  }
+  void checkForUpdate() {
+    if (!settings_.flag(Setting::kCheckForUpdates)) return;
+    updates_.run([this](const std::string& version) {
+      newerRelease_ = version;
+      updateAction_.setShortText("更新到 " + version);
+      // The menu of the app typed in now; others get the item as Project Key next turns on in them.
+      fcitx::InputContext* ic = instance_->mostRecentInputContext();
+      if (!ic || instance_->inputMethodEngine(ic) != this || !settings_.flag(Setting::kCheckForUpdates)) return;
+      ic->statusArea().addAction(fcitx::StatusGroup::InputMethod, &updateAction_);
+      ic->updateUserInterface(fcitx::UserInterfaceComponent::StatusArea);
+    });
   }
   void reloadAdvanced() {
     advanced_.reload([this](bool loaded) { environment_.advancedRanking = loaded; });
@@ -1114,11 +1185,14 @@ class Engine : public fcitx::InputMethodEngineV2 {
   fcitx::InputContext* announcing_ = nullptr;  // switched to or from Project Key, until Fcitx5 announces it
   bool leaving_ = false;                        // from it
   std::unique_ptr<fcitx::EventSource> announced_;
-  fcitx::SimpleAction settingsAction_, checkAction_, simplifiedAction_, fullWidthAction_;
+  fcitx::SimpleAction settingsAction_, checkAction_, simplifiedAction_, fullWidthAction_, updateAction_;
+  std::string newerRelease_;  // the version updateAction_ offers, once found
+  std::unique_ptr<fcitx::EventSourceTime> updateTimer_;
   std::unique_ptr<fcitx::EventSourceTime> pause_;
   fcitx::TrackableObjectReference<fcitx::InputContext> paused_;
   AdvancedRanker advanced_{instance_->eventLoop()};  // after what its answers use
   Dictation dictation_{instance_->eventLoop()};
+  UpdateCheck updates_{instance_->eventLoop()};
   SettingsObject settingsObject_{environment_, config_, [this] { reloadAdvanced(); }};
 };
 

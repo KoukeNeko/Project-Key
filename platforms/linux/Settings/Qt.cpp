@@ -605,6 +605,23 @@ int main(int argc, char** argv) {
   QNetworkAccessManager network;
   QFormLayout* form = nullptr;
   QFormLayout* about = nullptr;
+  auto addToggle = [&](QFormLayout* target, const Row& row) {
+    QString key = row.key;
+    auto* box = new QCheckBox(row.title);
+    box->setChecked(Text(config.value(key)) == "True");
+    box->setEnabled(available);
+    QObject::connect(box, &QCheckBox::toggled, [&controller, key, box](bool on) {
+      if (WriteConfig(controller, key, on ? "True" : "False")) return;
+      QSignalBlocker quiet(box);
+      box->setChecked(!on);
+      Unsaved(box);
+    });
+    showConfig.push_back([box, key](const QVariantMap& config) {
+      QSignalBlocker quiet(box);
+      box->setChecked(Text(config.value(key)) == "True");
+    });
+    target->addRow(QString(), box);
+  };
   for (const Group& section : Groups()) {
     if (section.rows.front().kind == Row::kRestore) {
       // 重設 goes under 關於, below a line and a bold heading.
@@ -626,20 +643,7 @@ int main(int argc, char** argv) {
     for (const Row& row : section.rows) {
       QString key = row.key;
       if (row.kind == Row::kToggle) {
-        auto* box = new QCheckBox(row.title);
-        box->setChecked(Text(config.value(key)) == "True");
-        box->setEnabled(available);
-        QObject::connect(box, &QCheckBox::toggled, [&controller, key, box](bool on) {
-          if (WriteConfig(controller, key, on ? "True" : "False")) return;
-          QSignalBlocker quiet(box);
-          box->setChecked(!on);
-          Unsaved(box);
-        });
-        showConfig.push_back([box, key](const QVariantMap& config) {
-          QSignalBlocker quiet(box);
-          box->setChecked(Text(config.value(key)) == "True");
-        });
-        form->addRow(QString(), box);
+        addToggle(form, row);
       } else if (row.kind == Row::kChoice) {
         QStringList values, shown;
         for (const char* value : row.values) values << value;
@@ -733,6 +737,7 @@ int main(int argc, char** argv) {
   auto* update = new QLabel("檢查中…");
   update->setOpenExternalLinks(true);
   about->addRow("更新：", update);
+  addToggle(about, kCheckForUpdatesRow);
   auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
   about->addRow("選字模型：", models);
 #ifdef PROJECTKEY_ADVANCED_MODEL

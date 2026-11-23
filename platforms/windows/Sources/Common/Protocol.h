@@ -252,6 +252,7 @@ struct Reply {
   int columns = kGridColumns;  // PanelContent::columns of every panel here; sent after the operations, so a text service without it still reads the reply
   bool fullWidth = false;      // sent last, likewise
   bool simplified = false;     // Setting::kSimplified, after the excluding flag; absent from older servers
+  std::string update;          // a newer release for the language bar's menu (Setting::kCheckForUpdates), empty for none; last, likewise
   std::vector<Operation> operations;
 };
 
@@ -278,6 +279,7 @@ inline std::string WriteReply(const Reply& reply) {
   // Not in each panel, so the panels' layout, which kVersion covers, stays as it was.
   w.boolean(std::any_of(reply.operations.begin(), reply.operations.end(), [](const Operation& o) { return o.panel.excluding; }));
   w.boolean(reply.simplified);
+  w.str(reply.update);
   return w.bytes();
 }
 
@@ -306,6 +308,7 @@ inline bool ReadReply(const std::string& bytes, Reply& reply) {
   bool excluding = r.more() && r.boolean();  // and the one before the question of excluding a word
   for (Operation& o : reply.operations) o.panel.excluding = excluding;
   if (r.more()) reply.simplified = r.boolean();
+  if (r.more()) reply.update = r.str();
   for (Operation& o : reply.operations) o.panel.columns = reply.columns;
   return r.ok();
 }

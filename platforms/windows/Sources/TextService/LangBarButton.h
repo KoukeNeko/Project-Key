@@ -5,6 +5,8 @@
 #include <ctfutb.h>
 #include <msctf.h>
 
+#include <string>
+
 namespace ProjectKey {
 
 class TextService;
@@ -35,7 +37,7 @@ class LangBarButton : public ITfLangBarItemButton, public ITfSource {
   STDMETHODIMP AdviseSink(REFIID riid, IUnknown* sink, DWORD* cookie) override;
   STDMETHODIMP UnadviseSink(DWORD cookie) override;
 
-  void update(bool englishMode, bool fullWidth, bool simplified);
+  void update(bool englishMode, bool fullWidth, bool simplified, const std::string& release);
   void detach() { service_ = nullptr; }
 
  private:
@@ -46,6 +48,7 @@ class LangBarButton : public ITfLangBarItemButton, public ITfSource {
   bool englishMode_ = false;
   bool fullWidth_ = false;
   bool simplified_ = false;
+  std::wstring update_;  // 更新到 the newer release, which opens the settings; empty for none
 };
 
 }  // namespace ProjectKey

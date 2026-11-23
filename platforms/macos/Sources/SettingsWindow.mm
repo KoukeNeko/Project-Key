@@ -17,6 +17,7 @@ NSString *const PKZhuyinToEnglishKey = @"ZhuyinToEnglish";
 NSString *const PKSimplifiedKey = @"Simplified";
 NSString *const PKSimplifiedToggleKey = @"SimplifiedToggle";
 NSString *const PKDictationKey = @"Dictation";
+NSString *const PKCheckForUpdatesKey = @"CheckForUpdates";
 NSString *const PKCandidatePositionKey = @"CandidatePosition";
 NSString *const PKNextDoubtfulKey = @"NextDoubtful";
 NSString *const PKKeypadPicksKey = @"KeypadPicks";
@@ -121,6 +122,7 @@ BOOL PKRemoveUserWords(void) {
     PKSimplifiedKey : @NO,
     PKSimplifiedToggleKey : @NO,
     PKDictationKey : @NO,
+    PKCheckForUpdatesKey : @YES,
     PKAppearanceKey : @3,  // 自動
     PKProofPreviewKey : @1,
     PKChoosingProofKey : @1,

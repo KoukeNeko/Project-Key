@@ -27,6 +27,7 @@ FOUNDATION_EXPORT NSString *const PKKeyboardLayoutKey;     // 0 大千, 1 倚天
 FOUNDATION_EXPORT NSString *const PKSimplifiedKey;         // 簡體中文: what goes to the app is in Simplified Chinese
 FOUNDATION_EXPORT NSString *const PKSimplifiedToggleKey;   // ⌃⇧F switches it
 FOUNDATION_EXPORT NSString *const PKDictationKey;          // 語音輸入: holding the right ⌥ records, and what was said is typed
+FOUNDATION_EXPORT NSString *const PKCheckForUpdatesKey;    // the input method asks GitHub for a newer release daily, offered in its menu
 
 // The dictionary and context models the engine uses, and where the settings window puts a
 // newer release for it (core/engine/Models.h).

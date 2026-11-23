@@ -299,6 +299,9 @@ inline std::string RecordedKey(bool shortcut, const std::string& name, bool modi
   return std::string(control ? "Control+" : "") + (alt ? "Alt+" : "") + (super ? "Super+" : "") + (shift ? "Shift+" : "") + name;
 }
 
+// On 關於, under 更新, rather than in a group of its own (Setting::kCheckForUpdates).
+inline const Row kCheckForUpdatesRow{Row::kToggle, "CheckForUpdates", "自動檢查更新"};
+
 struct Group {
   const char* title;
   std::vector<Row> rows;

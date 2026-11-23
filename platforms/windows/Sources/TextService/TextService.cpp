@@ -182,6 +182,7 @@ STDMETHODIMP TextService::ActivateEx(ITfThreadMgr* threadMgr, TfClientId clientI
     englishMode_ = reply->englishMode;
     fullWidth_ = reply->fullWidth;
     simplified_ = reply->simplified;
+    update_ = reply->update;
     appearance_ = reply->appearance;
   }
   updateLangBar();
@@ -526,6 +527,7 @@ void TextService::requestForFocus(const Protocol::Message& message) {
     englishMode_ = reply->englishMode;
     fullWidth_ = reply->fullWidth;
     simplified_ = reply->simplified;
+    update_ = reply->update;
     updateLangBar();
   }
   SafeRelease(context);
@@ -583,10 +585,11 @@ HRESULT TextService::editSession(ITfContext* context, DWORD flags, std::function
 }
 
 void TextService::apply(ITfContext* context, const Protocol::Reply& reply) {
-  if (reply.englishMode != englishMode_ || reply.fullWidth != fullWidth_ || reply.simplified != simplified_) {
+  if (reply.englishMode != englishMode_ || reply.fullWidth != fullWidth_ || reply.simplified != simplified_ || reply.update != update_) {
     englishMode_ = reply.englishMode;
     fullWidth_ = reply.fullWidth;
     simplified_ = reply.simplified;
+    update_ = reply.update;
     updateLangBar();
   }
   appearance_ = reply.appearance;
@@ -920,7 +923,7 @@ void TextService::showSettings() {
 }
 
 void TextService::updateLangBar() {
-  if (langBar_) langBar_->update(englishMode_, fullWidth_, simplified_);
+  if (langBar_) langBar_->update(englishMode_, fullWidth_, simplified_, update_);
 }
 
 }  // namespace ProjectKey

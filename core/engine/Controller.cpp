@@ -160,6 +160,7 @@ const char* Settings::Name(Setting setting) {
     case Setting::kDictation: return "Dictation";
     case Setting::kSimplified: return "Simplified";
     case Setting::kSimplifiedToggle: return "SimplifiedToggle";
+    case Setting::kCheckForUpdates: return "CheckForUpdates";
   }
   return "";
 }

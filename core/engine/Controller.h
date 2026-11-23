@@ -96,6 +96,7 @@ enum class Setting {
   kDictation,           // 語音輸入: holding the right Alt (Option) key records, and what was said is typed (SpeechModel.h)
   kSimplified,          // 簡體中文: what goes to the app is in Simplified Chinese (SimplifiedClient)
   kSimplifiedToggle,    // the platform's shortcut switches kSimplified
+  kCheckForUpdates,     // the input method asks GitHub for a newer release at start and daily, and its menu offers it
 };
 
 class Settings {

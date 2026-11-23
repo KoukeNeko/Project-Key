@@ -16,6 +16,7 @@
 #endif
 #include "Controller.h"
 #include "Models.h"
+#include "Update.h"
 
 using ProjectKey::Key;
 
@@ -253,6 +254,28 @@ bool UseNewestModels(ProjectKey::Environment &env) {
   return ProjectKey::UseNewestModels(env, NSBundle.mainBundle.resourcePath.fileSystemRepresentation, downloaded);
 }
 
+// The release the background check found newer than this one, offered in the input menu; nil for none.
+NSString *gNewerRelease;
+
+// Asks GitHub for the latest release, unless the user turned the check off (Setting::kCheckForUpdates).
+// A failed check finds nothing: it is tried again with the next.
+void CheckForUpdate(const ProjectKey::Settings &settings) {
+  if (!settings.flag(ProjectKey::Setting::kCheckForUpdates)) return;
+  NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@(ProjectKey::kLatestRelease)]];
+  [request setValue:@"ProjectKey" forHTTPHeaderField:@"User-Agent"];  // GitHub rejects requests without one
+  NSString *current = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"";
+  [[NSURLSession.sharedSession dataTaskWithRequest:request
+                                 completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+    if (error || ![response isKindOfClass:NSHTTPURLResponse.class] || ((NSHTTPURLResponse *)response).statusCode != 200) return;
+    std::optional<std::string> newer =
+        ProjectKey::NewerRelease(std::string(static_cast<const char *>(data.bytes), data.length), current.UTF8String);
+    NSString *found = newer ? String(*newer) : nil;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      gNewerRelease = found;
+    });
+  }] resume];
+}
+
 // The models, settings and 中/英 switch every input session shares.
 ProjectKey::Environment &SharedEnvironment() {
   static ProjectKey::Environment *environment = [] {
@@ -284,6 +307,12 @@ ProjectKey::Environment &SharedEnvironment() {
     }
     static DefaultsSettings settings;
     env->settings = &settings;
+    // Only the installed input method checks for updates; the tests run without a bundle.
+    if (NSBundle.mainBundle.bundleIdentifier) {
+      CheckForUpdate(settings);
+      NSTimeInterval interval = std::chrono::duration<double>(ProjectKey::kUpdateCheckInterval).count();
+      [NSTimer scheduledTimerWithTimeInterval:interval repeats:YES block:^(NSTimer *) { CheckForUpdate(settings); }];
+    }
     env->isEnglish = [](const std::string &text) {
       NSRange misspelled = [NSSpellChecker.sharedSpellChecker checkSpellingOfString:String(text)
                                                                          startingAt:0
@@ -541,6 +570,10 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
   NSMenuItem *fullWidth = [menu addItemWithTitle:@"全形" action:@selector(toggleFullWidth:) keyEquivalent:@""];
   fullWidth.state = SharedEnvironment().fullWidth ? NSControlStateValueOn : NSControlStateValueOff;
   [menu addItem:NSMenuItem.separatorItem];
+  // The settings window's 關於 installs it.
+  if (gNewerRelease && SharedEnvironment().settings->flag(ProjectKey::Setting::kCheckForUpdates)) {
+    [menu addItemWithTitle:[NSString stringWithFormat:@"更新到 %@", gNewerRelease] action:@selector(showSettings:) keyEquivalent:@""];
+  }
   [menu addItemWithTitle:@"設定…" action:@selector(showSettings:) keyEquivalent:@""];
   if (!SharedEnvironment().userPhrasesPath.empty()) {
     [menu addItemWithTitle:@"編輯自訂詞…" action:@selector(editUserPhrases:) keyEquivalent:@""];

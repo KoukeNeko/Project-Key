@@ -139,7 +139,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 | Windows | `scoop update project-key` | `scoop uninstall project-key` |
 | Linux | 再執行一次安裝指令；自套件庫安裝者亦可 `apt upgrade`、`dnf upgrade` | `curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platforms/linux/uninstall.sh \| sh` |
 
-自訂詞、排除詞、選字紀錄與設定於更新與移除後皆保留。新的選字模型可於 macOS、Windows、Linux 設定的「關於 > 選字模型」下載，無須重新安裝。Windows 上正在使用舊版的 App 須重新開啟才會改用新版；Linux 的 GNOME 須重新登入，才會載入新版擴充功能。
+有新版本時，輸入法選單會顯示「更新到 X」，選取後開啟設定進行更新；可於設定的「關於 > 自動檢查更新」關閉。自訂詞、排除詞、選字紀錄與設定於更新與移除後皆保留。新的選字模型可於 macOS、Windows、Linux 設定的「關於 > 選字模型」下載，無須重新安裝。Windows 上正在使用舊版的 App 須重新開啟才會改用新版；Linux 的 GNOME 須重新登入，才會載入新版擴充功能。
 
 ## 相容性
 
