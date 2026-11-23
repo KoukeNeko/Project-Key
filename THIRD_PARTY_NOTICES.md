@@ -67,12 +67,14 @@ SOFTWARE.
 
 ### Wayland 協定定義
 
-`platforms/linux/protocols/` 內含兩份 Wayland 協定的 XML，建置時由 `wayland-scanner` 產生程式碼，連結進 Linux 的 addon。兩者都以 MIT 授權發布，條文在各檔案開頭的 `<copyright>`：
+`platforms/linux/protocols/` 內含四份 Wayland 協定的 XML，建置時由 `wayland-scanner` 產生程式碼，連結進 Linux 的 addon。四者都以 MIT 授權發布，條文在各檔案開頭的 `<copyright>`：
 
 | 檔案 | 來源 |
 |---|---|
 | `input-method-unstable-v2.xml` | wlroots 的 input-method-unstable-v2 協定 |
 | `ext-background-effect-v1.xml` | [wayland-protocols](https://gitlab.freedesktop.org/wayland/wayland-protocols) 的 `staging/ext-background-effect` |
+| `fractional-scale-v1.xml` | wayland-protocols 的 `staging/fractional-scale` |
+| `viewporter.xml` | wayland-protocols 的 `stable/viewporter` |
 
 ### Windows 設定視窗的 NuGet 套件
 

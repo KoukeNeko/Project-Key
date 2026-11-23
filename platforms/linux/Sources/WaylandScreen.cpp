@@ -30,7 +30,9 @@
 
 #include "Screen.h"
 #include "ext-background-effect-v1-client-protocol.h"
+#include "fractional-scale-v1-client-protocol.h"
 #include "input-method-unstable-v2-client-protocol.h"
+#include "viewporter-client-protocol.h"
 
 namespace fcitx::wayland {
 class ZwpInputMethodV2;
@@ -83,6 +85,9 @@ struct Globals {
   wl_shm* shm = nullptr;
   ext_background_effect_manager_v1* effects = nullptr;  // KWin 6.7, Mutter 51, niri 26.04
   bool blur = false;                                    // effects says it can blur
+  // Together, for drawing at a fractional scale (150%) rather than one the compositor resamples.
+  wp_fractional_scale_manager_v1* fractionalScale = nullptr;
+  wp_viewporter* viewporter = nullptr;
   WaylandScreen* screen = nullptr;
   wl_seat* seat = nullptr;  // shortcut: the first seat only; bind the others if a multi-seat desktop shows up
   wl_pointer* pointer = nullptr;
@@ -242,6 +247,7 @@ class WaylandWindow final : public Window {
   static const wl_buffer_listener kBufferListener;
   static const wl_surface_listener kSurfaceListener;
   static const zwp_input_popup_surface_v2_listener kPopupListener;
+  static const wp_fractional_scale_v1_listener kFractionalScaleListener;
 
   // The surface's user data. Fcitx5's own pointer listener shares the connection, and when the
   // pointer enters this surface takes that data for its fcitx::wayland::WlSurface, reads
@@ -263,12 +269,14 @@ class WaylandWindow final : public Window {
   zwp_input_method_v2* im_ = nullptr;
   zwp_input_popup_surface_v2* popup_ = nullptr;
   ext_background_effect_surface_v1* effect_ = nullptr;
+  wp_fractional_scale_v1* fractionalScale_ = nullptr;  // with viewport_, where the compositor has both
+  wp_viewport* viewport_ = nullptr;
   std::array<int, 5> blurRegion_{};  // what effect_ was last given: on, x, y, width, height
   std::array<int, 4> inputRegion_{};  // what the surface takes clicks in: x, y, width, height
   std::array<Buffer, 2> buffers_;
   Buffer* painting_ = nullptr;
-  int scale_ = 1;       // the surface's preferred buffer scale
-  int surfaceHeight_ = 0;  // as last painted, in the surface's coordinates
+  double scale_ = 1;  // the surface's preferred scale: fractional with viewport_, else an integer
+  int surfaceWidth_ = 0, surfaceHeight_ = 0;  // as last painted, in the surface's coordinates
   bool above_ = false;  // the compositor put the popup above the caret
   bool waiting_ = false;  // a paint found both buffers busy
 };
@@ -300,6 +308,11 @@ const wl_registry_listener WaylandScreen::kRegistryListener = {
             // Version 1: a listener must have every event of the version it binds.
             globals->seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, 1));
             wl_seat_add_listener(globals->seat, &kSeatListener, globals);
+          } else if (std::strcmp(interface, wp_fractional_scale_manager_v1_interface.name) == 0 && !globals->fractionalScale) {
+            globals->fractionalScale = static_cast<wp_fractional_scale_manager_v1*>(
+                wl_registry_bind(registry, name, &wp_fractional_scale_manager_v1_interface, 1));
+          } else if (std::strcmp(interface, wp_viewporter_interface.name) == 0 && !globals->viewporter) {
+            globals->viewporter = static_cast<wp_viewporter*>(wl_registry_bind(registry, name, &wp_viewporter_interface, 1));
           }
         },
     .global_remove = [](void*, wl_registry*, uint32_t) {},
@@ -404,6 +417,8 @@ void WaylandScreen::disconnect(wl_display* display) {
   if (globals.pointer) wl_pointer_destroy(globals.pointer);
   if (globals.seat) wl_seat_destroy(globals.seat);
   if (globals.effects) ext_background_effect_manager_v1_destroy(globals.effects);
+  if (globals.fractionalScale) wp_fractional_scale_manager_v1_destroy(globals.fractionalScale);
+  if (globals.viewporter) wp_viewporter_destroy(globals.viewporter);
   if (globals.shm) wl_shm_destroy(globals.shm);
   if (globals.compositor) wl_compositor_destroy(globals.compositor);
   wl_registry_destroy(globals.registry);
@@ -432,11 +447,23 @@ const wl_surface_listener WaylandWindow::kSurfaceListener = {
     .preferred_buffer_scale =
         [](void* data, wl_surface*, int32_t factor) {
           WaylandWindow* window = static_cast<SurfaceData*>(data)->window;
-          if (factor < 1 || factor == window->scale_) return;
+          if (window->viewport_ || factor < 1 || factor == window->scale_) return;
           window->scale_ = factor;
           if (window->mapped) window->exposed_();
         },
     .preferred_buffer_transform = [](void*, wl_surface*, uint32_t) {},
+};
+
+// In 120ths: 180 at 150%.
+const wp_fractional_scale_v1_listener WaylandWindow::kFractionalScaleListener = {
+    .preferred_scale =
+        [](void* data, wp_fractional_scale_v1*, uint32_t scale) {
+          auto* window = static_cast<WaylandWindow*>(data);
+          double factor = scale / 120.0;
+          if (scale == 0 || factor == window->scale_) return;
+          window->scale_ = factor;
+          if (window->mapped) window->exposed_();
+        },
 };
 
 // The caret in the popup's coordinates touches the popup: it ends at the popup's top when the
@@ -469,6 +496,11 @@ void WaylandWindow::map(fcitx::InputContext& ic) {
     wl_region* none = wl_compositor_create_region(globals_->compositor);
     wl_surface_set_input_region(surface_, none);
     wl_region_destroy(none);
+    if (globals_->fractionalScale && globals_->viewporter) {
+      viewport_ = wp_viewporter_get_viewport(globals_->viewporter, surface_);
+      fractionalScale_ = wp_fractional_scale_manager_v1_get_fractional_scale(globals_->fractionalScale, surface_);
+      wp_fractional_scale_v1_add_listener(fractionalScale_, &kFractionalScaleListener, this);
+    }
     for (Buffer& buffer : buffers_) buffer.window = this;
   }
   // Fcitx5 has one input method object for each seat; the popup goes with it.
@@ -498,10 +530,15 @@ void WaylandWindow::release() {
   blurRegion_ = {};
   inputRegion_ = {};
   if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
+  if (fractionalScale_) wp_fractional_scale_v1_destroy(fractionalScale_);
+  if (viewport_) wp_viewport_destroy(viewport_);
   if (surface_) wl_surface_destroy(surface_);
   if (globals_) flush();
   popup_ = nullptr;
+  fractionalScale_ = nullptr;
+  viewport_ = nullptr;
   surface_ = nullptr;
+  scale_ = 1;  // a new surface is told its own
   im_ = nullptr;
   globals_ = nullptr;
   painting_ = nullptr;
@@ -516,13 +553,16 @@ cairo_t* WaylandWindow::beginPaint() {
   int left = std::min(0, frame.x), top = std::min(0, frame.y);
   int width = std::max(1, std::max(0, frame.x + frame.width) - left);
   int height = std::max(1, std::max(0, frame.y + frame.height) - top);
+  surfaceWidth_ = width;
   surfaceHeight_ = height;
   auto free = std::find_if(buffers_.begin(), buffers_.end(), [](const Buffer& buffer) { return !buffer.busy; });
   if (free == buffers_.end()) {
     waiting_ = true;
     return nullptr;
   }
-  if (!free->make(globals_->shm, width * scale_, height * scale_)) return nullptr;
+  if (!free->make(globals_->shm, static_cast<int>(std::lround(width * scale_)), static_cast<int>(std::lround(height * scale_)))) {
+    return nullptr;
+  }
   painting_ = &*free;
   cairo_surface_set_device_scale(painting_->surface, scale_, scale_);
   cairo_t* cr = cairo_create(painting_->surface);
@@ -534,7 +574,11 @@ void WaylandWindow::endPaint(cairo_t* cr) {
   cairo_destroy(cr);
   if (!painting_) return;
   cairo_surface_flush(painting_->surface);
-  if (globals_->compositorVersion >= 3) wl_surface_set_buffer_scale(surface_, scale_);
+  if (viewport_) {
+    wp_viewport_set_destination(viewport_, surfaceWidth_, surfaceHeight_);
+  } else if (globals_->compositorVersion >= 3) {
+    wl_surface_set_buffer_scale(surface_, static_cast<int>(scale_));
+  }
   setBlurRegion(frame.x - std::min(0, frame.x), frame.y - std::min(0, frame.y));  // where beginPaint put the frame
   setInputRegion(frame.x - std::min(0, frame.x), frame.y - std::min(0, frame.y));
   wl_surface_attach(surface_, painting_->buffer, 0, 0);
