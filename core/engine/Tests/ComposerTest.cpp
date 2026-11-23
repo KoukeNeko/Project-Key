@@ -315,16 +315,19 @@ int main(int argc, char** argv) {
   assert(withoutChars.text() == "候選字");
   // The candidates come in the order the walk scores them in context: a character model that
   // favors 件 reads ㄐㄧㄢˋ as 件, which then leads the candidates although 建 is the commoner word.
+  // A file of its own: chars still maps the first, which Windows will not let be rewritten.
+  std::string jianPath = tempPath("ComposerTest-jian-chars.bin");
   tables = {};
   for (const char* c : {"件", "建", "見"}) tables.unigrams.push_back({code(c), std::string(c) == "件" ? 0.5f : 0.01f});
   std::sort(tables.unigrams.begin(), tables.unigrams.end(), [](const Record& a, const Record& b) { return a.key < b.key; });
-  assert(ProjectKey::CharModel::save(charsPath, tables));
+  assert(ProjectKey::CharModel::save(jianPath, tables));
   auto jianChars = std::make_shared<ProjectKey::CharModel>();
-  assert(jianChars->load(charsPath));
+  assert(jianChars->load(jianPath));
   Composer jian(lm, contextModel, nullptr, Composer::kContextWeight, Composer::kTrigramWeight, jianChars, 1);
   type(jian, "ru04");
   assert(jian.text() == "件" && jian.candidates(jian.segments().back())[0] == "件");
   std::remove(charsPath.c_str());
+  std::remove(jianPath.c_str());
 
   // The sentence model. With zero weights every token is equally likely: P = (1 / vocabulary)
   // per character and for the end, alone, batched, or from the cache.
