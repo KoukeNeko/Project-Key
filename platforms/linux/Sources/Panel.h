@@ -35,7 +35,7 @@ class Panel {
 
   bool ok() const { return screen_ != nullptr; }
   // Whether the windows can go at ic's caret; Fcitx5's panel stands in where not.
-  bool shows(const fcitx::InputContext& ic) const { return screen_ && screen_->reaches(ic); }
+  bool shows(const fcitx::InputContext& ic) const { return screenFor(ic) != nullptr; }
   // What keeps the windows from showing as they should, for the install check.
   std::vector<std::string> problems() const;
   // Grid columns a candidate takes, measured as the window draws it.
@@ -63,6 +63,10 @@ class Panel {
     bool operator==(const Rect&) const = default;
   };
 
+  // The first screen that reaches ic: on Wayland an X11 app's caret is on XWayland's.
+  Screen* screenFor(const fcitx::InputContext& ic) const;
+  // Moves the windows to the screen that reaches ic, closing them on the one they were on.
+  void use(const fcitx::InputContext& ic);
   // Whether the windows should blur what is behind them: the setting asks for
   // it and the compositor (KWin) offers it.
   bool blurs();
@@ -120,7 +124,8 @@ class Panel {
 
   const Settings& settings_;
   fcitx::EventLoop& loop_;
-  std::unique_ptr<Screen> screen_;
+  std::vector<std::unique_ptr<Screen>> screens_;
+  Screen* screen_ = nullptr;  // the one of screens_ the windows are on
   float scale_ = 1;
   bool light_ = false;  // light() as the windows last showed
   // The desktop portal's org.freedesktop.appearance color-scheme (1 dark, 2 light, 0 no

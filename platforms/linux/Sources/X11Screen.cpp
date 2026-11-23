@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -23,21 +24,66 @@ xcb_atom_t Atom(xcb_connection_t* connection, const std::string& name) {
   return atom;
 }
 
-// Xft.dpi from the X resources, as desktops set it for HiDPI screens.
-float DpiScale(xcb_connection_t* connection, xcb_screen_t* screen) {
+// Xft/DPI from the XSETTINGS manager's settings (freedesktop.org's XSETTINGS
+// specification), where a desktop says it only there, as Nekoland does for XWayland; 0 without it.
+double XSettingsDpi(xcb_connection_t* connection, int screenNumber) {
+  xcb_get_selection_owner_reply_t* owner = xcb_get_selection_owner_reply(
+      connection, xcb_get_selection_owner(connection, Atom(connection, "_XSETTINGS_S" + std::to_string(screenNumber))), nullptr);
+  xcb_window_t manager = owner ? owner->owner : XCB_NONE;
+  free(owner);
+  if (manager == XCB_NONE) return 0;
+  xcb_atom_t settings = Atom(connection, "_XSETTINGS_SETTINGS");
+  xcb_get_property_reply_t* reply =
+      xcb_get_property_reply(connection, xcb_get_property(connection, 0, manager, settings, settings, 0, 1 << 16), nullptr);
+  if (!reply) return 0;
+  std::string data(static_cast<const char*>(xcb_get_property_value(reply)), xcb_get_property_value_length(reply));
+  free(reply);
+  bool msbFirst = !data.empty() && data[0] == 1;
+  // A CARD8, CARD16 or CARD32 at `at`; nothing past the end of what the manager wrote.
+  auto card = [&](size_t at, size_t size) -> std::optional<uint32_t> {
+    if (at + size > data.size()) return std::nullopt;
+    uint32_t value = 0;
+    for (size_t i = 0; i < size; i++) value = value << 8 | static_cast<unsigned char>(data[at + (msbFirst ? i : size - 1 - i)]);
+    return value;
+  };
+  auto padded = [](size_t length) { return (length + 3) & ~size_t{3}; };
+  std::optional<uint32_t> count = card(8, 4);
+  size_t at = 12;
+  for (uint32_t i = 0; count && i < *count; i++) {
+    std::optional<uint32_t> type = card(at, 1), nameLength = card(at + 2, 2);
+    if (!type || !nameLength || at + 4 + *nameLength > data.size()) return 0;
+    bool dpi = data.compare(at + 4, *nameLength, "Xft/DPI") == 0;
+    at += 4 + padded(*nameLength) + 4;  // the name, then the serial it last changed in
+    if (*type == 0) {  // an integer, in 1024ths of a dot per inch for Xft/DPI
+      std::optional<uint32_t> value = card(at, 4);
+      if (dpi) return value ? static_cast<int32_t>(*value) / 1024.0 : 0;
+      at += 4;
+    } else if (*type == 1) {  // a string
+      std::optional<uint32_t> length = card(at, 4);
+      if (!length) return 0;
+      at += 4 + padded(*length);
+    } else if (*type == 2) {  // a color, four CARD16s
+      at += 8;
+    } else {
+      return 0;
+    }
+  }
+  return 0;
+}
+
+// Xft.dpi from the X resources, as desktops set it for HiDPI screens, or else Xft/DPI from XSETTINGS.
+float DpiScale(xcb_connection_t* connection, xcb_screen_t* screen, int screenNumber) {
   xcb_get_property_reply_t* reply = xcb_get_property_reply(
       connection, xcb_get_property(connection, 0, screen->root, XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, 1 << 16), nullptr);
-  float scale = 1;
+  double dpi = 0;
   if (reply) {
     std::string resources(static_cast<const char*>(xcb_get_property_value(reply)), xcb_get_property_value_length(reply));
     size_t at = resources.find("Xft.dpi:");
-    if (at != std::string::npos) {
-      double dpi = std::strtod(resources.c_str() + at + 8, nullptr);
-      if (dpi >= 48) scale = static_cast<float>(dpi / 96);
-    }
+    if (at != std::string::npos) dpi = std::strtod(resources.c_str() + at + 8, nullptr);
     free(reply);
   }
-  return scale;
+  if (dpi < 48) dpi = XSettingsDpi(connection, screenNumber);
+  return dpi >= 48 ? static_cast<float>(dpi / 96) : 1;
 }
 
 class X11Window;
@@ -48,8 +94,10 @@ class X11Screen final : public Screen {
   ~X11Screen() override;
 
   // Project Key's window needs the caret on screen; a relative rect is only within the app's window.
+  // A Wayland app's caret is in its surface even without one: under a Wayland session this screen
+  // is XWayland's, for X11 apps only (Panel::screenFor).
   bool reaches(const fcitx::InputContext& ic) const override {
-    return !ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect);
+    return !ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect) && ic.frontendName() != "wayland_v2";
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
   fcitx::Rect caret(const fcitx::InputContext&, const fcitx::Rect& anchor) const override { return anchor; }
@@ -133,7 +181,7 @@ X11Screen::X11Screen(fcitx::EventLoop& loop, xcb_connection_t* connection, int s
   compositorAtom_ = Atom(connection_, "_NET_WM_CM_S" + std::to_string(screenNumber));
   blurAtom_ = Atom(connection_, "_KDE_NET_WM_BLUR_BEHIND_REGION");
   opacityAtom_ = Atom(connection_, "_NET_WM_WINDOW_OPACITY");
-  scale_ = DpiScale(connection_, screen_);
+  scale_ = DpiScale(connection_, screen_, screenNumber);
 
   io_ = loop.addIOEvent(xcb_get_file_descriptor(connection_), fcitx::IOEventFlag::In, [this](fcitx::EventSourceIO* source, int, fcitx::IOEventFlags) {
     sync();

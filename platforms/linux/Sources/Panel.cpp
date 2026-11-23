@@ -159,15 +159,19 @@ PangoFontDescription* Font(const char* family, float size, PangoWeight weight) {
 
 Panel::Panel(fcitx::Instance* instance, const Settings& settings) : settings_(settings), loop_(instance->eventLoop()) {
   // X windows cannot be placed at a Wayland app's caret; input method popups can, and on
-  // GNOME, which has none, its shell can.
+  // GNOME, which has none, its shell can. An X11 app under XWayland has its caret on the X
+  // screen, where popups cannot go, so X windows serve it there too.
   const char* desktop = std::getenv("XDG_CURRENT_DESKTOP");
   bool gnome = desktop && std::string_view(desktop).find("GNOME") != std::string_view::npos;
   if (!std::getenv("WAYLAND_DISPLAY")) {
-    screen_ = OpenX11Screen(loop_);
+    screens_.push_back(OpenX11Screen(loop_));
   } else {
-    screen_ = gnome ? OpenGnomeScreen(instance) : OpenWaylandScreen(instance);
+    screens_.push_back(gnome ? OpenGnomeScreen(instance) : OpenWaylandScreen(instance));
+    if (!gnome && std::getenv("DISPLAY")) screens_.push_back(OpenX11Screen(loop_));
   }
-  if (!screen_) return;
+  std::erase(screens_, nullptr);
+  if (screens_.empty()) return;
+  screen_ = screens_.front().get();
   scale_ = screen_->scale();
 
   context_ = pango_font_map_create_context(pango_cairo_font_map_get_default());
@@ -209,7 +213,7 @@ std::vector<std::string> Panel::problems() const {
   std::vector<std::string> problems;
   if (!screen_) {
     problems.push_back("連不上 X11 或 Wayland 顯示，候選字窗改用 Fcitx5 的面板");
-  } else if (std::string problem = screen_->problem(); !problem.empty()) {
+  } else if (std::string problem = screens_.front()->problem(); !problem.empty()) {
     problems.push_back(problem);
   }
   // The other fonts fall back to a generic family; this one has no stand-in.
@@ -230,6 +234,27 @@ int Panel::span(const std::string& candidate) const {
 }
 
 // MARK: Windows
+
+Screen* Panel::screenFor(const fcitx::InputContext& ic) const {
+  for (const auto& screen : screens_) {
+    if (screen->reaches(ic)) return screen.get();
+  }
+  return nullptr;
+}
+
+void Panel::use(const fcitx::InputContext& ic) {
+  Screen* screen = screenFor(ic);
+  if (!screen || screen == screen_) return;
+  if (panel_) finishHide();
+  hideBadge();
+  panelTimer_.reset();
+  badgeTimer_.reset();
+  panel_.reset();
+  hint_.reset();
+  badge_.reset();
+  owner_ = nullptr;
+  screen_ = screen;
+}
 
 bool Panel::blurs() {
   return settings_.get(Setting::kAppearance) == 1 && screen_->blurs();
@@ -385,6 +410,7 @@ Panel::Rect Panel::shownSelectionRect() const {
 
 void Panel::show(fcitx::InputContext& ic, const PanelContent& content, const fcitx::Rect& anchor) {
   if (!ok()) return;
+  use(ic);
   scale_ = screen_->scale();  // GNOME's extension reports it after Project Key loads
   light_ = light();
   if (!panel_) {
@@ -860,6 +886,7 @@ void Panel::drawCandidates(cairo_t* cr, float top, float windowWidth) {
 
 void Panel::follow(fcitx::InputContext& ic, const fcitx::Rect& anchor) {
   if (!ok()) return;
+  use(ic);
   if (badge_ && badge_->mapped) {
     placeBadge(screen_->caret(ic, anchor));
     paintBadge();
@@ -871,6 +898,7 @@ void Panel::follow(fcitx::InputContext& ic, const fcitx::Rect& anchor) {
 
 void Panel::showBadge(fcitx::InputContext& ic, const std::string& label, const fcitx::Rect& anchor) {
   if (!ok()) return;
+  use(ic);
   scale_ = screen_->scale();
   light_ = light();
   if (!badge_) {
