@@ -4,25 +4,25 @@ Hash: SHA512
 Origin: Project Key
 Label: Project Key
 Codename: noble
-Date: Mon, 23 Nov 2026 08:04:01 UTC
+Date: Mon, 23 Nov 2026 12:20:07 UTC
 Architectures: amd64
 Components: main
 MD5Sum:
- 6456899395e3a276bd501cf62407d41f 1374 main/binary-amd64/Packages
- e56c212049f2d523dfb72e5baeeb4512 750 main/binary-amd64/Packages.gz
+ fb9cc819c4f7a90abc74c5cf7d68552c 1374 main/binary-amd64/Packages
+ 84fc783001fc6b9676acf44e3bf2176c 752 main/binary-amd64/Packages.gz
  3d983cefd907751fc7be098599d00958 75 main/binary-amd64/Release
 SHA1:
- 7b8686542091e1a33ce58b8df65695ab101ab897 1374 main/binary-amd64/Packages
- 3ca810f8c5af0342feef1e2e0b74924457ac9118 750 main/binary-amd64/Packages.gz
+ 410de8bd671ebfb9fa25f8e680ce0d1baec8424f 1374 main/binary-amd64/Packages
+ c65c8faa4d4125c4e76f9fc8917c4a6618244a95 752 main/binary-amd64/Packages.gz
  98c05fe6c462b0ac1e1450f7884cf3c9658a1e92 75 main/binary-amd64/Release
 SHA256:
- b0b7bfd8bb2aab0f0f1b14e54e910040fdd39281daf3ab21e054f5d1fd10bd03 1374 main/binary-amd64/Packages
- 5dc237aaa4a708f3826a4bec2a8bda053a40c9774cdaeb8de97640717ba4f083 750 main/binary-amd64/Packages.gz
+ c7ceee129e7eadade08e9dbc7f75e7948b234b323e7f04e98828f0a9f307300f 1374 main/binary-amd64/Packages
+ 71b32aa77434c0fab6969cec127d2f7966b30d096e5b25d969a245c01e58d7ce 752 main/binary-amd64/Packages.gz
  3607a1a94c098b2a50fa62f3eafdc0469ef9aebeca7ff087027fed92e1e491a8 75 main/binary-amd64/Release
 -----BEGIN PGP SIGNATURE-----
 
-iHUEARYKAB0WIQRBmIkPCjqsUPEXNb/gmbtexz/r/gUCawPzcQAKCRDgmbtexz/r
-/s80AP46HyARl0dbX/2CFAa5wbLaKwK8zg2jI+zPalW8znvAYAD+NbuGEXYpCxW4
-QLaLNRzpBVz83BBhcXyhfOTuXjCYhAU=
-=8dgu
+iHUEARYKAB0WIQRBmIkPCjqsUPEXNb/gmbtexz/r/gUCawQvdwAKCRDgmbtexz/r
+/sh3AP96DKzIaCBWL2UeTgcvuXZpbPPf6n4Dh4XtDQk4951hKQEAqpiW+T2iO4zh
++FSI8xTrEMn7UONMR281Vdu7MSRmlg8=
+=Fk5C
 -----END PGP SIGNATURE-----

@@ -1,5 +1,5 @@
 Package: fcitx5-projectkey
-Version: 0.11.0-1~trixie
+Version: 0.11.1-1~trixie
 Architecture: amd64
 Maintainer: KoukeNeko <noreply@users.noreply.github.com>
 Installed-Size: 10152
@@ -9,11 +9,11 @@ Replaces: fcitx5-projectkey-data
 Homepage: https://github.com/KoukeNeko/Project-Key
 Priority: optional
 Section: utils
-Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.11.0-1~trixie_amd64.deb
-Size: 3232564
-SHA256: 52c3371ed822ab4013074eb876e32f2eb750df00837a024f991491474b34a4e4
-SHA1: 5c08130fd4e0449ceaa1949598b7322dc6ecd78d
-MD5sum: 01f19d913c43559f7343789a2b0eaabc
+Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.11.1-1~trixie_amd64.deb
+Size: 3232676
+SHA256: 53aee014d4571de014066b65fff62e7c6673d3a87243da12c69abec811f311cb
+SHA1: 92ed474d91af00a2333066bb66d02bbdb1cc9aa2
+MD5sum: 14923929ba16f79bdbd1e0baa85f051e
 Description: Zhuyin input method for Fcitx5
  Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
  for Fcitx5 on GNOME, KDE and other desktops.
