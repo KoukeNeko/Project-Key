@@ -130,8 +130,8 @@ class WaylandScreen final : public Screen {
     return im && globals(ic);
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
-  // The compositor knows the caret; frames start from it. COSMIC puts a popup's corner at the
-  // caret's top instead of below it, so frames start a caret's height down.
+  // The compositor knows the caret; frames start from it. Smithay's compositors put a popup's
+  // corner at the caret's top instead of below it, so frames start a caret's height down.
   fcitx::Rect caret(const fcitx::InputContext&, const fcitx::Rect&) const override { return fcitx::Rect(0, 0, 0, caretHeight_); }
   // And keeps the popups on screen.
   int width() const override { return INT_MAX / 2; }
@@ -175,10 +175,11 @@ class WaylandScreen final : public Screen {
   void disconnect(wl_display* display);
 
   mutable fcitx::AddonInstance* waylandim_;  // dropped once it turns out not to offer the call
-  // COSMIC (smithay) places a popup with its corner at the caret's top-left and sends the
-  // caret in the app's window, not in the popup, as wlroots does; it never flips one above.
-  // shortcut: told by XDG_CURRENT_DESKTOP; tell by the rectangle if another smithay compositor does this.
-  bool cornerAtCaret_ = false;
+  // Smithay sends the caret in the app's window, not in the popup as wlroots, Hyprland and KWin
+  // do, and leaves the popup's corner at the caret's top-left (COSMIC, Nekoland), never above it.
+  // niri, on smithay too, moves the popup below the caret itself.
+  // shortcut: niri told by XDG_CURRENT_DESKTOP; add any other smithay compositor that moves its popups.
+  bool placesBelow_ = false;
   int caretHeight_ = 0;
   std::unordered_map<wl_display*, Globals> connections_;
   std::vector<WaylandWindow*> windows_;
@@ -267,6 +268,7 @@ class WaylandWindow final : public Window {
   std::array<Buffer, 2> buffers_;
   Buffer* painting_ = nullptr;
   int scale_ = 1;       // the surface's preferred buffer scale
+  int surfaceHeight_ = 0;  // as last painted, in the surface's coordinates
   bool above_ = false;  // the compositor put the popup above the caret
   bool waiting_ = false;  // a paint found both buffers busy
 };
@@ -362,7 +364,7 @@ const wl_pointer_listener WaylandScreen::kPointerListener = {
 
 WaylandScreen::WaylandScreen(fcitx::AddonInstance* wayland, fcitx::AddonInstance* waylandim) : waylandim_(waylandim) {
   const char* desktop = std::getenv("XDG_CURRENT_DESKTOP");
-  cornerAtCaret_ = desktop && std::strstr(desktop, "COSMIC");
+  placesBelow_ = desktop && std::strstr(desktop, "niri");
   // Called at once for the connections Fcitx5 already has.
   created_ = wayland->call<fcitx::IWaylandModule::addConnectionCreatedCallback>(
       [this](const std::string&, wl_display* display, fcitx::FocusGroup* group) { connect(display, group); });
@@ -437,21 +439,19 @@ const wl_surface_listener WaylandWindow::kSurfaceListener = {
     .preferred_buffer_transform = [](void*, wl_surface*, uint32_t) {},
 };
 
-// The caret in the popup's coordinates: above the popup's top when the
-// compositor put it below the caret, at its bottom when above.
+// The caret in the popup's coordinates touches the popup: it ends at the popup's top when the
+// compositor put the popup below it, starts at its bottom when above. Anywhere else it is in
+// the app's window, as smithay sends it (WaylandScreen::placesBelow_).
 const zwp_input_popup_surface_v2_listener WaylandWindow::kPopupListener = {
     .text_input_rectangle =
         [](void* data, zwp_input_popup_surface_v2*, int32_t, int32_t y, int32_t, int32_t height) {
           auto* window = static_cast<WaylandWindow*>(data);
-          if (window->screen_.cornerAtCaret_) {
-            if (height == window->screen_.caretHeight_) return;
-            window->screen_.caretHeight_ = height;
-            if (window->mapped) window->moved_();
-            return;
-          }
-          bool above = y > 0;
-          if (above == window->above_) return;
+          bool inPopup = y == -height || (y > 0 && std::abs(y - window->surfaceHeight_) <= 1);
+          bool above = inPopup && y > 0;
+          int caretHeight = inPopup || window->screen_.placesBelow_ ? 0 : height;
+          if (above == window->above_ && caretHeight == window->screen_.caretHeight_) return;
           window->above_ = above;
+          window->screen_.caretHeight_ = caretHeight;
           if (window->mapped) window->moved_();
         },
 };
@@ -516,6 +516,7 @@ cairo_t* WaylandWindow::beginPaint() {
   int left = std::min(0, frame.x), top = std::min(0, frame.y);
   int width = std::max(1, std::max(0, frame.x + frame.width) - left);
   int height = std::max(1, std::max(0, frame.y + frame.height) - top);
+  surfaceHeight_ = height;
   auto free = std::find_if(buffers_.begin(), buffers_.end(), [](const Buffer& buffer) { return !buffer.busy; });
   if (free == buffers_.end()) {
     waiting_ = true;
