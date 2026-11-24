@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "Screen.h"
+#include "alpha-modifier-v1-client-protocol.h"
 #include "ext-background-effect-v1-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
 #include "input-method-unstable-v2-client-protocol.h"
@@ -85,6 +86,7 @@ struct Globals {
   wl_shm* shm = nullptr;
   ext_background_effect_manager_v1* effects = nullptr;  // KWin 6.7, Mutter 51, niri 26.04
   bool blur = false;                                    // effects says it can blur
+  wp_alpha_modifier_v1* alphaModifier = nullptr;        // fades a surface, the blur behind it included
   // Together, for drawing at a fractional scale (150%) rather than one the compositor resamples.
   wp_fractional_scale_manager_v1* fractionalScale = nullptr;
   wp_viewporter* viewporter = nullptr;
@@ -212,6 +214,7 @@ class WaylandWindow final : public Window {
   void unmap() override;
   // The blur itself goes with each frame (endPaint), as the frame moves in the surface.
   void setBlur(bool on) override { blurred = on; }
+  bool setOpacity(float alpha) override;
   cairo_t* beginPaint() override;
   void endPaint(cairo_t* cr) override;
   bool above() const override { return above_; }
@@ -272,6 +275,7 @@ class WaylandWindow final : public Window {
   zwp_input_method_v2* im_ = nullptr;
   zwp_input_popup_surface_v2* popup_ = nullptr;
   ext_background_effect_surface_v1* effect_ = nullptr;
+  wp_alpha_modifier_surface_v1* alpha_ = nullptr;
   wp_fractional_scale_v1* fractionalScale_ = nullptr;  // with viewport_, where the compositor has both
   wp_viewport* viewport_ = nullptr;
   std::array<int, 5> blurRegion_{};  // what effect_ was last given: on, x, y, width, height
@@ -307,6 +311,9 @@ const wl_registry_listener WaylandScreen::kRegistryListener = {
             globals->effects = static_cast<ext_background_effect_manager_v1*>(
                 wl_registry_bind(registry, name, &ext_background_effect_manager_v1_interface, 1));
             ext_background_effect_manager_v1_add_listener(globals->effects, &kEffectsListener, globals);
+          } else if (std::strcmp(interface, wp_alpha_modifier_v1_interface.name) == 0 && !globals->alphaModifier) {
+            globals->alphaModifier =
+                static_cast<wp_alpha_modifier_v1*>(wl_registry_bind(registry, name, &wp_alpha_modifier_v1_interface, 1));
           } else if (std::strcmp(interface, wl_seat_interface.name) == 0 && !globals->seat) {
             // Version 1: a listener must have every event of the version it binds.
             globals->seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, 1));
@@ -420,6 +427,7 @@ void WaylandScreen::disconnect(wl_display* display) {
   if (globals.pointer) wl_pointer_destroy(globals.pointer);
   if (globals.seat) wl_seat_destroy(globals.seat);
   if (globals.effects) ext_background_effect_manager_v1_destroy(globals.effects);
+  if (globals.alphaModifier) wp_alpha_modifier_v1_destroy(globals.alphaModifier);
   if (globals.fractionalScale) wp_fractional_scale_manager_v1_destroy(globals.fractionalScale);
   if (globals.viewporter) wp_viewporter_destroy(globals.viewporter);
   if (globals.shm) wl_shm_destroy(globals.shm);
@@ -531,6 +539,8 @@ void WaylandWindow::release() {
   for (Buffer& buffer : buffers_) buffer.clear();
   if (effect_) ext_background_effect_surface_v1_destroy(effect_);
   effect_ = nullptr;
+  if (alpha_) wp_alpha_modifier_surface_v1_destroy(alpha_);
+  alpha_ = nullptr;
   blurRegion_ = {};
   inputRegion_ = {};
   if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
@@ -592,6 +602,17 @@ void WaylandWindow::endPaint(cairo_t* cr) {
   painting_->busy = true;
   painting_ = nullptr;
   flush();
+}
+
+// A blurred window fades as a whole, as the blur does not take the alpha it is painted with;
+// the multiplier goes with the next commit, endPaint's.
+bool WaylandWindow::setOpacity(float alpha) {
+  if (!surface_ || !globals_->alphaModifier) return false;
+  bool whole = blurred && globals_->blur;
+  if (!whole && !alpha_) return false;
+  if (!alpha_) alpha_ = wp_alpha_modifier_v1_get_surface(globals_->alphaModifier, surface_);
+  wp_alpha_modifier_surface_v1_set_multiplier(alpha_, static_cast<uint32_t>(std::lround((whole ? alpha : 1.0) * UINT32_MAX)));
+  return whole;
 }
 
 // The frame only: the gap between it and the text, part of the surface, stays the app's.

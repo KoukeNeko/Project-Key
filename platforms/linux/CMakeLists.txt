@@ -80,8 +80,9 @@ target_link_libraries(PoolStressTest Threads::Threads)
 set(DATA_DIR "${CMAKE_INSTALL_FULL_DATADIR}/fcitx5/projectkey")
 # On Wayland: the input method popups the candidate window goes into (wlroots' protocol, as Fcitx5
 # uses), the blur behind them where the compositor offers it (wayland-protocols' staging, newer than
-# the distributions'), and the fractional scale (125%, 150%) they are drawn at.
-set(WAYLAND_PROTOCOLS input-method-unstable-v2 ext-background-effect-v1 fractional-scale-v1 viewporter)
+# the distributions') with the alpha that fades it along, and the fractional scale (125%, 150%) they
+# are drawn at.
+set(WAYLAND_PROTOCOLS input-method-unstable-v2 ext-background-effect-v1 alpha-modifier-v1 fractional-scale-v1 viewporter)
 set(WAYLAND_PROTOCOL_SOURCES)
 foreach(protocol ${WAYLAND_PROTOCOLS})
   set(xml "${CMAKE_CURRENT_SOURCE_DIR}/protocols/${protocol}.xml")
