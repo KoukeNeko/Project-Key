@@ -20,7 +20,7 @@
 | KDE Plasma（X11） | KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），須啟用 KWin 的模糊特效 |
 | KDE Plasma（Wayland） | 候選字窗為 Fcitx5 的面板，採用 Project Key 主題的 `EnableBlur` |
 | GNOME | 擴充功能中的 `Shell.BlurEffect` |
-| niri 26.04 以上、KWin 6.7 以上（input-method-v2） | `ext-background-effect-v1` |
+| niri 26.04 以上、KWin 6.7 以上、Nekoland（input-method-v2） | `ext-background-effect-v1`；Nekoland 繪製為 Catseye 玻璃 |
 | Hyprland | 由合成器模糊：`decoration:blur:input_methods = true` 時 Project Key 改為繪製半透明，關閉時不透明 |
 | sway、wayfire、COSMIC、其他 X11 視窗管理員 | 合成器未提供模糊，改為不透明 |
 
