@@ -143,7 +143,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 
 - **macOS** 13 以上，Apple 晶片；候選視窗於 macOS 26 以上可採用 Liquid Glass
 - **Windows** 11，x64；設定視窗使用 Windows 11 內建的 Windows App Runtime 2
-- **Linux** 上的 Fcitx5：X11 與 Wayland 的 KDE Plasma、GNOME、COSMIC，以及 sway、Hyprland 等 wlroots 系列合成器；各桌面的候選視窗顯示方式與已測試的環境見 [platforms/linux](platforms/linux/README.md)
+- **Linux** 上的 Fcitx5：X11 與 Wayland 的 KDE Plasma、GNOME、COSMIC，以及 sway、Hyprland 等 wlroots 系列與 niri、Nekoland 等合成器；各桌面的候選視窗顯示方式與已測試的環境見 [platforms/linux](platforms/linux/README.md)
 - **iOS** 17 以上的鍵盤擴充，採大千排列；不含整句模型
 - **鍵盤排列**（macOS、Windows、Linux）：大千、倚天、許氏、倚天 26 鍵、IBM
 
@@ -207,7 +207,7 @@ flowchart TB
 
   subgraph screens["Linux 候選視窗的顯示方式"]
     direction LR
-    x11["X11Screen<br>X11 視窗"]
+    x11["X11Screen<br>X11 視窗（含 XWayland）"]
     wayland["WaylandScreen<br>input-method-v2 popup"]
     gnome["GnomeScreen<br>經 D-Bus 交給 GNOME Shell 擴充功能"]
   end
