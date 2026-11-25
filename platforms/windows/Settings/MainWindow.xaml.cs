@@ -71,14 +71,30 @@ public sealed partial class MainWindow : Window {
 #endif
     CheckForUpdate();
 
+    Root.Loaded += (_, _) => PinPageHeight();
     WindowFit.Follow(this, Root, Width);
   }
+
+  private StackPanel[] AllPages => [ChoosePage, AppearancePage, KeysPage, AboutPage];
 
   // Shows the page the selector bar's item names, in the order of the items.
   private void OnPage(SelectorBar sender, SelectorBarSelectionChangedEventArgs args) {
     int selected = sender.Items.IndexOf(sender.SelectedItem);
-    StackPanel[] pages = [ChoosePage, AppearancePage, KeysPage, AboutPage];
+    StackPanel[] pages = AllPages;
     for (int i = 0; i < pages.Length; i++) pages[i].Visibility = i == selected ? Visibility.Visible : Visibility.Collapsed;
+  }
+
+  // Lays every page out once and holds the page area at the tallest, so the window keeps one height
+  // whichever tab is open.
+  private void PinPageHeight() {
+    StackPanel[] pages = AllPages;
+    Visibility[] before = pages.Select(p => p.Visibility).ToArray();
+    foreach (StackPanel page in pages) page.Visibility = Visibility.Visible;
+    PageHost.MinHeight = 0;
+    PageHost.UpdateLayout();
+    PageHost.MinHeight = pages.Max(p => p.ActualHeight) + PageHost.Padding.Top + PageHost.Padding.Bottom;
+    for (int i = 0; i < pages.Length; i++) pages[i].Visibility = before[i];
+    PageHost.UpdateLayout();
   }
 
   private static int Read(string name, int fallback) =>

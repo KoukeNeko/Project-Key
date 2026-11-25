@@ -19,7 +19,7 @@
       <SelectorBarItem Text="按鍵" />
       <SelectorBarItem Text="關於" />
     </SelectorBar>
-    <Grid Padding="24,0,24,24">
+    <Grid x:Name="PageHost" Padding="24,0,24,24">
       <StackPanel x:Name="ChoosePage" Spacing="4">
         <tk:SettingsCard Header="選字位置">
           <ComboBox x:Name="CandidatePosition" MinWidth="160">

@@ -2,6 +2,7 @@
 
 #include <d2d1.h>
 #include <olectl.h>
+#include <shellapi.h>
 #include <string>
 #include <dwrite.h>
 #include <wrl/client.h>
@@ -24,6 +25,38 @@ constexpr UINT kMenuSettings = 1;
 constexpr UINT kMenuSimplified = 2;
 constexpr UINT kMenuFullWidth = 3;
 constexpr UINT kMenuUpdate = 4;
+constexpr UINT kMenuPhrases = 5;
+constexpr UINT kMenuExcluded = 6;
+
+// Opens a file of the user's words in their editor, made first with its header when missing, as
+// the settings app's 編輯… does (MainWindow.xaml.cs).
+void OpenUserFile(const wchar_t* name, const wchar_t* header) {
+  wchar_t local[MAX_PATH];
+  DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+  if (length == 0 || length >= MAX_PATH) return;
+  std::wstring folder = std::wstring(local, length) + L"\\Project Key";
+  std::wstring file = folder + L"\\" + name;
+  if (GetFileAttributesW(file.c_str()) == INVALID_FILE_ATTRIBUTES) {
+    CreateDirectoryW(folder.c_str(), nullptr);
+    HANDLE handle = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) return;
+    std::string text = Narrow(header);  // UTF-8 without a BOM, as the engine reads it
+    DWORD written;
+    WriteFile(handle, text.data(), static_cast<DWORD>(text.size()), &written, nullptr);
+    CloseHandle(handle);
+  }
+  ShellExecuteW(nullptr, L"open", file.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void EditPhrases() {
+  OpenUserFile(L"phrases.txt",
+               L"# 每行一個詞：詞、空白、注音\n# 注音的音節以 - 連接，中間不留空白\n# 一聲不標；其他聲調寫在音節後，輕聲寫 ˙（ㄉㄜ˙）\n# 例：小鍵 ㄒㄧㄠˇ-ㄐㄧㄢˋ\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");
+}
+
+void EditExcluded() {
+  OpenUserFile(L"exclude-phrases.txt",
+               L"# 每行一個不要出現的詞：詞、空白、注音，格式同自訂詞\n# 選字時按 Delete 也會加到這裡\n# 存檔後，下一次打字就會用到；# 開頭的行不會讀入\n");
+}
 
 // Whether the taskbar is light, where the icon has to be dark.
 bool LightTaskbar() {
@@ -141,6 +174,8 @@ STDMETHODIMP LangBarButton::OnClick(TfLBIClick click, POINT point, const RECT*) 
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   if (!update_.empty()) AppendMenuW(menu, MF_STRING, kMenuUpdate, update_.c_str());
   AppendMenuW(menu, MF_STRING, kMenuSettings, L"設定…");
+  AppendMenuW(menu, MF_STRING, kMenuPhrases, L"編輯自訂詞…");
+  AppendMenuW(menu, MF_STRING, kMenuExcluded, L"編輯排除詞…");
   HWND owner = GetForegroundWindow();
   UINT chosen = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, point.x, point.y, 0, owner, nullptr);
   DestroyMenu(menu);
@@ -156,10 +191,14 @@ STDMETHODIMP LangBarButton::InitMenu(ITfMenu* menu) {
     menu->AddMenuItem(kMenuUpdate, 0, nullptr, nullptr, update_.c_str(), static_cast<ULONG>(update_.size()), nullptr);
   }
   menu->AddMenuItem(kMenuSettings, 0, nullptr, nullptr, L"設定…", 4, nullptr);
+  menu->AddMenuItem(kMenuPhrases, 0, nullptr, nullptr, L"編輯自訂詞…", 7, nullptr);
+  menu->AddMenuItem(kMenuExcluded, 0, nullptr, nullptr, L"編輯排除詞…", 7, nullptr);
   return S_OK;
 }
 
 STDMETHODIMP LangBarButton::OnMenuSelect(UINT id) {
+  if (id == kMenuPhrases) EditPhrases();
+  if (id == kMenuExcluded) EditExcluded();
   if (!service_) return S_OK;
   if (id == kMenuSettings || id == kMenuUpdate) service_->showSettings();
   if (id == kMenuSimplified) service_->toggleSimplified();
