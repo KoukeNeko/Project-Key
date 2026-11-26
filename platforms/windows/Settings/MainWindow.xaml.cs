@@ -84,17 +84,21 @@ public sealed partial class MainWindow : Window {
     for (int i = 0; i < pages.Length; i++) pages[i].Visibility = i == selected ? Visibility.Visible : Visibility.Collapsed;
   }
 
-  // Lays every page out once and holds the page area at the tallest, so the window keeps one height
-  // whichever tab is open.
+  // Measures every page at the window's fixed width and holds the page area at the tallest, so the
+  // window keeps one height whichever tab is open. Not at the width it has: at Loaded the window has
+  // not yet narrowed to Width, and its wider lines would measure the pages short.
   private void PinPageHeight() {
     StackPanel[] pages = AllPages;
     Visibility[] before = pages.Select(p => p.Visibility).ToArray();
-    foreach (StackPanel page in pages) page.Visibility = Visibility.Visible;
-    PageHost.MinHeight = 0;
-    PageHost.UpdateLayout();
-    PageHost.MinHeight = pages.Max(p => p.ActualHeight) + PageHost.Padding.Top + PageHost.Padding.Bottom;
+    var available = new Size(Width - PageHost.Padding.Left - PageHost.Padding.Right, double.PositiveInfinity);
+    double tallest = 0;
+    foreach (StackPanel page in pages) {
+      page.Visibility = Visibility.Visible;
+      page.Measure(available);
+      tallest = Math.Max(tallest, page.DesiredSize.Height);
+    }
     for (int i = 0; i < pages.Length; i++) pages[i].Visibility = before[i];
-    PageHost.UpdateLayout();
+    PageHost.MinHeight = tallest + PageHost.Padding.Top + PageHost.Padding.Bottom;
   }
 
   private static int Read(string name, int fallback) =>
