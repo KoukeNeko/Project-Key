@@ -55,3 +55,22 @@ jobs:
       - run: platforms/linux/build.sh
         env:
           PROJECTKEY_LLAMA: ${{ github.workspace }}/llama.cpp
+
+  # The same on Ubuntu 22.04: Fcitx5 5.0, libwayland 1.20, libadwaita 1.1 (the Qt settings window
+  # only) and GNOME 42 (the extension rewritten in its older form).
+  linux-jammy:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git curl build-essential cmake ninja-build python3 pkg-config \
+            libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev \
+            libpango1.0-dev libwayland-dev qt6-base-dev libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: tools/fetch-llama.sh llama.cpp
+      - run: platforms/linux/build.sh
+        env:
+          PROJECTKEY_LLAMA: ${{ github.workspace }}/llama.cpp

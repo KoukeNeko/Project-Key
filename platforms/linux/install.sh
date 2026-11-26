@@ -2,7 +2,7 @@
 # Installs Project Key on Linux, set up and ready to type with:
 #   curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/install.sh | sh
 # 1. The program, as a package the package manager can remove again: from the apt or dnf
-#    repository where one is built for the system (Debian 13, Ubuntu 24.04 and Fedora 43 on
+#    repository where one is built for the system (Debian 13, Ubuntu 24.04 and 22.04, Fedora 43 on
 #    x86_64); anywhere else built here from the latest release's source (apt, dnf or pacman).
 # 2. What a package cannot do for the user: Fcitx5 as the input method and started at login,
 #    Project Key in Fcitx5's input methods, and on GNOME the extension turned on.
@@ -24,7 +24,7 @@ UUID=project-key@koukeneko.github.io
 if [ -t 1 ]; then bold=$(printf '\033[1m'); dim=$(printf '\033[2m'); plain=$(printf '\033[0m'); else bold= dim= plain=; fi
 step() { printf '%s==> %s%s\n' "$bold" "$*" "$plain"; }
 note() { printf '    %s\n' "$*"; }
-die() { printf '錯誤：%s\n' "$*" >&2; exit 1; }
+die() { printf '錯誤：%s\n' "$*" >&2; died=true; exit 1; }
 
 [ "$(id -u)" != 0 ] || die "請以一般使用者身分執行，毋須加上 sudo；需要管理員權限時將提示輸入密碼。"
 [ "$(uname -s)" = Linux ] || die "這個指令只適用於 Linux；macOS 與 Windows 的安裝方式見 https://github.com/$REPO#安裝"
@@ -38,7 +38,10 @@ else
   command -v pkexec >/dev/null || die "沒有終端機時需要 pkexec 詢問密碼；請在終端機執行這個指令。"
 fi
 as_root() {
-  script=$1
+  # needrestart (Ubuntu 22.04) would stop apt to ask which services to restart, gdm3 among them,
+  # which would end the session the user is in: it only lists them.
+  script="export NEEDRESTART_MODE=l
+$1"
   shift
   if [ "$terminal" = true ]; then
     sudo /bin/sh -ec "$script" sh "$@"
@@ -53,7 +56,8 @@ command -v curl >/dev/null || die "需要 curl。"
 arch=$(uname -m)
 work=$(mktemp -d "${TMPDIR:-/tmp}/projectkey.XXXXXX")
 chmod 755 "$work"  # apt reads the downloaded package as its own user
-trap 'rm -rf "$work"' EXIT
+# A command that fails stops the script (set -e) without a word of its own: say so, not end silently.
+trap 'status=$?; rm -rf "$work"; [ "$status" = 0 ] || [ "${died:-}" = true ] || printf "錯誤：安裝沒有完成；原因見上方最後的訊息。\n" >&2' EXIT
 
 step "安裝 Project Key（需要系統管理員密碼）"
 # In a terminal, asks once for the password, before the long steps, rather than in the middle of them.
@@ -97,6 +101,10 @@ fetch_data_package() {  # $1: the key file, $2: deb or rpm
   data_package=$file
 }
 
+# Another repository the system lists failing (one whose key is missing, issue #4) fails all of
+# apt-get update; what is needed from the rest is then still there, and apt-get install says if not.
+apt_update='apt-get update || echo "注意：apt-get update 回報錯誤（見上方），仍繼續安裝。" >&2'
+
 install_from_apt_repository() {
   command -v gpg >/dev/null || as_root 'apt-get install -y gpg'
   curl -fsSL "$PAGES/apt/key.asc" -o "$work/key.asc"
@@ -106,7 +114,7 @@ install_from_apt_repository() {
   as_root '
     install -D -m 644 "$1" /etc/apt/keyrings/projectkey.asc
     echo "deb [signed-by=/etc/apt/keyrings/projectkey.asc] $2/apt $3 main" >/etc/apt/sources.list.d/projectkey.list
-    apt-get update
+    '"$apt_update"'
     apt-get install -y "$4" fcitx5-projectkey' "$work/key.asc" "$PAGES" "$suite" "$data_package"
 }
 
@@ -140,18 +148,27 @@ fetch_source() {
   curl -fsSL --retry 3 "https://github.com/$REPO/archive/refs/tags/$tag.tar.gz" | tar -xz -C "$src" --strip-components=1
 }
 
+# The build's own errors, which debhelper follows with pages of CMake's compiler checks.
+build_failed() {
+  grep -m5 -A8 -e 'CMake Error' -e 'error:' "$work/build.log" >&2 || tail -30 "$work/build.log" >&2
+  die "建置失敗。"
+}
+
 # The build-dependency lists are release.yml's, which builds the published packages the same way.
 build_deb() {
   step "安裝建置所需的套件"
+  # On Plasma 5 (Kubuntu 22.04 and 24.04) the KDE settings window is built with Qt 5, KDE's look's (CMakeLists.txt).
+  qt5=
+  if ls /usr/lib/*/qt5/plugins/platformthemes/KDEPlasmaPlatformTheme.so >/dev/null 2>&1; then qt5=qtbase5-dev; fi
   as_root '
-    apt-get update
+    '"$apt_update"'
     apt-get install -y --no-install-recommends ca-certificates git curl make build-essential dpkg-dev debhelper \
       fakeroot cmake ninja-build g++ python3 pkg-config libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev \
       fcitx5-modules-dev libenchant-2-dev libxcb1-dev libcairo2-dev libpango1.0-dev libwayland-dev qt6-base-dev \
-      libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev'
+      libadwaita-1-dev libsoup-3.0-dev libjson-glib-dev '"$qt5"
   fetch_source
   step "建置套件（下載詞庫與模型，需要數分鐘）"
-  sh "$src/platforms/linux/package-deb.sh" >"$work/build.log" 2>&1 || { tail -30 "$work/build.log" >&2; die "建置失敗。"; }
+  sh "$src/platforms/linux/package-deb.sh" >"$work/build.log" 2>&1 || build_failed
   step "安裝套件"
   as_root 'apt-get install -y --reinstall "$@"' "$src"/platforms/linux/dist/*.deb
 }
@@ -164,7 +181,7 @@ build_rpm() {
       libsoup3-devel json-glib-devel'
   fetch_source
   step "建置套件（下載詞庫與模型，需要數分鐘）"
-  sh "$src/platforms/linux/package-rpm.sh" >"$work/build.log" 2>&1 || { tail -30 "$work/build.log" >&2; die "建置失敗。"; }
+  sh "$src/platforms/linux/package-rpm.sh" >"$work/build.log" 2>&1 || build_failed
   step "安裝套件"
   as_root 'dnf install -y "$@"' "$src"/platforms/linux/dist/*.rpm
 }
@@ -178,7 +195,7 @@ build_arch() {
   step "建置套件（下載詞庫與模型，需要數分鐘）"
   # Built without -s and -i, which would run sudo themselves: the dependencies are in place, and
   # the package is installed through as_root.
-  (cd "$src/platforms/linux/arch" && makepkg --noconfirm -f) >"$work/build.log" 2>&1 || { tail -30 "$work/build.log" >&2; die "建置失敗。"; }
+  (cd "$src/platforms/linux/arch" && makepkg --noconfirm -f) >"$work/build.log" 2>&1 || build_failed
   step "安裝套件"
   as_root 'pacman -U --noconfirm "$@"' "$src"/platforms/linux/arch/*.pkg.tar.zst
 }
@@ -191,7 +208,7 @@ repository=false
 unsigned() { note "最新發行版本的資料套件缺少簽章，改自原始碼建置。"; }
 # Plain if/else throughout: in `a && f || g`, set -e does not apply inside f.
 if command -v apt-get >/dev/null; then
-  if [ "$repository" = true ] && { [ "$suite" = trixie ] || [ "$suite" = noble ]; }; then
+  if [ "$repository" = true ] && { [ "$suite" = trixie ] || [ "$suite" = noble ] || [ "$suite" = jammy ]; }; then
     if signed_data_package deb; then
       install_from_apt_repository
     else
@@ -256,11 +273,13 @@ fi
 kwin_starts_it=false
 case ":$desktop:" in
   *:KDE:*)
-    # Plasma on Wayland starts Fcitx5 itself once it is the virtual keyboard (input-method-v1).
+    # Plasma on Wayland starts Fcitx5 itself once it is the virtual keyboard (input-method-v1); on X11
+    # im-config or imsettings start it. An autostart entry made from an X11 session would start a
+    # second one beside KWin's at the next Wayland login (Kubuntu 22.04).
     kwrite=$(command -v kwriteconfig6 || command -v kwriteconfig5 || true)
     if [ -n "$kwrite" ]; then
       if "$kwrite" --file kwinrc --group Wayland --key InputMethod /usr/share/applications/org.fcitx.Fcitx5.desktop &&
-         [ "${XDG_SESSION_TYPE:-}" = wayland ]; then
+         { [ "${XDG_SESSION_TYPE:-}" = wayland ] || command -v im-config >/dev/null || command -v imsettings-switch >/dev/null; }; then
         kwin_starts_it=true
       fi
     fi
@@ -273,6 +292,8 @@ if [ "$kwin_starts_it" = false ] && ! ls /etc/xdg/autostart/*[Ff]citx* >/dev/nul
    [ ! -e "$config/autostart/org.fcitx.Fcitx5.desktop" ]; then
   mkdir -p "$config/autostart"
   cp /usr/share/applications/org.fcitx.Fcitx5.desktop "$config/autostart/"
+elif [ "$kwin_starts_it" = true ] && cmp -s /usr/share/applications/org.fcitx.Fcitx5.desktop "$config/autostart/org.fcitx.Fcitx5.desktop"; then
+  rm -f "$config/autostart/org.fcitx.Fcitx5.desktop"  # the copy an earlier run made from an X11 session
 fi
 
 step "將 Project Key 加入 Fcitx5 的輸入法"

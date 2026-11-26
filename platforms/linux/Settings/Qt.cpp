@@ -388,6 +388,16 @@ void ApplyDarkPalette() {
   QApplication::setPalette(palette);
 }
 
+// A label in the dimmed (placeholder) color, set as its text color: with setForegroundRole(PlaceholderText),
+// Qt 5.15.3 (Ubuntu 22.04) draws no text at all.
+QLabel* DimLabel(const QString& text) {
+  auto* label = new QLabel(text);
+  QPalette palette = label->palette();
+  palette.setColor(QPalette::WindowText, palette.color(QPalette::PlaceholderText));
+  label->setPalette(palette);
+  return label;
+}
+
 // The input method group in use: its name, default layout and input methods; no name when
 // Fcitx5 is not running.
 struct InputMethodGroup {
@@ -444,11 +454,7 @@ int Welcome(QApplication& app, QDBusInterface& controller) {
     grid->addWidget(marks[row], row, 0);
     grid->addWidget(new QLabel(titles[row]), row, 1);
   }
-  auto dim = [](const QString& text) {
-    auto* label = new QLabel(text);
-    label->setForegroundRole(QPalette::PlaceholderText);
-    return label;
-  };
+  auto dim = DimLabel;
   auto* add = new QPushButton("加入");
   add->setDefault(true);
   QLabel* added = dim("已加入");
@@ -547,7 +553,9 @@ int Welcome(QApplication& app, QDBusInterface& controller) {
 int main(int argc, char** argv) {
   QApplication app(argc, argv);
   ApplyDarkPalette();
-  QApplication::setApplicationName("Project Key 設定");
+  // Also the class in the window's WM_CLASS, by which GNOME on X11 matches it to projectkey-settings.desktop
+  // (its name and icon); that property is Latin-1, so a Han name showed garbled there.
+  QApplication::setApplicationName("projectkey-settings");
   QApplication::setDesktopFileName("projectkey-settings");
   QApplication::setWindowIcon(QIcon::fromTheme("fcitx-projectkey"));
 
@@ -591,11 +599,7 @@ int main(int argc, char** argv) {
     return form;
   };
   auto label = [](const char* title) { return QString(title) + "："; };
-  auto note = [](const QString& text) {
-    auto* label = new QLabel(text);
-    label->setForegroundRole(QPalette::PlaceholderText);
-    return label;
-  };
+  auto note = DimLabel;
   // Each setting's control shows the config again, after 恢復原廠設定.
   std::vector<std::function<void(const QVariantMap&)>> showConfig;
   QPushButton* clearChoices = nullptr;

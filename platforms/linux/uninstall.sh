@@ -21,7 +21,8 @@ packages=
 if command -v dpkg-query >/dev/null; then
   packages=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' fcitx5-projectkey fcitx5-projectkey-data 2>/dev/null |
     awk '$1 == "ii" { print $2 }' | tr '\n' ' ')
-  remove="sudo apt-get remove -y"
+  # needrestart (Ubuntu 22.04) only lists the services, as in install.sh, rather than asking to restart gdm3.
+  remove="sudo env NEEDRESTART_MODE=l apt-get remove -y"
 elif command -v rpm >/dev/null && command -v dnf >/dev/null; then
   packages=$(rpm -q --qf '%{NAME}\n' fcitx5-projectkey fcitx5-projectkey-data 2>/dev/null | grep -v 'not installed' | tr '\n' ' ' || true)
   remove="sudo dnf remove -y"

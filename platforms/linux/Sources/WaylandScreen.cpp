@@ -2,9 +2,10 @@
 // which the compositor (sway, Hyprland and the other wlroots ones) places at the
 // text's caret, below it or, where the screen ends, above. A popup belongs to the
 // input method object Fcitx5 bound on its own Wayland connection, so the windows
-// are made on that connection, as Fcitx5's own panel is. Contexts from other
-// frontends (Fcitx5's D-Bus one, which GTK_IM_MODULE=fcitx uses) and KWin's
-// input method (v1) get Fcitx5's panel instead.
+// are made on that connection, as Fcitx5's own panel is. Under KWin's input method
+// (input-method-unstable-v1, Plasma) they are overlay input panels instead, which
+// KWin places the same way. Contexts from other frontends (Fcitx5's D-Bus one,
+// which GTK_IM_MODULE=fcitx uses) get Fcitx5's panel.
 #include <fcitx-utils/handlertable.h>
 #include <fcitx-utils/signals.h>
 #include <fcitx/addoninstance.h>
@@ -32,6 +33,7 @@
 #include "alpha-modifier-v1-client-protocol.h"
 #include "ext-background-effect-v1-client-protocol.h"
 #include "fractional-scale-v1-client-protocol.h"
+#include "input-method-unstable-v1-client-protocol.h"
 #include "input-method-unstable-v2-client-protocol.h"
 #include "viewporter-client-protocol.h"
 
@@ -84,6 +86,7 @@ struct Globals {
   wl_compositor* compositor = nullptr;
   uint32_t compositorVersion = 0;
   wl_shm* shm = nullptr;
+  zwp_input_panel_v1* inputPanel = nullptr;  // KWin's, on the connection it started Fcitx5 with
   ext_background_effect_manager_v1* effects = nullptr;  // KWin 6.7, Mutter 51, niri 26.04
   bool blur = false;                                    // effects says it can blur
   wp_alpha_modifier_v1* alphaModifier = nullptr;        // fades a surface, the blur behind it included
@@ -133,8 +136,8 @@ class WaylandScreen final : public Screen {
   ~WaylandScreen() override;
 
   bool reaches(const fcitx::InputContext& ic) const override {
-    zwp_input_method_v2* im = inputMethod(const_cast<fcitx::InputContext&>(ic));
-    return im && globals(ic);
+    const Globals* found = globals(ic);
+    return found && (inputMethod(const_cast<fcitx::InputContext&>(ic)) || inputPanel(ic, *found));
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
   // The compositor knows the caret; frames start from it. Smithay's compositors put a popup's
@@ -152,7 +155,7 @@ class WaylandScreen final : public Screen {
   }
 
   zwp_input_method_v2* inputMethod(fcitx::InputContext& ic) const {
-    if (!waylandim_ || ic.frontendName() != "wayland_v2") return nullptr;
+    if (!waylandim_ || std::string_view(ic.frontend()) != "wayland_v2") return nullptr;
     // A Fcitx5 whose waylandim does not register the call throws; Fcitx5's panel stands in there.
     try {
       return Proxy(waylandim_->call<fcitx::IWaylandIMModule::getInputMethodV2>(&ic));
@@ -160,6 +163,12 @@ class WaylandScreen final : public Screen {
       waylandim_ = nullptr;
       return nullptr;
     }
+  }
+  // KWin's input method (v1) gives no caret but places an overlay panel at it, below it or, where the
+  // screen ends, above. shortcut: KWin does not say which, so a window above the caret is drawn as below
+  // (its proof row on top); tell by the caret if that shows.
+  static zwp_input_panel_v1* inputPanel(const fcitx::InputContext& ic, const Globals& globals) {
+    return std::string_view(ic.frontend()) == "wayland" ? globals.inputPanel : nullptr;
   }
   // The globals on ic's connection, once both have arrived. Fcitx5 gives each
   // connection its own focus group, so the group finds it (libwayland only tells
@@ -274,6 +283,7 @@ class WaylandWindow final : public Window {
   SurfaceData surfaceData_;
   zwp_input_method_v2* im_ = nullptr;
   zwp_input_popup_surface_v2* popup_ = nullptr;
+  zwp_input_panel_surface_v1* panelSurface_ = nullptr;  // in place of popup_ under KWin's input method (v1)
   ext_background_effect_surface_v1* effect_ = nullptr;
   wp_alpha_modifier_surface_v1* alpha_ = nullptr;
   wp_fractional_scale_v1* fractionalScale_ = nullptr;  // with viewport_, where the compositor has both
@@ -301,12 +311,15 @@ const wl_registry_listener WaylandScreen::kRegistryListener = {
         [](void* data, wl_registry* registry, uint32_t name, const char* interface, uint32_t version) {
           auto* globals = static_cast<Globals*>(data);
           if (std::strcmp(interface, wl_compositor_interface.name) == 0 && !globals->compositor) {
-            // Version 6 tells the surface its buffer scale.
-            globals->compositorVersion = std::min(version, 6u);
+            // Version 6 tells the surface its buffer scale; an older libwayland (1.20, Ubuntu 22.04) knows
+            // only its own version's events.
+            globals->compositorVersion = std::min({version, 6u, static_cast<uint32_t>(wl_compositor_interface.version)});
             globals->compositor =
                 static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, globals->compositorVersion));
           } else if (std::strcmp(interface, wl_shm_interface.name) == 0 && !globals->shm) {
             globals->shm = static_cast<wl_shm*>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
+          } else if (std::strcmp(interface, zwp_input_panel_v1_interface.name) == 0 && !globals->inputPanel) {
+            globals->inputPanel = static_cast<zwp_input_panel_v1*>(wl_registry_bind(registry, name, &zwp_input_panel_v1_interface, 1));
           } else if (std::strcmp(interface, ext_background_effect_manager_v1_interface.name) == 0 && !globals->effects) {
             globals->effects = static_cast<ext_background_effect_manager_v1*>(
                 wl_registry_bind(registry, name, &ext_background_effect_manager_v1_interface, 1));
@@ -430,6 +443,7 @@ void WaylandScreen::disconnect(wl_display* display) {
   if (globals.alphaModifier) wp_alpha_modifier_v1_destroy(globals.alphaModifier);
   if (globals.fractionalScale) wp_fractional_scale_manager_v1_destroy(globals.fractionalScale);
   if (globals.viewporter) wp_viewporter_destroy(globals.viewporter);
+  if (globals.inputPanel) zwp_input_panel_v1_destroy(globals.inputPanel);
   if (globals.shm) wl_shm_destroy(globals.shm);
   if (globals.compositor) wl_compositor_destroy(globals.compositor);
   wl_registry_destroy(globals.registry);
@@ -455,6 +469,7 @@ const wl_buffer_listener WaylandWindow::kBufferListener = {
 const wl_surface_listener WaylandWindow::kSurfaceListener = {
     .enter = [](void*, wl_surface*, wl_output*) {},
     .leave = [](void*, wl_surface*, wl_output*) {},
+#ifdef WL_SURFACE_PREFERRED_BUFFER_SCALE_SINCE_VERSION  // libwayland 1.22
     .preferred_buffer_scale =
         [](void* data, wl_surface*, int32_t factor) {
           WaylandWindow* window = static_cast<SurfaceData*>(data)->window;
@@ -463,6 +478,7 @@ const wl_surface_listener WaylandWindow::kSurfaceListener = {
           if (window->mapped) window->exposed_();
         },
     .preferred_buffer_transform = [](void*, wl_surface*, uint32_t) {},
+#endif
 };
 
 // In 120ths: 180 at 150%.
@@ -496,8 +512,9 @@ const zwp_input_popup_surface_v2_listener WaylandWindow::kPopupListener = {
 
 void WaylandWindow::map(fcitx::InputContext& ic) {
   zwp_input_method_v2* im = screen_.inputMethod(ic);
-  const Globals* globals = im ? screen_.globals(ic) : nullptr;
-  if (!globals) return;
+  const Globals* globals = screen_.globals(ic);
+  zwp_input_panel_v1* panel = globals && !im ? WaylandScreen::inputPanel(ic, *globals) : nullptr;
+  if (!globals || (!im && !panel)) return;
   if (globals != globals_) {
     release();
     globals_ = globals;
@@ -514,8 +531,13 @@ void WaylandWindow::map(fcitx::InputContext& ic) {
     }
     for (Buffer& buffer : buffers_) buffer.window = this;
   }
-  // Fcitx5 has one input method object for each seat; the popup goes with it.
-  if (im != im_ || screen_.newestPopup_ != this) {
+  if (panel) {
+    if (!panelSurface_) {
+      panelSurface_ = zwp_input_panel_v1_get_input_panel_surface(panel, surface_);
+      zwp_input_panel_surface_v1_set_overlay_panel(panelSurface_);
+    }
+  } else if (im != im_ || screen_.newestPopup_ != this) {
+    // Fcitx5 has one input method object for each seat; the popup goes with it.
     if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
     popup_ = zwp_input_method_v2_get_input_popup_surface(im, surface_);
     zwp_input_popup_surface_v2_add_listener(popup_, &kPopupListener, this);
@@ -544,6 +566,8 @@ void WaylandWindow::release() {
   blurRegion_ = {};
   inputRegion_ = {};
   if (popup_) zwp_input_popup_surface_v2_destroy(popup_);
+  if (panelSurface_) zwp_input_panel_surface_v1_destroy(panelSurface_);
+  panelSurface_ = nullptr;
   if (screen_.newestPopup_ == this) screen_.newestPopup_ = nullptr;
   if (fractionalScale_) wp_fractional_scale_v1_destroy(fractionalScale_);
   if (viewport_) wp_viewport_destroy(viewport_);

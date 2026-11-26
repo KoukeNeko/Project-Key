@@ -107,6 +107,7 @@ jobs:
         include:
           - {suite: trixie, image: 'debian:trixie'}
           - {suite: noble, image: 'ubuntu:24.04'}
+          - {suite: jammy, image: 'ubuntu:22.04'}
     container: ${{ matrix.image }}
     env:
       DEBIAN_FRONTEND: noninteractive

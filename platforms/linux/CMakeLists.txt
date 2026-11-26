@@ -79,10 +79,10 @@ target_link_libraries(PoolStressTest Threads::Threads)
 
 set(DATA_DIR "${CMAKE_INSTALL_FULL_DATADIR}/fcitx5/projectkey")
 # On Wayland: the input method popups the candidate window goes into (wlroots' protocol, as Fcitx5
-# uses), the blur behind them where the compositor offers it (wayland-protocols' staging, newer than
+# uses) or, under KWin's input method (v1), its input panel surfaces, the blur behind them where the compositor offers it (wayland-protocols' staging, newer than
 # the distributions') with the alpha that fades it along, and the fractional scale (125%, 150%) they
 # are drawn at.
-set(WAYLAND_PROTOCOLS input-method-unstable-v2 ext-background-effect-v1 alpha-modifier-v1 fractional-scale-v1 viewporter)
+set(WAYLAND_PROTOCOLS input-method-unstable-v2 input-method-unstable-v1 ext-background-effect-v1 alpha-modifier-v1 fractional-scale-v1 viewporter)
 set(WAYLAND_PROTOCOL_SOURCES)
 foreach(protocol ${WAYLAND_PROTOCOLS})
   set(xml "${CMAKE_CURRENT_SOURCE_DIR}/protocols/${protocol}.xml")
@@ -109,7 +109,8 @@ add_executable(projectkey-settings-qt Settings/Qt.cpp)
 target_link_libraries(projectkey-settings-qt PRIVATE Qt${PROJECTKEY_QT}::Widgets Qt${PROJECTKEY_QT}::DBus Qt${PROJECTKEY_QT}::Network Fcitx5::Utils)
 target_include_directories(projectkey-settings-qt PRIVATE "${CORE}")  # Models.h
 target_compile_definitions(projectkey-settings-qt PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}" PROJECTKEY_DATA_DIR="${DATA_DIR}")
-pkg_check_modules(ADWAITA IMPORTED_TARGET libadwaita-1 libsoup-3.0 json-glib-1.0)
+# libadwaita 1.5 for its dialogs; older ones (Ubuntu 22.04's 1.1) get the Qt window.
+pkg_check_modules(ADWAITA IMPORTED_TARGET libadwaita-1>=1.5 libsoup-3.0 json-glib-1.0)
 if(ADWAITA_FOUND)
   add_executable(projectkey-settings-gtk Settings/Gtk.cpp)
   target_link_libraries(projectkey-settings-gtk PRIVATE PkgConfig::ADWAITA)
@@ -117,7 +118,7 @@ if(ADWAITA_FOUND)
   target_compile_definitions(projectkey-settings-gtk PRIVATE PROJECTKEY_VERSION="${PROJECT_VERSION}" PROJECTKEY_DATA_DIR="${DATA_DIR}")
   install(TARGETS projectkey-settings-gtk DESTINATION "${CMAKE_INSTALL_BINDIR}")
 else()
-  message(STATUS "libadwaita, libsoup 3 or json-glib missing: building only the Qt settings window")
+  message(STATUS "libadwaita 1.5, libsoup 3 or json-glib missing: building only the Qt settings window")
 endif()
 # The 進階模型 row, only where the addon can use what it downloads.
 if(PROJECTKEY_LLAMA)
@@ -138,7 +139,27 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/projectkey-settings.desktop" DESTINAT
 install(FILES fcitx-projectkey.svg fcitx-projectkey-symbolic.svg DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
 # The GNOME Shell extension that shows Project Key's windows on GNOME (Sources/GnomeScreen.cpp),
 # where Mutter lets no input method place them; it is turned on in GNOME's Extensions app.
-install(DIRECTORY gnome-shell/project-key@koukeneko.github.io DESTINATION "${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions")
+# GNOME 45 made extensions ES modules, which GNOME 42 to 44 (Ubuntu 22.04) cannot load: for those it
+# is rewritten in their form here. GNOME and GLib come together, GNOME 45 with GLib 2.78.
+# shortcut: told apart by the GLib built against, wrong for a GLib other than the desktop's (Homebrew's).
+set(EXTENSION project-key@koukeneko.github.io)
+if(PANEL_gio-2.0_VERSION AND PANEL_gio-2.0_VERSION VERSION_LESS 2.78)
+  file(READ gnome-shell/${EXTENSION}/extension.js js)
+  string(REGEX REPLACE "import ([A-Za-z]+) from 'gi://[A-Za-z]+';" "const \\1 = imports.gi.\\1;" js "${js}")
+  string(REPLACE "import * as Main from 'resource:///org/gnome/shell/ui/main.js';" "const Main = imports.ui.main;" js "${js}")
+  string(REPLACE "import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';\n" "" js "${js}")
+  string(REPLACE "export default class ProjectKeyExtension extends Extension {" "class ProjectKeyExtension {" js "${js}")
+  if(js MATCHES "import |export ")
+    message(FATAL_ERROR "gnome-shell/${EXTENSION}/extension.js: an import or export the GNOME 42 form does not rewrite")
+  endif()
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${EXTENSION}/extension.js" "${js}\nfunction init() {\n    return new ProjectKeyExtension();\n}\n")
+  file(READ gnome-shell/${EXTENSION}/metadata.json metadata)
+  string(REGEX REPLACE "\"shell-version\": \\[[^\n]*\\]" "\"shell-version\": [\"42\", \"43\", \"44\"]" metadata "${metadata}")
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${EXTENSION}/metadata.json" "${metadata}")
+  install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${EXTENSION}" DESTINATION "${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions")
+else()
+  install(DIRECTORY gnome-shell/${EXTENSION} DESTINATION "${CMAKE_INSTALL_DATADIR}/gnome-shell/extensions")
+endif()
 # The Fcitx5 theme in the candidate window's look, for Fcitx5's own panel (Wayland, other input methods).
 install(DIRECTORY theme/ DESTINATION "${FCITX_INSTALL_PKGDATADIR}/themes/projectkey")
 install(CODE "execute_process(COMMAND gtk-update-icon-cache -q -t -f \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor\" ERROR_QUIET)")

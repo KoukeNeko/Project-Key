@@ -95,9 +95,11 @@ class X11Screen final : public Screen {
 
   // Project Key's window needs the caret on screen; a relative rect is only within the app's window.
   // A Wayland app's caret is in its surface even without one: under a Wayland session this screen
-  // is XWayland's, for X11 apps only (Panel::screenFor).
+  // is XWayland's, for X11 apps only (Panel::screenFor). KWin's input-method-v1 ("wayland") gives no
+  // caret at all, and Fcitx5 5.0 (Ubuntu 22.04) does not mark it relative: KWin places Fcitx5's panel.
   bool reaches(const fcitx::InputContext& ic) const override {
-    return !ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect) && ic.frontendName() != "wayland_v2";
+    std::string_view frontend = ic.frontend();  // Fcitx5 5.0 has no frontendName()
+    return !ic.capabilityFlags().test(fcitx::CapabilityFlag::RelativeRect) && frontend != "wayland_v2" && frontend != "wayland";
   }
   std::unique_ptr<Window> createWindow(std::function<void()> exposed, std::function<void()> moved) override;
   fcitx::Rect caret(const fcitx::InputContext&, const fcitx::Rect& anchor) const override { return anchor; }

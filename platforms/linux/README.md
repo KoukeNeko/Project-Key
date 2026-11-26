@@ -1,6 +1,8 @@
 # Linux 輸入法
 
-以 Fcitx5 實作的注音輸入法，按鍵與 [macOS 版](../macos/README.md)、[Windows 版](../windows/README.md) 相同。已測試的環境：Ubuntu 24.04 的 KDE Plasma（X11 與 Wayland）與 GNOME（Xorg 與 Wayland）、Debian 13 的 GNOME（Wayland），以及 Pop!_OS 24.04 的 COSMIC。
+以 Fcitx5 實作的注音輸入法，按鍵與 [macOS 版](../macos/README.md)、[Windows 版](../windows/README.md) 相同。已測試的環境：Ubuntu 24.04 的 KDE Plasma（X11 與 Wayland）與 GNOME（Xorg 與 Wayland）、Ubuntu 22.04 的 GNOME 42（Xorg 與 Wayland）與 KDE Plasma 5.24（X11 與 Wayland）、Debian 13 的 GNOME（Wayland），以及 Pop!_OS 24.04 的 COSMIC。
+
+Ubuntu 22.04 的 libadwaita 為 1.1，GNOME 版設定視窗須 1.5 以上，因此該版本在 GNOME 上同樣使用 Qt 版設定視窗，功能相同。GNOME 42 至 44 不支援 GNOME 45 起的 ES module 擴充功能格式，建置時依 GLib 版本（GNOME 45 對應 GLib 2.78）自動將擴充功能轉為舊格式。
 
 ## 架構
 
@@ -9,7 +11,7 @@
 | 引擎功能 | Fcitx5 上的實作 |
 |---|---|
 | 組字區 | preedit；可疑字以外的段落加底線，選字中的段落反白 |
-| 候選字窗、中／英標記 | 由 Project Key 自行繪製的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色與動畫與 Windows 版相同，候選字與第一列尾端的頁碼或箭頭支援滑鼠點選。X11 上為 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上為輸入法的 popup（`Sources/WaylandScreen.cpp`），GNOME 上由 Project Key 的 GNOME Shell 擴充功能顯示（`Sources/GnomeScreen.cpp`） |
+| 候選字窗、中／英標記 | 由 Project Key 自行繪製的視窗（`Sources/Panel.cpp`，Cairo + Pango），尺寸、顏色與動畫與 Windows 版相同，候選字與第一列尾端的頁碼或箭頭支援滑鼠點選。X11 上為 X11 視窗（`Sources/X11Screen.cpp`），Wayland 上為輸入法的 popup 或 KWin 的輸入法面板（`Sources/WaylandScreen.cpp`），GNOME 上由 Project Key 的 GNOME Shell 擴充功能顯示（`Sources/GnomeScreen.cpp`） |
 | 前文（Tab 英文轉注音、組字接續游標前的字選字） | surrounding text；App 未提供時 Tab 照常輸入，選字視為句首 |
 | 英文判斷（Tab 注音轉英文） | Enchant 的 en_US 字典 |
 
@@ -18,17 +20,17 @@
 | 桌面 | 模糊 |
 |---|---|
 | KDE Plasma（X11） | KWin 的 blur behind（`_KDE_NET_WM_BLUR_BEHIND_REGION`），須啟用 KWin 的模糊特效 |
-| KDE Plasma（Wayland） | 候選字窗為 Fcitx5 的面板，採用 Project Key 主題的 `EnableBlur` |
+| KDE Plasma（Wayland） | KWin 6.7 以上為 `ext-background-effect-v1`；較舊的 KWin 未提供可用的協定，改為不透明 |
 | GNOME | 擴充功能中的 `Shell.BlurEffect` |
 | niri 26.04 以上、KWin 6.7 以上、Nekoland（input-method-v2） | `ext-background-effect-v1`；Nekoland 繪製為 Catseye 玻璃 |
 | Hyprland | 由合成器模糊：`decoration:blur:input_methods = true` 時 Project Key 改為繪製半透明，關閉時不透明 |
 | sway、wayfire、COSMIC、其他 X11 視窗管理員 | 合成器未提供模糊，改為不透明 |
 
-Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連線至 Fcitx5 時，候選字窗與中／英標記為繪製於 Fcitx5 Wayland 連線上的 input popup，由合成器置於游標下方，下方空間不足時置於上方（COSMIC 等以 smithay 實作、將 popup 的左上角置於游標頂端的合成器，Project Key 自行向下讓出游標的高度）；模糊方式見上表。經 XWayland 執行的 X11 App（IBus、XIM）提供螢幕座標，候選字窗與中／英標記改為 XWayland 上的 X11 視窗，縮放比例取自 X 資源的 `Xft.dpi`，未設定時取自 XSETTINGS 的 `Xft/DPI`。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）或 KWin 的輸入法（input-method-v1）連線時，以及 X11 上 App 僅提供相對座標時，改用 Fcitx5 內建的候選面板，外觀依循 Fcitx5 主題。操作與其他平台相同：整句預覽與頁碼位於第一行，選字列逐格選取，按 ↓ 展開的格線以直排列出最多五列（GNOME 上面板由 App 繪製，每個候選僅能為一行純文字，因此選取的列整列反白，選取的字以［］標示）。
+Wayland 下，App 經由合成器的輸入法協定（text-input-v3 → input-method-v2，sway、Hyprland 等 wlroots 系列）連線至 Fcitx5 時，候選字窗與中／英標記為繪製於 Fcitx5 Wayland 連線上的 input popup，由合成器置於游標下方，下方空間不足時置於上方（COSMIC 等以 smithay 實作、將 popup 的左上角置於游標頂端的合成器，Project Key 自行向下讓出游標的高度）；模糊方式見上表。經 XWayland 執行的 X11 App（IBus、XIM）提供螢幕座標，候選字窗與中／英標記改為 XWayland 上的 X11 視窗，縮放比例取自 X 資源的 `Xft.dpi`，未設定時取自 XSETTINGS 的 `Xft/DPI`。KWin 的輸入法（input-method-v1）不提供游標位置，候選字窗與中／英標記改為同一連線上的輸入法面板（`zwp_input_panel_surface_v1` 的 overlay panel），同樣由 KWin 置於游標下方或上方；KWin 不告知置於何側，置於上方時視窗仍依置於下方的順序繪製（整句預覽在第一行）。App 經由 Fcitx5 的 D-Bus（`GTK_IM_MODULE=fcitx`、`QT_IM_MODULE=fcitx`）連線時，以及 X11 上 App 僅提供相對座標時，改用 Fcitx5 內建的候選面板，外觀依循 Fcitx5 主題。操作與其他平台相同：整句預覽與頁碼位於第一行，選字列逐格選取，按 ↓ 展開的格線以直排列出最多五列（GNOME 上面板由 App 繪製，每個候選僅能為一行純文字，因此選取的列整列反白，選取的字以［］標示）。
 
 GNOME（Mutter）未提供讓輸入法將視窗置於游標處的協定，因此 GNOME 上的候選字窗、Tab 提示與中／英標記由 GNOME Shell 擴充功能「Project Key」（`gnome-shell/`，安裝於 `/usr/share/gnome-shell/extensions/project-key@koukeneko.github.io`）顯示：Project Key 照常自行繪製，將繪製完成的影像寫入 `XDG_RUNTIME_DIR` 中的檔案，經 D-Bus 交由擴充功能置於游標處；擴充功能則回報焦點視窗與工作區的位置，將 App 提供的相對座標換算為螢幕座標，並回報該螢幕的縮放比例（含 125% 等分數縮放）：Project Key 依此比例繪製，擴充功能再將視窗對齊螢幕的像素，影像不經縮放，文字因此清晰。經 GNOME Shell 轉送的 App（IBus）與經 Fcitx5 D-Bus 的 App 皆適用。安裝後須於「擴充功能」App 啟用（或執行 `gnome-extensions enable project-key@koukeneko.github.io`，須重新登入）；未啟用時改用 Fcitx5 的候選面板。動畫與其他桌面相同，每一格畫面皆經由擴充功能顯示；滑鼠點選由擴充功能回傳至 Project Key。更新後須重新登入，才會載入新版擴充功能。候選字窗開啟與收起時，整個視窗連同模糊一併淡入淡出（GNOME 由擴充功能處理，X11 透過視窗的 `_NET_WM_WINDOW_OPACITY`，Wayland 透過 `wp_alpha_modifier_v1`）；未提供該協定的 Wayland 桌面，模糊本身直接出現與消失。
 
-KDE Plasma 的 Wayland 上，KWin 以其輸入法協定（input-method-v1）啟動 Fcitx5，候選字預設由 Plasma 的輸入法面板（kimpanel）顯示，外觀依循 Plasma 主題；以 `fcitx5 --disable=kimpanel` 啟動時，改用 Fcitx5 的面板與下述主題。
+KDE Plasma 的 Wayland 上，KWin 以其輸入法協定（input-method-v1）啟動 Fcitx5，候選字窗與中／英標記由 Project Key 自行繪製，如上所述；其他 Fcitx5 輸入法的候選字仍由 Plasma 的輸入法面板（kimpanel）或 Fcitx5 的面板顯示。安裝程式於 KDE 上不另建 Fcitx5 的自動啟動項目：Wayland 由 KWin 啟動，X11 由 im-config 或 imsettings 啟動，多一個自動啟動項目會在 Wayland 上啟動第二個 Fcitx5。
 
 COSMIC（Pop!_OS）上，支援 text-input-v3 的 App（例如 Firefox）經由合成器連線至 Fcitx5；COSMIC 內建的 App（例如 COSMIC Edit）不支援輸入法協定，無法輸入中文。COSMIC 的系統匣會將圖示染為文字顏色，因此於該處改用單色圖示 `fcitx-projectkey-symbolic.svg`（ㄅ 挖空）。
 
@@ -50,7 +52,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 
 `install.sh` 依序完成：
 
-1. 安裝套件：Debian 13、Ubuntu 24.04（含以其為基礎的 Pop!_OS、Linux Mint）與 Fedora 43 的 x86_64 自下方的套件庫安裝；其他版本與架構則安裝建置所需的套件，以 `package-deb.sh`、`package-rpm.sh` 或 `arch/PKGBUILD` 自最新發行版本的原始碼建置套件後安裝（約需數分鐘）。兩者皆為套件管理員管理的套件，可以 `apt remove`、`dnf remove` 或 `pacman -R` 移除。
+1. 安裝套件：Debian 13、Ubuntu 24.04 與 22.04（含以其為基礎的 Pop!_OS、Linux Mint）與 Fedora 43 的 x86_64 自下方的套件庫安裝；其他版本與架構則安裝建置所需的套件，以 `package-deb.sh`、`package-rpm.sh` 或 `arch/PKGBUILD` 自最新發行版本的原始碼建置套件後安裝（約需數分鐘；Plasma 5 上另安裝 `qtbase5-dev`，見「自行建置」）。兩者皆為套件管理員管理的套件，可以 `apt remove`、`dnf remove` 或 `pacman -R` 移除。系統中其他套件庫（例如缺少公鑰者）使 `apt-get update` 回報錯誤時，顯示提示後仍繼續安裝；needrestart（Ubuntu 22.04）僅列出需重新啟動的服務，不詢問也不重新啟動。
 2. 將 Fcitx5 設為輸入法框架：Debian／Ubuntu 以 `im-config` 寫入 `~/.xinputrc`（im-config 1.x 為 `-w fcitx5`，較舊版本為 `-n fcitx5`），Fedora 執行 `imsettings-switch fcitx5`；KDE Plasma 將 Fcitx5 設為 KWin 的虛擬鍵盤。Fcitx5 套件未附自動啟動項目時（例如 Ubuntu 26.10），另將其加入 `~/.config/autostart`，否則 Fcitx5 僅於 App 經由 D-Bus 呼叫時才啟動。
 3. 將 Project Key 加入 Fcitx5 的輸入法（`~/.config/fcitx5/profile`），設為 Ctrl+Space 切換的輸入法，並重新啟動 Fcitx5。
 4. GNOME 上將擴充功能「Project Key」加入 `org.gnome.shell enabled-extensions`；GNOME 於登入時載入擴充功能，因此須再登出登入一次。
@@ -68,9 +70,9 @@ curl -fsSL https://raw.githubusercontent.com/KoukeNeko/Project-Key/main/platform
 
 以下為各項手動安裝方式。
 
-以套件庫安裝（Debian 13、Ubuntu 24.04、Fedora 43，x86_64）：
+以套件庫安裝（Debian 13、Ubuntu 24.04 與 22.04、Fedora 43，x86_64）：
 ```sh
-# Debian / Ubuntu（suite：Debian 13 用 trixie，Ubuntu 24.04 用 noble）
+# Debian / Ubuntu（suite：Debian 13 用 trixie，Ubuntu 24.04 用 noble，Ubuntu 22.04 用 jammy）
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://koukeneko.github.io/Project-Key/apt/key.asc | sudo tee /etc/apt/keyrings/projectkey.asc >/dev/null
 echo "deb [signed-by=/etc/apt/keyrings/projectkey.asc] https://koukeneko.github.io/Project-Key/apt trixie main" | sudo tee /etc/apt/sources.list.d/projectkey.list

@@ -303,19 +303,24 @@ void Panel::setFontOptions(bool blurred) {
 // callback: a finished animation just lets the one-shot lapse.
 void Panel::startTimer(std::unique_ptr<fcitx::EventSourceTime>& timer, bool (Panel::*tick)()) {
   uint64_t next = fcitx::now(CLOCK_MONOTONIC) + kFrameUs;
-  if (timer) {
-    timer->setTime(next);
-    timer->setOneShot();
-    return;
-  }
-  // An accuracy of 0 means sd-event's default, 250ms, which would coalesce the frames.
-  timer = loop_.addTimeEvent(CLOCK_MONOTONIC, next, 1000, [this, tick](fcitx::EventSourceTime* source, uint64_t) {
-    if ((this->*tick)()) {
-      source->setNextInterval(kFrameUs);
-      source->setOneShot();
+  // Fcitx5 5.0 (Ubuntu 22.04) throws once its loop has ended, as it takes the focus from each field
+  // while exiting: no animation then, rather than aborting Fcitx5 on its way out.
+  try {
+    if (timer) {
+      timer->setTime(next);
+      timer->setOneShot();
+      return;
     }
-    return true;
-  });
+    // An accuracy of 0 means sd-event's default, 250ms, which would coalesce the frames.
+    timer = loop_.addTimeEvent(CLOCK_MONOTONIC, next, 1000, [this, tick](fcitx::EventSourceTime* source, uint64_t) {
+      if ((this->*tick)()) {
+        source->setNextInterval(kFrameUs);
+        source->setOneShot();
+      }
+      return true;
+    });
+  } catch (const fcitx::EventLoopException&) {
+  }
 }
 
 // MARK: Candidate window
