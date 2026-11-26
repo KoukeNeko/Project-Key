@@ -57,6 +57,17 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 
 以一般使用者執行，不加 `sudo`；需要管理員權限時，以 `sudo`（終端機）或 `pkexec`（無終端機）要求密碼。安裝程序安裝所需套件、將 Fcitx5 設為輸入法框架並啟用 Project Key。GNOME 須重新登入後生效。
 
+| 發行版 | 安裝方式 | 已測試的桌面 |
+|---|---|---|
+| Ubuntu 24.04、Kubuntu 24.04 | 套件庫 | GNOME、KDE Plasma（X11 與 Wayland） |
+| Ubuntu 22.04、Kubuntu 22.04 | 套件庫* | GNOME 42、KDE Plasma 5.24（X11 與 Wayland） |
+| Debian 13 | 套件庫 | GNOME（Wayland） |
+| Pop!_OS 24.04 | 套件庫 | COSMIC |
+| Fedora 43 | 套件庫 | — |
+| Arch 及其衍生版、其他 Debian／Ubuntu／Fedora 版本 | 自原始碼建置（數分鐘） | — |
+
+\* 0.12.1 之後的版本起；在此之前自原始碼建置。sway、Hyprland、niri 等其他 Wayland 合成器與 X11 視窗管理員亦可使用，尚未逐一測試。
+
 **iOS 17 以上：** 從原始碼建置，見 [platforms/ios](platforms/ios/README.md)。
 
 安裝後開啟歡迎視窗，按「加入」將 Project Key 加入系統輸入法（Linux 的安裝指令已自動加入，並開啟歡迎視窗）。歡迎視窗自動下載最新的選字模型；進階模型（約 1.3 GB）按「下載」後才下載。亦可於系統的輸入法設定手動加入：macOS 為「系統設定 > 鍵盤 > 輸入方式」，Windows 為「設定 > 時間與語言 > 語言與地區 > 中文（台灣）> 語言選項 > 新增鍵盤」，Linux 為 Fcitx5 設定的「輸入法」。
@@ -144,7 +155,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 
 - **macOS** 13 以上，Apple 晶片；候選視窗於 macOS 26 以上可採用 Liquid Glass
 - **Windows** 11，x64；設定視窗使用 Windows 11 內建的 Windows App Runtime 2
-- **Linux** 上的 Fcitx5：X11 與 Wayland 的 KDE Plasma、GNOME、COSMIC，以及 sway、Hyprland 等 wlroots 系列與 niri、Nekoland 等合成器；各桌面的候選視窗顯示方式與已測試的環境見 [platforms/linux](platforms/linux/README.md)
+- **Linux** 上的 Fcitx5：發行版與桌面見[安裝](#安裝)的表格
 - **iOS** 17 以上的鍵盤擴充，採大千排列；不含整句模型
 - **鍵盤排列**（macOS、Windows、Linux）：大千、倚天、許氏、倚天 26 鍵、IBM
 
