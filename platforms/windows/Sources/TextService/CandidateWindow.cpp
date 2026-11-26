@@ -318,9 +318,16 @@ D2D1_SIZE_F CandidateWindow::fittingSize() const {
     if (!content_->replacedText.empty()) key += fonts_.widthOf(Widen(content_->replacedText) + kReplacedArrow, fonts_.proof());
     width = std::max(width, kProofLeft + fonts_.widthOf(Widen(sentence), fonts_.proof()) + key + kProofRight);
   }
-  if (!content_->rows.empty()) {
+  if (!content_->rows.empty() && !content_->pageLabel.empty()) {
     float row = kRowLeft + content_->columns * (fonts_.columnWidth() + kCellGap);
     width = std::max(width, row + tailWidth());
+  } else {
+    // A single page fits its candidates, the same from typing to choosing.
+    for (const std::vector<int>& row : spans_) {
+      int cells = 0;
+      for (int span : row) cells += span;
+      if (cells > 0) width = std::max(width, kRowLeft + cells * fonts_.columnWidth() + (cells - 1) * kCellGap + kRowLeft);
+    }
   }
   float separator = content_->showsProof && !content_->rows.empty() ? 1.f : 0.f;
   return D2D1::SizeF(width, proofHeight() + separator + rowHeight());

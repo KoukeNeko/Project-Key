@@ -275,9 +275,16 @@ CGFloat TextTop(NSFont *font, CGFloat top, CGFloat lineHeight) {
     if (self.content.replacedText) key += [self widthOf:[self.content.replacedText stringByAppendingString:kReplacedArrow] font:_proofFont];
     width = MAX(width, kProofLeft + [self widthOf:sentence font:_proofFont] + key + kProofRight);
   }
-  if (self.content.rows) {
+  if (self.content.rows && self.content.pageLabel) {
     CGFloat row = kRowLeft + self.content.columns * (ColumnWidth() + kCellGap) + self.tailWidth;
     width = MAX(width, row);
+  } else {
+    // A single page fits its candidates, the same from typing to choosing.
+    for (NSArray<NSString *> *row in self.content.rows) {
+      NSInteger cells = 0;
+      for (NSString *word in row) cells += Span(word);
+      if (cells > 0) width = MAX(width, kRowLeft + cells * ColumnWidth() + (cells - 1) * kCellGap + kRowLeft);
+    }
   }
   CGFloat separator = self.content.showsProof && self.content.rows ? 1 : 0;
   return NSMakeSize(width, self.proofHeight + separator + self.rowHeight);
