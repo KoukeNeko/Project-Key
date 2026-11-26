@@ -1,39 +1,34 @@
 Project Key: dictionary and context models
 
-The program is under the MIT License. The three data files below are
-distributed with it under their own licenses. They are separate files the
-program reads at run time; each can be replaced or removed, and the program
-falls back to McBopomofo's dictionary and ranking without them. They were made
-by tools/bigram-trainer in https://github.com/KoukeNeko/Project-Key, which
-rebuilds them from the sources listed here.
+The program is under the MIT License. The data files below are distributed
+with it under their own licenses. They are separate files the program reads at
+run time; each can be replaced or removed, and the program falls back to
+McBopomofo's dictionary and ranking without them.
 
-bigram.bin, chars.bin
-  Word and character n-gram statistics counted from:
-  - Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard), by
-    Wikipedia contributors, under CC BY-SA 4.0
-    (https://creativecommons.org/licenses/by-sa/4.0/). The text was converted
-    to Taiwan Traditional Chinese with OpenCC and only counted; no text is
-    included.
+bigram.bin, chars.bin, sentence.bin
+  Word and character n-gram statistics (bigram.bin, chars.bin) and character-
+  level GPT-2 weights (sentence.bin) trained on a Taiwan Traditional Chinese
+  corpus (~136.7M characters) composed from:
+  - Taiwan Traditional Chinese web text from agentlans/fineweb2-chinese
+    (TAIWAN.jsonl.zst, derived from HuggingFaceFW/fineweb-2), under the Open
+    Data Commons Attribution License (ODC-BY).
+  - Taiwan Traditional Chinese Q&A from twinkle-ai/tw-reasoning-instruct-50k,
+    under the MIT License.
   - 立法院公報 (Legislative Yuan Gazette), 資料提供者：立法院, obtained through
     the g0v Legislative Yuan API (https://v2.ly.govapi.tw), under the Open
-    Government Data License, version 1.0
-    (https://data.gov.tw/license).
-  These two files are licensed under CC BY-SA 4.0.
-
-sentence.bin
-  The weights of a character-level GPT-2 trained by tools/lm-trainer on
-  Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard), by
-  Wikipedia contributors, under CC BY-SA 4.0
-  (https://creativecommons.org/licenses/by-sa/4.0/), converted to Taiwan
-  Traditional Chinese with OpenCC, then fine-tuned to rank the composer's
-  candidate sentences as Gemma 4 E2B (google/gemma-4-E2B, by Google DeepMind,
-  under the Apache License 2.0) does. The candidates were typed from:
-  - the Wikipedia text above;
-  - the 立法院公報 text above;
-  - that text rewritten as everyday speech by Breeze-7B-Instruct-v1_0
-    (MediaTek-Research/Breeze-7B-Instruct-v1_0, by MediaTek Research, under
-    the Apache License 2.0).
-  No text is included. This file is licensed under CC BY-SA 4.0.
+    Government Data License, version 1.0 (https://data.gov.tw/license),
+    including passages rewritten as everyday Taiwanese Mandarin by
+    Breeze-7B-Instruct-v1_0 (MediaTek-Research/Breeze-7B-Instruct-v1_0, by
+    MediaTek Research, under the Apache License 2.0).
+  - Traditional Chinese Wikinews (erhwenkuo/wikinews-zhtw), by Wikinews
+    contributors, under CC BY-SA 3.0.
+  - Mozilla Common Voice 25 zh-TW validated sentence transcripts
+    (OpenFormosa/common_voice_25_zh-TW), under CC0 1.0.
+  - Filtered Chinese Wikipedia (wikimedia/wikipedia 20231101.zh, first shard),
+    by Wikipedia contributors, under CC BY-SA 4.0
+    (https://creativecommons.org/licenses/by-sa/4.0/), converted to Taiwan
+    Traditional Chinese with OpenCC.
+  No source text is included. These three files are licensed under CC BY-SA 4.0.
 
 data.txt
   McBopomofo's dictionary (MIT License, see McBopomofo-LICENSE.txt), with
@@ -42,7 +37,7 @@ data.txt
     c44e81aef24b06f1509f19e1be54c99812d0c43f
     (https://github.com/chewing/libchewing-data), Copyright (c) 2025
     libchewing Core Team, under LGPL-2.1-or-later;
-  - words found in the training text above;
+  - words found in the training text;
   - road and district names from 全國路名資料 (national road names, year 115
     edition), 資料提供者：內政部戶政司 (https://data.gov.tw/dataset/35321), under
     the Open Government Data License, version 1.0
@@ -55,32 +50,30 @@ data.txt
 
 Project Key：詞庫與上下文模型
 
-程式本身以 MIT 授權發布。以下三個資料檔隨程式散布，各有自己的授權。它們是
-程式執行時讀取的獨立檔案，可以替換或移除；沒有它們時，程式改用 McBopomofo
-的詞庫與排序。這些檔案由 https://github.com/KoukeNeko/Project-Key 的
-tools/bigram-trainer 產生，可依下列來源重新建置。
+程式本身以 MIT 授權發布。以下資料檔隨程式散布，各有自己的授權。它們是程式執
+行時讀取的獨立檔案，可以替換或移除；沒有它們時，程式改用 McBopomofo 的詞庫
+與排序。
 
-bigram.bin、chars.bin
-  從下列文字統計出的詞與字 n-gram：
-  - 中文維基百科（wikimedia/wikipedia 20231101.zh 第一個分片），維基百科貢獻
-    者，CC BY-SA 4.0（https://creativecommons.org/licenses/by-sa/4.0/）。文字
-    經 OpenCC 轉為臺灣正體後只做統計，不含原文。
+bigram.bin、chars.bin、sentence.bin
+  由臺灣繁體中文混合語料（約 1.37 億字）訓練之詞與字元 n-gram 統計模型
+  （bigram.bin、chars.bin）與字元級 GPT-2 權重（sentence.bin），來源包含：
+  - 臺灣繁體中文網頁語料：agentlans/fineweb2-chinese（TAIWAN.jsonl.zst，
+    衍生自 HuggingFaceFW/fineweb-2），採 ODC-BY 授權。
+  - 臺灣繁體中文問答語料：twinkle-ai/tw-reasoning-instruct-50k，採 MIT 授權。
   - 立法院公報，資料提供者：立法院，經 g0v 立法院 API
-    （https://v2.ly.govapi.tw）取得，政府資料開放授權條款第 1 版
-    （https://data.gov.tw/license）。
-  這兩個檔案以 CC BY-SA 4.0 授權。
-
-sentence.bin
-  由 tools/lm-trainer 訓練的字元級 GPT-2 權重，訓練文字為中文維基百科
-  （wikimedia/wikipedia 20231101.zh 第一個分片），維基百科貢獻者，CC BY-SA 4.0
-  （https://creativecommons.org/licenses/by-sa/4.0/），經 OpenCC 轉為臺灣正體；
-  再微調，使它排序組字候選句的方式接近 Gemma 4 E2B（google/gemma-4-E2B，Google
-  DeepMind，Apache License 2.0）。候選句打自：
-  - 上述維基百科文字；
-  - 上述立法院公報文字；
-  - 由 Breeze-7B-Instruct-v1_0（MediaTek-Research/Breeze-7B-Instruct-v1_0，
-    聯發創新基地，Apache License 2.0）改寫為日常口語的上述公報文字。
-  不含原文。這個檔案以 CC BY-SA 4.0 授權。
+    （https://v2.ly.govapi.tw）取得，採政府資料開放授權條款第 1 版
+    （https://data.gov.tw/license），另包含由 Breeze-7B-Instruct-v1_0
+    （MediaTek-Research/Breeze-7B-Instruct-v1_0，聯發創新基地，Apache
+    License 2.0）改寫為臺灣日常口語之公報文本。
+  - 繁體中文維基新聞（erhwenkuo/wikinews-zhtw），維基新聞貢獻者，採
+    CC BY-SA 3.0 授權。
+  - Mozilla Common Voice 25 臺灣華語驗證語句文字（OpenFormosa/
+    common_voice_25_zh-TW），採 CC0 1.0 授權。
+  - 清洗後之中文維基百科（wikimedia/wikipedia 20231101.zh 第一個分片），
+    維基百科貢獻者，採 CC BY-SA 4.0 授權
+    （https://creativecommons.org/licenses/by-sa/4.0/），經 OpenCC 轉為臺灣
+    正體。
+  不含原文。這三個檔案以 CC BY-SA 4.0 授權。
 
 data.txt
   McBopomofo 的詞庫（MIT 授權，見 McBopomofo-LICENSE.txt），另加入：
@@ -88,7 +81,7 @@ data.txt
     c44e81aef24b06f1509f19e1be54c99812d0c43f，
     https://github.com/chewing/libchewing-data），Copyright (c) 2025
     libchewing Core Team，LGPL-2.1-or-later；
-  - 從上述訓練文字找出的詞；
+  - 從訓練文字找出的詞；
   - 全國路名資料（115 年版）的路名與鄉鎮市區名，資料提供者：內政部戶政司
     （https://data.gov.tw/dataset/35321），政府資料開放授權條款第 1 版
     （https://data.gov.tw/license）。
