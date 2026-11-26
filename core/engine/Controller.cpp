@@ -1386,11 +1386,14 @@ void Controller::clickCandidate(int row, int index) {
     return;
   }
   // From the window, or on Windows from any app through the server's pipe: anything may come.
-  if (row < 0 || index < 0 || index >= static_cast<int>(candidates_.size()) || row >= static_cast<int>(candidates_.size())) return;
+  if (row < 0 || index < 0) return;
+  // The row shown while typing is not candidates_, which holds the last word chosen, if any:
+  // pickFromTypingRow checks the index against the row it opens.
   if (!choosing_) {
     if (row == 0 && rowSegment_) pickFromTypingRow(index);
     return;
   }
+  if (index >= static_cast<int>(candidates_.size()) || row >= static_cast<int>(candidates_.size())) return;
   if (!expanded_ && row != 0) return;
   int shown = expanded_ ? firstRow_ + row : rowOf(selection_);
   if (shown >= static_cast<int>(rowStarts_.size())) return;

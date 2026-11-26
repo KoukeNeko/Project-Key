@@ -1290,6 +1290,19 @@ int main(int argc, char** argv) {
   assert(Contains(client.marked, clicked));
   controller.clickCandidate(5, 0);  // nothing there
   EscapeAll(controller, client);
+  // Likewise before anything was ever chosen, and out of the row picks nothing.
+  {
+    FakeClient fresh;
+    Controller first(env, fresh);
+    Type(first, "rup ");
+    assert(fresh.panel.selectedRow == -1 && fresh.panel.rows[0].size() > 1);
+    std::string typed = fresh.marked;
+    first.clickCandidate(0, INT_MAX);
+    assert(fresh.marked == typed);
+    clicked = fresh.panel.rows[0][1];
+    first.clickCandidate(0, 1);
+    assert(Contains(fresh.marked, clicked));
+  }
 
   // The update check: a newer tag only, number by number, and never a tag that is no version.
   assert(ProjectKey::NewerRelease(R"({"url": "x", "tag_name": "v0.10.1", "name": "Project Key 0.10.1"})", "0.10.0") == "0.10.1");
