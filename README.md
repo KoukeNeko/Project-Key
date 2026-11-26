@@ -17,6 +17,7 @@
   <img alt="iOS 17+" src="https://img.shields.io/badge/IOS-17%2B-000000?style=for-the-badge&logo=apple&logoColor=white">
   <img alt="C++20" src="https://img.shields.io/badge/C%2B%2B-20-00599C?style=for-the-badge&logo=cplusplus&logoColor=white">
   <a href="https://github.com/KoukeNeko/Project-Key/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/KoukeNeko/Project-Key?style=for-the-badge&label=RELEASE&color=2196F3"></a>
+  <a href="https://github.com/KoukeNeko/Project-Key/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/KoukeNeko/Project-Key/total?style=for-the-badge&label=DOWNLOADS&color=4CAF50"></a>
   <a href="https://github.com/KoukeNeko/Project-Key/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/KoukeNeko/Project-Key/ci.yml?branch=main&style=for-the-badge&label=CI"></a>
 </p>
 
