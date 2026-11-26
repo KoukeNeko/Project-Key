@@ -1,0 +1,28 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: Project Key
+Label: Project Key
+Codename: jammy
+Date: Thu, 26 Nov 2026 18:44:43 UTC
+Architectures: amd64
+Components: main
+MD5Sum:
+ a983504996c847d6db2a3ae93687b5de 1247 main/binary-amd64/Packages
+ 674fd8cd1ff5ff2b8ec98872e2f64029 696 main/binary-amd64/Packages.gz
+ 3d983cefd907751fc7be098599d00958 75 main/binary-amd64/Release
+SHA1:
+ b01832515ed03560d68728401df7017459e8e722 1247 main/binary-amd64/Packages
+ 7d9de8eca05e6ff9d6dd47ec1140604ef3026c99 696 main/binary-amd64/Packages.gz
+ 98c05fe6c462b0ac1e1450f7884cf3c9658a1e92 75 main/binary-amd64/Release
+SHA256:
+ 30a6aeb20e16d4be6283de6f97b0e48163ea3dbb50c5f9e054002efc25dc1a1f 1247 main/binary-amd64/Packages
+ 05593773cfa93936461432712cca8194f52a766326f5f0130f2ef8f47455d4ae 696 main/binary-amd64/Packages.gz
+ 3607a1a94c098b2a50fa62f3eafdc0469ef9aebeca7ff087027fed92e1e491a8 75 main/binary-amd64/Release
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQRBmIkPCjqsUPEXNb/gmbtexz/r/gUCawh+GwAKCRDgmbtexz/r
+/liJAQDdshVGQLY/nWoPgWE3hPcq4cTMnsMBkftB6N09TAJpCwEA85hLCxFqhgjX
+22ZSFXaRRfalDPxIpBtRAEcJR3qnywY=
+=eABx
+-----END PGP SIGNATURE-----

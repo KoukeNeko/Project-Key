@@ -1,19 +1,19 @@
 Package: fcitx5-projectkey
-Version: 0.12.1-1~noble
+Version: 0.12.2-1~noble
 Architecture: amd64
 Maintainer: KoukeNeko <noreply@users.noreply.github.com>
-Installed-Size: 9275
-Depends: libadwaita-1-0 (>= 1.5~beta), libc6 (>= 2.38), libcairo2 (>= 1.14.0), libenchant-2-2 (>= 2.2.3), libfcitx5config6 (>= 5.1.7), libfcitx5core7 (>= 5.1.7), libfcitx5utils2 (>= 5.1.7), libgcc-s1 (>= 3.4), libglib2.0-0t64 (>= 2.44.0), libgtk-4-1 (>= 4.0.0), libjson-glib-1.0-0 (>= 1.5.2), libpango-1.0-0 (>= 1.22.0), libpangocairo-1.0-0 (>= 1.14.0), libqt6core6t64 (>= 6.4.0), libqt6dbus6t64 (>= 6.4.0), libqt6gui6t64 (>= 6.1.2), libqt6network6t64 (>= 6.1.2), libqt6widgets6t64 (>= 6.1.2), libsoup-3.0-0 (>= 3.0.3), libstdc++6 (>= 13.1), libwayland-client0 (>= 1.20.0), libxcb1, fcitx5, hunspell-en-us, fcitx5-projectkey-data (= 2026.11.14+mcb257da53-1)
+Installed-Size: 9255
+Depends: libadwaita-1-0 (>= 1.5~beta), libc6 (>= 2.38), libcairo2 (>= 1.14.0), libenchant-2-2 (>= 2.2.3), libfcitx5config6 (>= 5.1.7), libfcitx5core7 (>= 5.1.7), libfcitx5utils2 (>= 5.1.7), libgcc-s1 (>= 3.4), libglib2.0-0t64 (>= 2.44.0), libgtk-4-1 (>= 4.0.0), libjson-glib-1.0-0 (>= 1.5.2), libpango-1.0-0 (>= 1.22.0), libpangocairo-1.0-0 (>= 1.14.0), libqt6core6t64 (>= 6.4.0), libqt6dbus6t64 (>= 6.4.0), libqt6gui6t64 (>= 6.1.2), libqt6network6t64 (>= 6.1.2), libqt6widgets6t64 (>= 6.1.2), libsoup-3.0-0 (>= 3.0.3), libstdc++6 (>= 13.1), libwayland-client0 (>= 1.20.0), libxcb1, fcitx5, hunspell-en-us, fcitx5-projectkey-data (= 2026.11.27+mcb257da53-1)
 Recommends: fonts-noto-cjk
 Replaces: fcitx5-projectkey-data
 Homepage: https://github.com/KoukeNeko/Project-Key
 Priority: optional
 Section: utils
-Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.12.1-1~noble_amd64.deb
-Size: 3199608
-SHA256: 314d45418c3dbedbd9ea2abf99236420ebe24093afcd2239f1639b1b55e979c8
-SHA1: 4a27978280ff58fb36d61c8042f33dbc969376f6
-MD5sum: a90ae236da7c7b2a7c1ca5d7362b0247
+Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.12.2-1~noble_amd64.deb
+Size: 3192008
+SHA256: 09e4ffaf678291b7903a1c7c133cd3b8f9c09659006a3628d8a76e416d2f0d27
+SHA1: 7ee9fd5ec108abaa9011c0da532aab1e33faa4d1
+MD5sum: 8f1703ab7f67eb659a63ae8c9e457958
 Description: Zhuyin input method for Fcitx5
  Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
  for Fcitx5 on GNOME, KDE and other desktops.

@@ -12,3 +12,10 @@ Architectures: amd64
 Components: main
 SignWith: 4198890F0A3AAC50F11735BFE099BB5EC73FEBFE
 
+Origin: Project Key
+Label: Project Key
+Codename: jammy
+Architectures: amd64
+Components: main
+SignWith: 4198890F0A3AAC50F11735BFE099BB5EC73FEBFE
+

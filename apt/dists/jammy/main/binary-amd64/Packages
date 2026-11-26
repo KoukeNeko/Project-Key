@@ -1,0 +1,20 @@
+Package: fcitx5-projectkey
+Version: 0.12.2-1~jammy
+Architecture: amd64
+Maintainer: KoukeNeko <noreply@users.noreply.github.com>
+Installed-Size: 8499
+Depends: libc6 (>= 2.34), libcairo2 (>= 1.14.0), libenchant-2-2 (>= 2.2.3), libfcitx5config6 (>= 5.0.14), libfcitx5core7 (>= 5.0.14), libfcitx5utils2 (>= 5.0.14), libgcc-s1 (>= 3.4), libglib2.0-0 (>= 2.39.4), libpango-1.0-0 (>= 1.22.0), libpangocairo-1.0-0 (>= 1.14.0), libqt6core6 (>= 6.2.0), libqt6dbus6 (>= 6.1.2), libqt6gui6 (>= 6.1.2), libqt6network6 (>= 6.1.2), libqt6widgets6 (>= 6.1.2), libstdc++6 (>= 12), libwayland-client0 (>= 1.20.0), libxcb1, fcitx5, hunspell-en-us, fcitx5-projectkey-data (= 2026.11.27+mcb257da53-1)
+Recommends: fonts-noto-cjk
+Replaces: fcitx5-projectkey-data
+Homepage: https://github.com/KoukeNeko/Project-Key
+Priority: optional
+Section: utils
+Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.12.2-1~jammy_amd64.deb
+Size: 2841400
+SHA256: 8689b0485833587b7b60670bf9e08e9b0383beaa878d95a67ffd3645b7c863ac
+SHA1: 5d48e9ad63eb20556ac2888a2f36cdfda343b1a7
+MD5sum: 24f383a1a705c968806c502b534706d4
+Description: Zhuyin input method for Fcitx5
+ Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
+ for Fcitx5 on GNOME, KDE and other desktops.
+
