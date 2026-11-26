@@ -36,7 +36,7 @@ if [ -n "${PROJECTKEY_LLAMA:-}" ]; then
   # mtmd, llama.cpp's audio input, for the speech model (core/engine/SpeechModel.h); the microphone
   # (core/engine/Microphone.h) through the miniaudio llama.cpp vendors.
   cmake --build "$BUILD/llama" --target llama mtmd >/dev/null
-  ENGINE="$ENGINE $CORE/AdvancedModel.cpp $CORE/SpeechModel.cpp $CORE/Microphone.cpp"
+  ENGINE="$ENGINE $CORE/SpeechModel.cpp $CORE/Microphone.cpp"
   CXXFLAGS="$CXXFLAGS -DPROJECTKEY_ADVANCED_MODEL -I$PROJECTKEY_LLAMA/include -I$PROJECTKEY_LLAMA/ggml/include -I$PROJECTKEY_LLAMA/tools/mtmd -I$PROJECTKEY_LLAMA/vendor"
   LIBS="$LIBS $BUILD/llama/tools/mtmd/libmtmd.a $BUILD/llama/vendor/hash/libvendor-hash.a $BUILD/llama/src/libllama.a $BUILD/llama/ggml/src/libggml.a $BUILD/llama/ggml/src/libggml-cpu.a $BUILD/llama/ggml/src/libggml-base.a"
 fi

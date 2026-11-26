@@ -19,8 +19,7 @@ inline std::string ModelsVersion(const std::filesystem::path& dir) {
   return version;
 }
 
-// The newest complete release under downloaded, or empty when there is none. The advanced model
-// (AdvancedModel.h), which nothing bundles, loads from it as it is.
+// The newest complete release under downloaded, or empty when there is none.
 inline std::filesystem::path NewestDownload(const std::filesystem::path& downloaded) {
   std::filesystem::path newest;
   std::string newestVersion;

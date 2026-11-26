@@ -50,7 +50,6 @@
 #include <vector>
 
 #ifdef PROJECTKEY_ADVANCED_MODEL
-#include "AdvancedModel.h"
 #include "Microphone.h"
 #include "SpeechModel.h"
 #endif
@@ -64,8 +63,6 @@ namespace ProjectKey {
 namespace {
 
 constexpr char kConfigPath[] = "conf/projectkey.conf";
-// How long the typing pauses before the advanced model chooses the sentence (AdvancedRanker).
-constexpr uint64_t kPauseUs = 300000;
 constexpr uint64_t kFirstUpdateCheckUs = 60000000;  // a minute after Fcitx5 starts
 
 enum class ProofMode { Always, WhenDoubtful, Off };
@@ -568,98 +565,6 @@ class UpdateCheck {
   bool running_ = false;  // on Fcitx5's thread only
 };
 
-// The advanced model (core/engine/AdvancedModel.h) the settings windows download: loaded and asked
-// on a thread of its own, so typing never waits for it, and its answers handed back on Fcitx5's
-// thread. Built without llama.cpp, there is never one to load.
-class AdvancedRanker {
- public:
-  using Answer = std::function<void(const Composer::RankingRequest&, const std::vector<double>&)>;
-  explicit AdvancedRanker(fcitx::EventLoop& loop) {
-    dispatcher_.attach(&loop);
-    thread_ = std::thread([this] { run(); });
-  }
-  ~AdvancedRanker() {
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      stopping_ = true;
-    }
-    wake_.notify_all();
-    thread_.join();
-    dispatcher_.detach();
-  }
-  // Loads the newest download, or drops the model when there is none; then loaded(whether one is).
-  void reload(std::function<void(bool)> loaded) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    reload_ = std::move(loaded);
-    wake_.notify_all();
-  }
-  // Scores the request's sentences; a request still waiting is replaced, as a key made it old.
-  void ask(Composer::RankingRequest request, Answer answer) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    job_ = {std::move(request), std::move(answer)};
-    wake_.notify_all();
-  }
-
- private:
-  void run() {
-    for (;;) {
-      std::unique_lock<std::mutex> lock(mutex_);
-      wake_.wait(lock, [&] { return stopping_ || reload_ || job_; });
-      if (stopping_) return;
-      if (reload_) {
-        std::function<void(bool)> loaded = std::move(reload_);
-        reload_ = nullptr;
-        lock.unlock();
-        bool ok = load();
-        dispatcher_.schedule([loaded, ok] { loaded(ok); });
-        continue;
-      }
-      std::pair<Composer::RankingRequest, Answer> job = std::move(*job_);
-      job_.reset();
-      lock.unlock();
-      std::vector<double> scores(job.first.sentences.size(), NAN);
-#ifdef PROJECTKEY_ADVANCED_MODEL
-      if (model_) scores = model_->log10Probabilities(job.first.sentences);
-#endif
-      dispatcher_.schedule([job = std::move(job), scores = std::move(scores)] { job.second(job.first, scores); });
-    }
-  }
-  bool load() {
-#ifdef PROJECTKEY_ADVANCED_MODEL
-    model_.reset();  // a removed download's memory goes before a new one loads
-    std::filesystem::path dir = NewestDownload(SettingsRows::DownloadedAdvanced());
-    if (dir.empty()) return false;
-    auto model = std::make_unique<AdvancedModel>();
-    // All but one core: it runs only while the typing pauses.
-    int threads = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 1, 8);
-    if (!model->load((dir / AdvancedModel::kFileName).string(), threads)) {
-      FCITX_ERROR() << "Project Key: cannot load the advanced model in " << dir;
-      return false;
-    }
-    model_ = std::move(model);
-    // Older ones are left by an update, as UseNewestModels leaves older models; not one downloading.
-    std::error_code error;
-    for (const auto& entry : std::filesystem::directory_iterator(SettingsRows::DownloadedAdvanced(), error)) {
-      if (entry.path() != dir && entry.path().extension() != ".partial") std::filesystem::remove_all(entry.path(), error);
-    }
-    return true;
-#else
-    return false;
-#endif
-  }
-
-  fcitx::EventDispatcher dispatcher_;
-  std::mutex mutex_;
-  std::condition_variable wake_;
-  bool stopping_ = false;
-  std::function<void(bool)> reload_;
-  std::optional<std::pair<Composer::RankingRequest, Answer>> job_;
-#ifdef PROJECTKEY_ADVANCED_MODEL
-  std::unique_ptr<AdvancedModel> model_;  // only the thread touches it
-#endif
-  std::thread thread_;  // last: it runs on the members above
-};
-
 // Dictation (Setting::kDictation): the microphone records on Fcitx5's thread while the dictation key is
 // held, and the speech model (core/engine/SpeechModel.h) the settings windows download transcribes
 // on a thread of its own; what was said goes back on Fcitx5's thread. Built without llama.cpp,
@@ -1012,7 +917,6 @@ class Engine : public fcitx::InputMethodEngineV2 {
     }
     if (controller.handleKey(k)) event.filterAndAccept();
     if (environment_.fullWidth != fullWidthAction_.isChecked(nullptr)) syncMenu(event.inputContext());  // Shift+Space
-    waitForPause(event.inputContext());
   }
 
   // Focus left the field, or the app reset it (a click in the text): the app
@@ -1084,7 +988,6 @@ class Engine : public fcitx::InputMethodEngineV2 {
     });
   }
   void reloadAdvanced() {
-    advanced_.reload([this](bool loaded) { environment_.advancedRanking = loaded; });
     dictation_.reload();
   }
   // The dictation key pressed or released: records while it is held, then types what was said in the
@@ -1111,35 +1014,6 @@ class Engine : public fcitx::InputMethodEngineV2 {
       notifications->call<fcitx::INotifications::sendNotification>("Project Key", 0, "fcitx-projectkey", summary, body,
                                                                    std::vector<std::string>{}, -1, nullptr, nullptr);
     }
-  }
-  // After each key the pause starts again; once it lasts, the advanced model chooses for the
-  // context typed in, and its answer is dropped if a key came since (Controller::applyRanking).
-  void waitForPause(fcitx::InputContext* ic) {
-    if (!environment_.advancedRanking) return;
-    paused_ = ic->watch();
-    uint64_t at = fcitx::now(CLOCK_MONOTONIC) + kPauseUs;
-    if (pause_) {
-      pause_->setTime(at);
-      pause_->setOneShot();
-      return;
-    }
-    pause_ = instance_->eventLoop().addTimeEvent(CLOCK_MONOTONIC, at, 1000, [this](fcitx::EventSourceTime*, uint64_t) {
-      askAdvanced();
-      return true;
-    });
-  }
-  void askAdvanced() {
-    fcitx::InputContext* ic = paused_.get();
-    if (!ic || instance_->inputMethodEngine(ic) != this) return;
-    std::optional<Composer::RankingRequest> request = ic->propertyFor(&factory_)->controller.rankingRequest();
-    if (!request) return;
-    advanced_.ask(std::move(*request), [this, ref = ic->watch()](const Composer::RankingRequest& asked, const std::vector<double>& scores) {
-      fcitx::InputContext* typed = ref.get();
-      if (!typed || instance_->inputMethodEngine(typed) != this) return;
-      Session* session = typed->propertyFor(&factory_);
-      Active active(session);
-      session->controller.applyRanking(asked, scores);
-    });
   }
 
   // The Fcitx5 menu's 檢查 Project Key 安裝: what an install needs, as a notification. ic is
@@ -1188,9 +1062,6 @@ class Engine : public fcitx::InputMethodEngineV2 {
   fcitx::SimpleAction settingsAction_, checkAction_, simplifiedAction_, fullWidthAction_, updateAction_;
   std::string newerRelease_;  // the version updateAction_ offers, once found
   std::unique_ptr<fcitx::EventSourceTime> updateTimer_;
-  std::unique_ptr<fcitx::EventSourceTime> pause_;
-  fcitx::TrackableObjectReference<fcitx::InputContext> paused_;
-  AdvancedRanker advanced_{instance_->eventLoop()};  // after what its answers use
   Dictation dictation_{instance_->eventLoop()};
   UpdateCheck updates_{instance_->eventLoop()};
   SettingsObject settingsObject_{environment_, config_, [this] { reloadAdvanced(); }};

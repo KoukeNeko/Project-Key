@@ -636,7 +636,6 @@ void Activate(GtkApplication* app) {
   gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
   CheckForModels(GTK_LABEL(value));
 #ifdef PROJECTKEY_ADVANCED_MODEL
-  adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), AddOnRow(kAdvanced));
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), AddOnRow(kSpeech));
 #endif
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(about), InfoRow("授權", &value, "MIT"));
@@ -873,16 +872,13 @@ void ActivateWelcome(GtkApplication* app) {
   gtk_box_append(GTK_BOX(tryBox), frame);
   gtk_box_append(GTK_BOX(content), tryBox);
 
-  // The newest 選字模型 is downloaded; 進階模型 only when the user asks, for its size.
+  // The newest 選字模型 is downloaded.
   GtkWidget* models = adw_preferences_group_new();
   GtkWidget* value = nullptr;
   adw_preferences_group_add(ADW_PREFERENCES_GROUP(models), InfoRow("選字模型", &value, InstalledModelsText().c_str()));
   gtk_label_set_selectable(GTK_LABEL(value), false);  // it may become a link
   g_object_set_data(G_OBJECT(value), "automatic", GINT_TO_POINTER(1));
   CheckForModels(GTK_LABEL(value));
-#ifdef PROJECTKEY_ADVANCED_MODEL
-  adw_preferences_group_add(ADW_PREFERENCES_GROUP(models), AddOnRow(kAdvanced));
-#endif
   gtk_box_append(GTK_BOX(content), models);
 
   GtkWidget* footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);

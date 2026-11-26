@@ -52,7 +52,6 @@ private func Property<T>(of source: TISInputSource, _ key: CFString) -> T? {
 struct WelcomeForm: View {
   @ObservedObject var inputSource: InputSourceState
   @ObservedObject var models: ModelsUpdater
-  @ObservedObject var advanced: ModelsUpdater
   @State var tried = ""
   var checksModels = true  // off in the preview, which downloads nothing
   @FocusState private var trying: Bool
@@ -122,7 +121,7 @@ struct WelcomeForm: View {
       .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
       .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(nsColor: .separatorColor).opacity(0.6)))
 
-      // The newest 選字模型 is downloaded; 進階模型 only when the user asks, for its size.
+      // The newest 選字模型 is downloaded.
       VStack(spacing: 0) {
         HStack {
           Text("選字模型").font(.system(size: 14))
@@ -131,16 +130,6 @@ struct WelcomeForm: View {
         }
         .padding(.horizontal, 14)
         .frame(minHeight: 44)
-        if advanced.supported {
-          Divider().padding(.leading, 14)
-          HStack {
-            Text("進階模型").font(.system(size: 14))
-            Spacer()
-            ModelsState(updater: advanced).foregroundStyle(.secondary)
-          }
-          .padding(.horizontal, 14)
-          .frame(minHeight: 44)
-        }
       }
       .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
       .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(nsColor: .separatorColor).opacity(0.6)))
@@ -166,7 +155,6 @@ struct WelcomeForm: View {
       await models.check()
       if case .available(let release) = models.state { models.download(release) }
     }
-    .task { if checksModels && advanced.supported { await advanced.check() } }
   }
 
   // 0 not yet, 1 the step to do now, 2 done.
@@ -297,12 +285,11 @@ final class WelcomeWindow: NSObject {
   // After installing (Homebrew opens the app), while Project Key is not an enabled input source.
   @MainActor @objc static func showIfNeeded(models: PKModels) {
     if InputSourceState().enabled { return }
-    let (updater, advanced) = ModelsUpdater.shared(for: models)
-    show(models: updater, advanced: advanced)
+    show(models: ModelsUpdater.shared(for: models))
   }
 
   // From the settings window's 關於, whatever the state.
-  @MainActor static func show(models: ModelsUpdater, advanced: ModelsUpdater) {
+  @MainActor static func show(models: ModelsUpdater) {
     if let window {
       NSApp.activate(ignoringOtherApps: true)
       window.makeKeyAndOrderFront(nil)
@@ -314,7 +301,7 @@ final class WelcomeWindow: NSObject {
     window.titleVisibility = .hidden
     window.title = "Project Key"
     window.isReleasedWhenClosed = false
-    window.contentView = NSHostingView(rootView: WelcomeForm(inputSource: inputSource, models: models, advanced: advanced,
+    window.contentView = NSHostingView(rootView: WelcomeForm(inputSource: inputSource, models: models,
                                                             showSettings: { PKShowSettings() },
                                                             close: { WelcomeWindow.window?.close(); WelcomeWindow.window = nil }))
     window.setContentSize(window.contentView!.fittingSize)
@@ -327,13 +314,13 @@ final class WelcomeWindow: NSObject {
 
   // The window's states as PNGs, for `ProjectKey --preview`.
   @MainActor @objc static func preview(into dir: String, models: PKModels) {
-    let (updater, advanced) = ModelsUpdater.shared(for: models)
+    let updater = ModelsUpdater.shared(for: models)
     let states: [(String, Bool, Bool, String)] = [
       ("welcome-add", false, false, ""), ("welcome-switch", true, false, ""),
       ("welcome-try", true, true, ""), ("welcome-done", true, true, "我們把舊的程式重構成模組"),
     ]
     for (name, enabled, selected, tried) in states {
-      let form = WelcomeForm(inputSource: InputSourceState(enabled: enabled, selected: selected), models: updater, advanced: advanced,
+      let form = WelcomeForm(inputSource: InputSourceState(enabled: enabled, selected: selected), models: updater,
                              tried: tried, checksModels: false, showSettings: {}, close: {})
       let view = NSHostingView(rootView: form.background(Color(nsColor: .windowBackgroundColor)).environment(\.controlActiveState, .key))
       let window = NSWindow(contentRect: .zero, styleMask: .borderless, backing: .buffered, defer: false)

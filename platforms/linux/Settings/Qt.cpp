@@ -472,7 +472,7 @@ int Welcome(QApplication& app, QDBusInterface& controller) {
   grid->addWidget(text, 4, 1, 1, 3);
   layout->addWidget(steps);
 
-  // The newest 選字模型 is downloaded; 進階模型 only when the user asks, for its size.
+  // The newest 選字模型 is downloaded.
   QNetworkAccessManager network;
   auto* modelsFrame = new QFrame;
   modelsFrame->setFrameShape(QFrame::StyledPanel);
@@ -480,9 +480,6 @@ int Welcome(QApplication& app, QDBusInterface& controller) {
   auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
   modelsForm->addRow("選字模型：", models);
   CheckForModels(network, models, nullptr, nullptr, true);
-#ifdef PROJECTKEY_ADVANCED_MODEL
-  modelsForm->addRow("進階模型：", AddOnRow(network, kAdvanced));
-#endif
   layout->addWidget(modelsFrame);
 
   auto* footer = new QHBoxLayout;
@@ -741,7 +738,6 @@ int main(int argc, char** argv) {
   auto* models = new QLabel(QString::fromStdString(InstalledModelsText()));
   about->addRow("選字模型：", models);
 #ifdef PROJECTKEY_ADVANCED_MODEL
-  about->addRow("進階模型：", AddOnRow(network, kAdvanced));
   about->addRow("語音模型：", AddOnRow(network, kSpeech));
 #endif
   about->addRow("授權：", new QLabel("MIT"));

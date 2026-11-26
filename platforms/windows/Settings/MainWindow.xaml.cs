@@ -63,8 +63,6 @@ public sealed partial class MainWindow : Window {
     Version.Text = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "..", "ProjectKey.dll")).ProductVersion ?? "";
     CheckForReleases(ModelsReleases(Models));
 #if ADVANCED_MODEL
-    Advanced.Visibility = Visibility.Visible;
-    CheckForReleases(AddOnReleases(Advanced, AdvancedModel));
     DictationCard.Visibility = Visibility.Visible;
     Speech.Visibility = Visibility.Visible;
     CheckForReleases(AddOnReleases(Speech, SpeechModel));
@@ -138,16 +136,13 @@ public sealed partial class MainWindow : Window {
     return new TextBlock { Text = !installed ? "未安裝" : version != "" ? version : "已安裝" };
   }
 
-  // A model downloaded apart from the models that nothing installs: the advanced model
-  // (core/engine/AdvancedModel.h) or the speech model (core/engine/SpeechModel.h), in a folder of
-  // its own, from <Prefix>YYYY-MM-DD releases with all its files.
+  // A model downloaded apart from the models that nothing installs: the speech model
+  // (core/engine/SpeechModel.h), in a folder of its own, from <Prefix>YYYY-MM-DD releases with all its files.
   internal sealed record AddOn(string Folder, string Prefix, string[] Files, string RemoveTitle, string RemoveBody);
 
   private static string UserFolder(string name) =>
       Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Project Key", name);
 
-  internal static readonly AddOn AdvancedModel =
-      new(UserFolder("advanced"), "advanced-", ["advanced.gguf"], "移除進階模型？", "打字停頓時，不再用進階模型重選整句。");
   internal static readonly AddOn SpeechModel =
       new(UserFolder("speech"), "speech-", ["speech.gguf", "speech-encoder.gguf"], "移除語音模型？", "按住右 Alt 不再錄音輸入。");
 

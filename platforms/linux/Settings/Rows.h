@@ -40,10 +40,10 @@ inline std::filesystem::path DownloadedModels() {
   return data.empty() ? data : data / "models";
 }
 
-// A model downloaded apart from the 選字模型 and never bundled: the advanced model
-// (core/engine/AdvancedModel.h) and the speech model (core/engine/SpeechModel.h). Each goes in a
-// folder of its own, a release per folder as for the models, and the addon uses the newest
-// (NewestDownload). Its row offers <prefix>YYYY-MM-DD releases published with all its files.
+// A model downloaded apart from the 選字模型 and never bundled: the speech model
+// (core/engine/SpeechModel.h). It goes in a folder of its own, a release per folder as for the
+// models, and the addon uses the newest (NewestDownload). Its row offers <prefix>YYYY-MM-DD
+// releases published with all its files.
 struct AddOn {
   const char* title;   // the row's
   const char* folder;  // under UserData()
@@ -55,10 +55,8 @@ struct AddOn {
     return data.empty() ? data : data / folder;
   }
 };
-inline const AddOn kAdvanced{"進階模型", "advanced", "advanced-", {"advanced.gguf"}, "移除進階模型？", "打字停頓時，不再用進階模型重選整句。"};
 inline const AddOn kSpeech{"語音模型", "speech", "speech-", {"speech.gguf", "speech-encoder.gguf"}, "移除語音模型？", "按住右 Alt 不再錄音輸入。"};
 
-inline std::filesystem::path DownloadedAdvanced() { return kAdvanced.downloaded(); }
 inline std::filesystem::path DownloadedSpeech() { return kSpeech.downloaded(); }
 
 // The user's own words, phrases.txt (core/engine Lexicon::loadUserPhrases), or the words never

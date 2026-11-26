@@ -855,10 +855,13 @@ int main(int argc, char** argv) {
     fs::remove_all(downloaded / "2026-04-01");
     release(downloaded / "2026-02-01", "2026-02-01", true);
     assert(ModelsDirectory(bundled, downloaded) == downloaded / "2026-02-01");
-    // The advanced model has no bundled copy: the newest complete release, or none.
     assert(NewestDownload(downloaded) == downloaded / "2026-02-01");
     assert(NewestDownload(root / "none").empty());
+    // The retired advanced model folder beside downloaded models is removed automatically.
+    fs::create_directories(root / "advanced" / "2026-01-01");
+    std::ofstream(root / "advanced" / "2026-01-01" / "advanced.gguf") << "retired";
     assert(UseNewestModels(env, bundled.string(), downloaded.string()));
+    assert(!fs::exists(root / "advanced"));
     assert(env.lm != before && env.models == loads + 1 && env.lm->isAssociatedPhrasesV2Loaded());
     // The new lexicon has the dates and times, which the tests below do without, as above.
     assert(env.lm->convertMacro("MACRO@THIS_YEAR_PLAIN").ends_with("年"));

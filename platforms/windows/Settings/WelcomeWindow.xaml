@@ -72,11 +72,9 @@
         </Border>
       </StackPanel>
 
-      <!-- The newest 選字模型 is downloaded; 進階模型 only when the user asks, for its size. -->
+      <!-- The newest 選字模型 is downloaded. -->
       <StackPanel Spacing="4">
         <tk:SettingsCard x:Name="Models" Header="選字模型" />
-        <!-- Shown when build.ps1 built the server with llama.cpp (ADVANCED_MODEL). -->
-        <tk:SettingsCard x:Name="Advanced" Header="進階模型" Visibility="Collapsed" />
       </StackPanel>
 
       <Grid>

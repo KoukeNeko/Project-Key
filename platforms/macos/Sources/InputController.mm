@@ -10,7 +10,6 @@
 #import "CandidatePanel.h"
 #import "SettingsWindow.h"
 #ifdef PROJECTKEY_ADVANCED_MODEL
-#include "AdvancedModel.h"
 #include "Microphone.h"
 #include "SpeechModel.h"
 #endif
@@ -86,90 +85,13 @@ NSURL *DownloadedModels() {
   return [PKSupportDirectory() URLByAppendingPathComponent:@"models" isDirectory:YES];
 }
 
-// The advanced model the settings window downloads, beside the models.
-NSURL *DownloadedAdvanced() {
-  return [PKSupportDirectory() URLByAppendingPathComponent:@"advanced" isDirectory:YES];
-}
-
-// The speech model the settings window downloads, beside the advanced model.
+// The speech model the settings window downloads, beside the models.
 NSURL *DownloadedSpeech() {
   return [PKSupportDirectory() URLByAppendingPathComponent:@"speech" isDirectory:YES];
 }
 
 // The device-dependent flag of the right ⌥ alone (NX_DEVICERALTKEYMASK), which the left ⌥ leaves off.
 constexpr NSEventModifierFlags kRightOptionDown = 0x40;
-
-// How long the typing pauses before the advanced model chooses the sentence.
-constexpr NSTimeInterval kPauseSeconds = 0.3;
-
-// The advanced model (core/engine/AdvancedModel.h): loaded and asked on a serial queue of its own,
-// so typing never waits for it, with its answers handed back on the main thread. Built without
-// llama.cpp, there is never one to load.
-class AdvancedRanker {
- public:
-  using Request = ProjectKey::Composer::RankingRequest;
-  using Answer = std::function<void(const Request &, const std::vector<double> &)>;
-  static AdvancedRanker &Shared() {
-    static AdvancedRanker *ranker = new AdvancedRanker();
-    return *ranker;
-  }
-  // Loads the newest download, or drops the model when there is none; env says which once done.
-  void reload(ProjectKey::Environment *env) {
-    dispatch_async(queue_, ^{
-      bool loaded = load();
-      dispatch_async(dispatch_get_main_queue(), ^{
-        env->advancedRanking = loaded;
-      });
-    });
-  }
-  // Scores the request's sentences, unless one asked since (a key came) is waiting.
-  void ask(Request request, Answer answer) {
-    uint64_t ticket = ++latest_;
-    auto job = std::make_shared<std::pair<Request, Answer>>(std::move(request), std::move(answer));
-    dispatch_async(queue_, ^{
-      if (ticket != latest_) return;
-      std::vector<double> scores(job->first.sentences.size(), NAN);
-#ifdef PROJECTKEY_ADVANCED_MODEL
-      if (model_) scores = model_->log10Probabilities(job->first.sentences);
-#endif
-      dispatch_async(dispatch_get_main_queue(), ^{
-        job->second(job->first, scores);
-      });
-    });
-  }
-
- private:
-  bool load() {
-#ifdef PROJECTKEY_ADVANCED_MODEL
-    model_.reset();  // a removed download's memory goes before a new one loads
-    std::filesystem::path folder = DownloadedAdvanced().fileSystemRepresentation;
-    std::filesystem::path dir = ProjectKey::NewestDownload(folder);
-    if (dir.empty()) return false;
-    auto model = std::make_unique<ProjectKey::AdvancedModel>();
-    // All but one core: it runs only while the typing pauses.
-    int threads = std::clamp(static_cast<int>(NSProcessInfo.processInfo.activeProcessorCount) - 1, 1, 8);
-    if (!model->load((dir / ProjectKey::AdvancedModel::kFileName).string(), threads)) {
-      NSLog(@"Project Key: cannot load the advanced model in %s", dir.c_str());
-      return false;
-    }
-    model_ = std::move(model);
-    // Older ones are left by an update, as UseNewestModels leaves older models; not one downloading.
-    std::error_code error;
-    for (const auto &entry : std::filesystem::directory_iterator(folder, error)) {
-      if (entry.path() != dir && entry.path().extension() != ".partial") std::filesystem::remove_all(entry.path(), error);
-    }
-    return true;
-#else
-    return false;
-#endif
-  }
-
-  dispatch_queue_t queue_ = dispatch_queue_create("org.projectkey.inputmethod.advanced", DISPATCH_QUEUE_SERIAL);
-  std::atomic<uint64_t> latest_{0};
-#ifdef PROJECTKEY_ADVANCED_MODEL
-  std::unique_ptr<ProjectKey::AdvancedModel> model_;  // only the queue touches it
-#endif
-};
 
 // Dictation (Setting::kDictation): the microphone records on the main thread while the right ⌥ is
 // held, and the speech model (core/engine/SpeechModel.h) transcribes on a serial queue of its own,
@@ -299,10 +221,8 @@ ProjectKey::Environment &SharedEnvironment() {
       }];
       [center addObserverForName:PKReloadModelsNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *) {
         if (!UseNewestModels(*env)) NSLog(@"Project Key: cannot load the downloaded models");
-        AdvancedRanker::Shared().reload(env);
         Dictation::Shared().reload();
       }];
-      AdvancedRanker::Shared().reload(env);
       Dictation::Shared().reload();
     }
     static DefaultsSettings settings;
@@ -491,15 +411,6 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 #endif
 }
 
-- (NSString *)advancedVersion {
-  std::filesystem::path dir = ProjectKey::NewestDownload(DownloadedAdvanced().fileSystemRepresentation);
-  return dir.empty() ? @"" : String(ProjectKey::ModelsVersion(dir));
-}
-
-- (NSURL *)advancedDownloads {
-  return DownloadedAdvanced();
-}
-
 - (NSString *)speechVersion {
   std::filesystem::path dir = ProjectKey::NewestDownload(DownloadedSpeech().fileSystemRepresentation);
   return dir.empty() ? @"" : String(ProjectKey::ModelsVersion(dir));
@@ -510,7 +421,6 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
 }
 
 - (void)reloadAdvanced {
-  AdvancedRanker::Shared().reload(&SharedEnvironment());
   Dictation::Shared().reload();
 }
 
@@ -653,9 +563,7 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
     _controller->toggleSimplified();
     return YES;
   }
-  BOOL handled = _controller->handleKey(KeyEventFrom(event));
-  [self waitForPause];
-  return handled;
+  return _controller->handleKey(KeyEventFrom(event));
 }
 
 // The right ⌥ pressed or released: records while it is held, then types what was said in the
@@ -673,23 +581,6 @@ ProjectKey::KeyEvent KeyEventFrom(NSEvent *event) {
     if (!strongSelf) return;
     strongSelf->_client->client = client;
     strongSelf->_controller->insertDictation(text);
-  });
-}
-
-// After each key the pause starts again; once it lasts, the advanced model chooses
-// (Controller::rankingRequest), and its answer is dropped when a key came since.
-- (void)waitForPause {
-  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(paused) object:nil];
-  if (SharedEnvironment().advancedRanking) [self performSelector:@selector(paused) withObject:nil afterDelay:kPauseSeconds];
-}
-
-- (void)paused {
-  std::optional<ProjectKey::Composer::RankingRequest> request = _controller->rankingRequest();
-  if (!request) return;
-  __weak PKInputController *weakSelf = self;
-  AdvancedRanker::Shared().ask(std::move(*request), [weakSelf](const ProjectKey::Composer::RankingRequest &asked, const std::vector<double> &scores) {
-    PKInputController *strongSelf = weakSelf;
-    if (strongSelf) strongSelf->_controller->applyRanking(asked, scores);
   });
 }
 

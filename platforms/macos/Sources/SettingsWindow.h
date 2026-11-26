@@ -36,16 +36,12 @@ FOUNDATION_EXPORT NSString *const PKCheckForUpdatesKey;    // the input method a
 @property(readonly) BOOL loaded;              // bigram.bin and chars.bin are in use
 @property(readonly, copy) NSURL *downloads;
 - (BOOL)reload;  // switches to the newest release in downloads; NO when it cannot be loaded
-// The advanced model (core/engine/AdvancedModel.h), downloaded apart from them into its own
+// The speech model for dictation (core/engine/SpeechModel.h), downloaded apart from them into its own
 // folder as they are; nothing bundles it.
-@property(readonly) BOOL advancedSupported;           // this input method was built to run it
-@property(readonly, copy) NSString *advancedVersion;  // the newest one downloaded; empty when there is none
-@property(readonly, copy) NSURL *advancedDownloads;
-// The speech model for dictation (core/engine/SpeechModel.h), downloaded the same way; it runs
-// wherever the advanced model does (advancedSupported).
+@property(readonly) BOOL advancedSupported;  // this input method was built with llama.cpp (speech model)
 @property(readonly, copy) NSString *speechVersion;
 @property(readonly, copy) NSURL *speechDownloads;
-- (void)reloadAdvanced;  // after a download or a removal of either: loads the newest of both, or drops them
+- (void)reloadAdvanced;  // after a download or a removal: loads the newest speech model, or drops it
 @end
 
 // The input method's bundle identifier (Resources/Info.plist). The settings app

@@ -36,10 +36,6 @@ public sealed partial class WelcomeWindow : Window {
     Closed += (_, _) => poll.Stop();
     Refresh();
     MainWindow.CheckForReleases(MainWindow.ModelsReleases(Models), download: true);
-#if ADVANCED_MODEL
-    Advanced.Visibility = Visibility.Visible;
-    MainWindow.CheckForReleases(MainWindow.AddOnReleases(Advanced, MainWindow.AdvancedModel));
-#endif
   }
 
   // Whether the user's language list (Settings > Time & language) has Project Key.

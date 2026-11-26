@@ -194,7 +194,7 @@ void Controller::makeComposer() {
   ReloadUserPhrases(env_);
   // The composer keeps the words it looked up, so new user phrases need a new one.
   if (composer_ && abbreviated == abbreviated_ && omitTones == omitTones_ && fuzzy == fuzzy_ && rememberChoices == rememberChoices_ && keyboardLayout == keyboardLayout_ && env_.models == models_ &&
-      env_.advancedRanking == advancedRanking_ && env_.userPhrasesVersion == userPhrasesVersion_) {
+      env_.userPhrasesVersion == userPhrasesVersion_) {
     return;
   }
   userPhrasesVersion_ = env_.userPhrasesVersion;
@@ -204,22 +204,12 @@ void Controller::makeComposer() {
   rememberChoices_ = rememberChoices;
   keyboardLayout_ = keyboardLayout;
   models_ = env_.models;
-  advancedRanking_ = env_.advancedRanking;
   // An app that is not trusted with what was typed elsewhere neither reads nor teaches the choices either.
   composer_ = std::make_unique<Composer>(env_.lm, env_.bigram, rememberChoices && personal_ ? env_.userModel : nullptr,
                                          Composer::kContextWeight, Composer::kTrigramWeight, env_.chars, Composer::kCharWeight,
                                          rememberChoices && personal_ ? env_.personal : nullptr, abbreviated, omitTones, fuzzy,
                                          KeyboardLayout(keyboardLayout));
-  composer_->setAdvancedRanking(env_.advancedRanking);
   if (env_.sentences) composer_->setSentenceModel(env_.sentences);
-}
-
-std::optional<Composer::RankingRequest> Controller::rankingRequest() const {
-  return choosing_ ? std::nullopt : composer_->rankingRequest();
-}
-
-void Controller::applyRanking(const Composer::RankingRequest& request, const std::vector<double>& log10Probabilities) {
-  if (!choosing_ && composer_->applyRanking(request, log10Probabilities)) refresh();
 }
 
 void ClearChoices(Environment& env) {
@@ -262,6 +252,11 @@ bool UseNewestModels(Environment& env, const std::string& bundled, const std::st
   for (const auto& entry : std::filesystem::directory_iterator(Path(downloaded), error)) {
     // Best effort: Windows keeps a release open while a composer still maps it; the next start removes it.
     if (entry.path() != dir && entry.path().extension() != ".partial") std::filesystem::remove_all(entry.path(), error);
+  }
+  // Clean up the retired advanced model folder (advanced.gguf, ~1.3 GB) beside downloaded models.
+  if (!downloaded.empty()) {
+    std::filesystem::path retired = Path(downloaded).parent_path() / "advanced";
+    if (!retired.empty()) std::filesystem::remove_all(retired, error);
   }
   return true;
 }

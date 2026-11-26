@@ -48,13 +48,6 @@ void Post(NSString *name) {
   return NO;
 #endif
 }
-- (NSString *)advancedVersion {
-  std::filesystem::path dir = ProjectKey::NewestDownload(self.advancedDownloads.fileSystemRepresentation);
-  return dir.empty() ? @"" : @(ProjectKey::ModelsVersion(dir).c_str());
-}
-- (NSURL *)advancedDownloads {
-  return [PKSupportDirectory() URLByAppendingPathComponent:@"advanced" isDirectory:YES];
-}
 - (NSString *)speechVersion {
   std::filesystem::path dir = ProjectKey::NewestDownload(self.speechDownloads.fileSystemRepresentation);
   return dir.empty() ? @"" : @(ProjectKey::ModelsVersion(dir).c_str());

@@ -1,4 +1,4 @@
-# Builds the Windows input method into build\out and runs the tests. Needs
+﻿# Builds the Windows input method into build\out and runs the tests. Needs
 # Visual Studio with the C++ desktop workload (MSVC and the Windows SDK) and
 # uv (for the Python that generates McBopomofo's dictionary). The McBopomofo
 # engine and dictionary (MIT) are fetched at a pinned commit into build\. With
@@ -125,7 +125,7 @@ $engineSources = @('AssociatedPhrasesV2', 'ByteBlockBackedDictionary', 'McBopomo
 $engineSources += "$Engine\gramambular2\reading_grid.cpp", "$Engine\Mandarin\Mandarin.cpp"
 $engineObjects = @(Compile 'mcbopomofo' $engineSources @('/W0'))
 $coreSources = @("$Core\Composer.cpp", "$Core\Bigram.cpp", "$Core\CharModel.cpp", "$Core\SentenceModel.cpp", "$Core\PersonalModel.cpp", "$Core\Controller.cpp", "$Core\InputMacro.cpp")
-if ($Llama) { $coreSources += "$Core\AdvancedModel.cpp", "$Core\SpeechModel.cpp", "$Core\Microphone.cpp" }
+if ($Llama) { $coreSources += "$Core\SpeechModel.cpp", "$Core\Microphone.cpp" }
 $engineObjects += Compile 'engine' $coreSources
 Invoke-Native lib.exe /nologo "/OUT:$Obj\engine.lib" @engineObjects
 

@@ -28,12 +28,6 @@
 - (BOOL)advancedSupported {
   return NO;
 }
-- (NSString *)advancedVersion {
-  return @"";
-}
-- (NSURL *)advancedDownloads {
-  return [NSURL fileURLWithPath:NSTemporaryDirectory()];
-}
 - (NSString *)speechVersion {
   return @"";
 }

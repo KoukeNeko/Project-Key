@@ -30,12 +30,9 @@ struct SettingsForm: View {
   @State private var restoring = false
   @State private var removeFailed = false
   @State private var update = UpdateState.checking
-  @State private var removingAdvanced = false
-  @State private var advancedRemoveFailed = false
   @State private var removingSpeech = false
   @State private var speechRemoveFailed = false
   @ObservedObject var models: ModelsUpdater
-  @ObservedObject var advanced: ModelsUpdater
   @ObservedObject var speech: ModelsUpdater
   let clearChoices: () -> Void
 
@@ -176,20 +173,6 @@ struct SettingsForm: View {
             }
             Toggle("自動檢查更新", isOn: $checkForUpdates)
             LabeledContent("選字模型") { ModelsState(updater: models) }
-            if advanced.supported {
-              LabeledContent("進階模型") {
-                HStack {
-                  ModelsState(updater: advanced, current: advancedRemoveFailed ? "無法移除" : nil)
-                  if advanced.removable { Button("移除") { removingAdvanced = true } }
-                }
-              }
-              .alert("移除進階模型？", isPresented: $removingAdvanced) {
-                Button("移除", role: .destructive) { Task { advancedRemoveFailed = !(await advanced.remove()) } }
-                Button("取消", role: .cancel) {}
-              } message: {
-                Text("打字停頓時，不再用進階模型重選整句。")
-              }
-            }
             if speech.supported {
               LabeledContent("語音模型") {
                 HStack {
@@ -205,7 +188,7 @@ struct SettingsForm: View {
               }
             }
             LabeledContent("歡迎視窗") {
-              Button("開啟") { WelcomeWindow.show(models: models, advanced: advanced) }
+              Button("開啟") { WelcomeWindow.show(models: models) }
             }
             LabeledContent("授權", value: "MIT")
             LabeledContent("引擎與詞庫") {
@@ -242,7 +225,6 @@ struct SettingsForm: View {
     .fixedSize(horizontal: false, vertical: true)
     .task { update = await checkForUpdate() }
     .task { await models.check() }
-    .task { if advanced.supported { await advanced.check() } }
     .task { if speech.supported { await speech.check() } }
   }
 }
@@ -354,14 +336,14 @@ final class ModelsUpdater: ObservableObject {
     case current, available(Release), downloading(Double), failed
   }
 
-  enum Kind { case models, advanced, speech }
+  enum Kind { case models, speech }
 
-  private static var shared: (ModelsUpdater, ModelsUpdater)?
+  private static var shared: ModelsUpdater?
   private static var sharedSpeech: ModelsUpdater?
 
-  static func shared(for models: PKModels) -> (ModelsUpdater, ModelsUpdater) {
+  static func shared(for models: PKModels) -> ModelsUpdater {
     if let shared { return shared }
-    let made = (ModelsUpdater(models: models), ModelsUpdater(models: models, kind: .advanced))
+    let made = ModelsUpdater(models: models)
     shared = made
     return made
   }
@@ -383,28 +365,24 @@ final class ModelsUpdater: ObservableObject {
   private var prefix: String {
     switch kind {
     case .models: "models-"
-    case .advanced: "advanced-"
     case .speech: "speech-"
     }
   }
   private var required: [String] {
     switch kind {
     case .models: ["data.txt", "bigram.bin", "chars.bin"]
-    case .advanced: ["advanced.gguf"]
     case .speech: ["speech.gguf", "speech-encoder.gguf"]
     }
   }
   private var version: String {
     switch kind {
     case .models: models.version
-    case .advanced: models.advancedVersion
     case .speech: models.speechVersion
     }
   }
   private var downloads: URL {
     switch kind {
     case .models: models.downloads
-    case .advanced: models.advancedDownloads
     case .speech: models.speechDownloads
     }
   }
@@ -560,8 +538,8 @@ private func sha256(of file: URL) throws -> String {
 @objc(PKSettingsForm)
 final class SettingsFormFactory: NSObject {
   @MainActor @objc static func makeView(clearChoices: @escaping () -> Void, models: PKModels) -> NSView {
-    let (updater, advanced) = ModelsUpdater.shared(for: models)
-    return NSHostingView(rootView: SettingsForm(models: updater, advanced: advanced, speech: ModelsUpdater.speech(for: models),
+    let updater = ModelsUpdater.shared(for: models)
+    return NSHostingView(rootView: SettingsForm(models: updater, speech: ModelsUpdater.speech(for: models),
                                                 clearChoices: clearChoices).defaultAppStorage(PKDefaults()))
   }
 }
