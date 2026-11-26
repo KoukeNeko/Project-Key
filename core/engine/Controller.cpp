@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <unordered_set>
 
 #include "Models.h"
 #include "Utf8.h"
@@ -1511,26 +1512,33 @@ void Controller::commitWithAssociated(const std::string& text) {
         last.reading.find(Composer::kAnyTone) == std::string::npos
             ? env_.lm->findAssociatedPhrasesV2(last.text, McBopomofo::AssociatedPhrasesV2::SplitReadings(last.reading))
             : env_.lm->findAssociatedPhrasesV2(last.text.substr(0, first), {});
+    std::unordered_set<std::string> seen;
     for (const auto& phrase : found) {
-      if (phrase.value.size() > last.text.size() && phrase.value.starts_with(last.text)) phrases.push_back(phrase.value.substr(last.text.size()));
+      if (phrase.value.size() > last.text.size() && phrase.value.starts_with(last.text)) {
+        std::string suffix = phrase.value.substr(last.text.size());
+        if (seen.insert(suffix).second) phrases.push_back(std::move(suffix));
+      }
     }
     // The table ranks the whole phrases by how common each is; the character model, with what
-    // the user typed, ranks what follows by how likely it is to follow this text.
+    // the user typed, ranks what follows by how likely it is to follow this text. Dividing by
+    // len^0.35 keeps longer phrases from losing automatically to single-character suffixes.
     if (env_.chars) {
       std::vector<uint32_t> before = CharModel::CodePoints(text);
       std::vector<std::pair<double, std::string>> scored;
       for (std::string& phrase : phrases) {
         uint32_t first = before.size() > 1 ? before[before.size() - 2] : CharModel::kBoundary;
         uint32_t second = before.empty() ? CharModel::kBoundary : before.back();
+        std::vector<uint32_t> codePoints = CharModel::CodePoints(phrase);
         double log10P = 0;
-        for (uint32_t next : CharModel::CodePoints(phrase)) {
+        for (uint32_t next : codePoints) {
           double p = env_.chars->probability(first, second, next);
           if (env_.personal) p = env_.personal->blend(p, first, second, next);
           log10P += std::log10(p);
           first = second;
           second = next;
         }
-        scored.emplace_back(log10P, std::move(phrase));
+        double score = codePoints.empty() ? log10P : log10P / std::pow(static_cast<double>(codePoints.size()), 0.35);
+        scored.emplace_back(score, std::move(phrase));
       }
       std::stable_sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
       for (size_t i = 0; i < scored.size(); i++) phrases[i] = std::move(scored[i].second);

@@ -145,7 +145,7 @@ class Composer {
   // How much the sentence model's log10 P(sentence) adds to a path's score, and how many paths
   // it reranks: 0.5 and 10 put 229 of the 240 corpus sentences right instead of 224, and 1448 of
   // 2000 held-out Wikipedia sentences instead of 1353 (20 paths do no better, 5 slightly worse).
-  static constexpr double kSentenceWeight = 0.5;
+  static constexpr double kSentenceWeight = 0.8;
   static constexpr size_t kSentencePaths = 10;
   // The advanced model (AdvancedModel.h) is too slow for every key, so it chooses among the same
   // best paths once the typing pauses: the platform takes a request, has the model score its

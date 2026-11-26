@@ -1219,6 +1219,15 @@ int main(int argc, char** argv) {
   assert(client.panelVisible && client.panel.rows[0] == following);
   controller.clickCandidate(0, 0);
   assert(client.committed.substr(before) == "輸入法" && !client.panelVisible);
+  // Duplicate suffixes from multiple readings of the same phrase (e.g. 電腦輔助教學) appear only once.
+  Type(controller, "2u04sl3");
+  assert(controller.handleKey(Special(ProjectKey::Key::kReturn)) && client.panelVisible);
+  {
+    std::vector<std::string> unique = client.panel.rows[0];
+    std::sort(unique.begin(), unique.end());
+    assert(std::adjacent_find(unique.begin(), unique.end()) == unique.end());
+  }
+  assert(controller.handleKey(Special(ProjectKey::Key::kEscape)) && !client.panelVisible);
   settings.remove(Setting::kCandidatePosition);
   settings.remove(Setting::kAssociatedPhrases);
 
