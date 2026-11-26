@@ -38,20 +38,20 @@ SOFTWARE.
 
 ### 發行版隨附的詞庫與上下文模型
 
-發行版（macOS、Windows 與 Homebrew 的 Linux formula）隨附 `tools/bigram-trainer` 訓練出的三個資料檔，建置時由 `tools/bigram-trainer/fetch-models.sh` 從 GitHub 發行檔下載並以 `models.sha256` 核對。它們與程式分開授權，安裝在同一個資料夾，旁邊附上來源與授權說明 [`MODELS-NOTICE.txt`](tools/bigram-trainer/MODELS-NOTICE.txt) 與 LGPL 條文 [`LICENSE-LGPL-2.1.txt`](tools/bigram-trainer/LICENSE-LGPL-2.1.txt)。
+發行版（macOS、Windows 與 Homebrew 的 Linux formula）隨附 `tools/bigram-trainer` 與 `tools/lm-trainer` 訓練出的四個資料檔，建置時由 `tools/bigram-trainer/fetch-models.sh` 從 GitHub 發行檔下載並以 `models.sha256` 核對。它們與程式分開授權，安裝在同一個資料夾，旁邊附上來源與授權說明 [`MODELS-NOTICE.txt`](tools/bigram-trainer/MODELS-NOTICE.txt) 與 LGPL 條文 [`LICENSE-LGPL-2.1.txt`](tools/bigram-trainer/LICENSE-LGPL-2.1.txt)。
 
 | 檔案 | 來源 | 授權 |
 |---|---|---|
-| `bigram.bin`、`chars.bin` | 從[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）與[立法院公報](https://ppg.ly.gov.tw)（資料提供者：立法院，政府資料開放授權條款第 1 版）統計的詞與字 n-gram，不含原文 | CC BY-SA 4.0 |
+| `bigram.bin`、`chars.bin`、`sentence.bin` | 以臺灣繁體中文語料（約 1.37 億字）訓練的詞與字 n-gram（`bigram.bin`、`chars.bin`）與字元級 GPT-2 整句模型的權重（`sentence.bin`），不含原文。語料來自 [agentlans/fineweb2-chinese](https://huggingface.co/datasets/agentlans/fineweb2-chinese) 的臺灣網頁文字（衍生自 HuggingFaceFW/fineweb-2，ODC-BY）、[twinkle-ai/tw-reasoning-instruct-50k](https://huggingface.co/datasets/twinkle-ai/tw-reasoning-instruct-50k) 的問答（MIT）、[立法院公報](https://ppg.ly.gov.tw)（資料提供者：立法院，政府資料開放授權條款第 1 版；部分段落由 [Breeze-7B-Instruct-v1_0](https://huggingface.co/MediaTek-Research/Breeze-7B-Instruct-v1_0)（聯發創新基地，Apache License 2.0）改寫為口語）、[erhwenkuo/wikinews-zhtw](https://huggingface.co/datasets/erhwenkuo/wikinews-zhtw) 的中文維基新聞（維基新聞貢獻者，CC BY-SA 3.0）、[OpenFormosa/common_voice_25_zh-TW](https://huggingface.co/datasets/OpenFormosa/common_voice_25_zh-TW) 的 Mozilla Common Voice 25 句子（CC0 1.0），以及經過濾、以 OpenCC 轉為臺灣正體的[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0） | CC BY-SA 4.0 |
 | `data.txt` | McBopomofo 詞庫（MIT），加上 [libchewing-data](https://github.com/chewing/libchewing-data) `tsi.csv`（commit `c44e81aef24b06f1509f19e1be54c99812d0c43f`，LGPL-2.1-or-later）的詞、[全國路名資料](https://data.gov.tw/dataset/35321)（115 年版，資料提供者：內政部戶政司，政府資料開放授權條款第 1 版）的路名與鄉鎮市區名，以及從上述訓練文字找出的詞 | LGPL-2.1-or-later |
 
 程式在執行時讀取這些檔案，可以直接替換或移除；沒有它們時改用 McBopomofo 的詞庫與排序。
 
-自 models-2026-11-09 起，模型另附 `sentence.bin`：`tools/lm-trainer` 訓練的整句模型（字元級 GPT-2 的權重），以[中文維基百科](https://zh.wikipedia.org)（維基百科貢獻者，CC BY-SA 4.0）經 OpenCC 轉為臺灣正體後訓練，不含原文，以 CC BY-SA 4.0 授權。自 models-2026-11-14 起，它再經微調，使排序候選句的方式接近 [Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B)（Google DeepMind，Apache License 2.0），候選句打自上述維基百科、立法院公報，以及由 [Breeze-7B-Instruct-v1_0](https://huggingface.co/MediaTek-Research/Breeze-7B-Instruct-v1_0)（聯發創新基地，Apache License 2.0）改寫為口語的公報文字。此檔案為選用；未提供時，引擎不重新排序整句候選。
+`sentence.bin` 為選用；未提供時，引擎不重新排序整句候選。
 
-### 進階模型與 llama.cpp
+### llama.cpp
 
-設定視窗可另外下載進階模型（`advanced-YYYY-MM-DD` release 的 `advanced.gguf`）：[Gemma 4 E2B](https://huggingface.co/google/gemma-4-E2B)（Google DeepMind，Apache License 2.0）刪去中文用不到的詞表、量化為 4 位元的 GGUF，release 附 Apache License 2.0 條文。打字停頓時，引擎用它從同一批整句候選中重選。[llama.cpp](https://github.com/ggml-org/llama.cpp)（MIT）執行這個模型：發行版與 Linux 套件以 [LLAMA_RELEASE](LLAMA_RELEASE) 指定的版本建置並連結進去；自行建置時以 `PROJECTKEY_LLAMA`（Windows 亦可用 `build.ps1 -Llama`）指向其原始碼。
+[llama.cpp](https://github.com/ggml-org/llama.cpp)（MIT）執行下方的語音模型：發行版與 Linux 套件以 [LLAMA_RELEASE](LLAMA_RELEASE) 指定的版本建置並連結進去；自行建置時以 `PROJECTKEY_LLAMA`（Windows 亦可用 `build.ps1 -Llama`）指向其原始碼。
 
 ### 語音模型與 miniaudio
 
