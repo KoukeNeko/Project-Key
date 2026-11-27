@@ -3,9 +3,20 @@ name: Release
 # Pushing a tag vX.Y.Z, where X.Y.Z is the version in Info.plist, ProjectKey.rc and the Linux CMakeLists.txt,
 # builds both platforms, publishes the GitHub release, and points the Homebrew cask
 # and the Scoop manifest at its files and the Homebrew formula (Linux) at its source.
+#
+# Run by hand with a released tag, it rebuilds that release's files from the branch it runs on, whose
+# version must still match, and replaces them: for a release whose build has changed since.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The released tag to rebuild, such as v1.2.3
+        required: true
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: read
@@ -23,12 +34,12 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - id: check
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           mac="$(/usr/bin/env python3 -c 'import plistlib; print(plistlib.load(open("platforms/macos/Resources/Info.plist", "rb"))["CFBundleShortVersionString"])')"
           win="$(sed -n 's/.*VALUE "ProductVersion", "\(.*\)".*/\1/p' platforms/windows/Sources/TextService/ProjectKey.rc)"
           linux="$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' platforms/linux/CMakeLists.txt)"
           if [ "$mac" != "$version" ] || [ "$win" != "$version" ] || [ "$linux" != "$version" ]; then
-            echo "::error::the tag $GITHUB_REF_NAME does not match Info.plist ($mac), ProjectKey.rc ($win) and CMakeLists.txt ($linux)" >&2
+            echo "::error::the tag $TAG does not match Info.plist ($mac), ProjectKey.rc ($win) and CMakeLists.txt ($linux)" >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -87,6 +98,14 @@ jobs:
           xcrun stapler staple "Project Key 設定.app"
       - run: ditto -c -k --keepParent platforms/macos/build/ProjectKey.app "ProjectKey-${{ needs.version.outputs.version }}-macos.zip"
       - run: platforms/macos/package.sh && mv platforms/macos/build/ProjectKey-*-macos.pkg .
+      - name: Notarize the pkg
+        if: env.PROJECTKEY_INSTALLER_IDENTITY != ''
+        env:
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          xcrun notarytool submit ProjectKey-*-macos.pkg --key "$RUNNER_TEMP/AuthKey.p8" --key-id "$KEY_ID" --issuer "$ISSUER" --wait
+          xcrun stapler staple ProjectKey-*-macos.pkg
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos
@@ -219,7 +238,7 @@ jobs:
           # release, with a signature each that the README has the reader check against the repositories' key.
           for data in in/deb-trixie/fcitx5-projectkey-data_*.deb in/rpm/fcitx5-projectkey-data-*.rpm; do
             gpg --batch --yes --armor --detach-sign -u "$GPG_KEY" -o "$data.asc" "$data"
-            gh release upload "$GITHUB_REF_NAME" "$data" "$data.asc" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" "$data" "$data.asc" --clobber --repo "$GITHUB_REPOSITORY"
           done
           sh platforms/linux/publish-repos.sh in site
           cd site
@@ -247,13 +266,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The notes written for this version (distribution/README.md), or notes generated from the commits.
-          notes="distribution/release-notes/$GITHUB_REF_NAME.md"
+          notes="distribution/release-notes/$TAG.md"
           if [ -f "$notes" ]; then from=(--notes-file "$notes"); else from=(--generate-notes); fi
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS platforms/linux/install.sh --clobber
-            if [ -f "$notes" ]; then gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"; fi
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS platforms/linux/install.sh --clobber
+            if [ -f "$notes" ]; then gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$notes"; fi
           else
-            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Project Key ${{ needs.version.outputs.version }}" \
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Project Key ${{ needs.version.outputs.version }}" \
               "${from[@]}" ProjectKey-*.zip ProjectKey-*.pkg *.pkg.tar.zst SHA256SUMS platforms/linux/install.sh
           fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -315,14 +334,14 @@ jobs:
           # Linux: a formula built from the tag's source against the distribution's own Fcitx5,
           # which loads the addon. Named apart from the cask, so macOS's `brew install project-key`
           # still finds the cask.
-          mcb="$(curl -sSfL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/MCBOPOMOFO_COMMIT" | tr -d '[:space:]')"
-          src_sha="$(curl -sSfL "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$GITHUB_REF_NAME.tar.gz" | sha256sum | cut -d' ' -f1)"
+          mcb="$(curl -sSfL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/MCBOPOMOFO_COMMIT" | tr -d '[:space:]')"
+          src_sha="$(curl -sSfL "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$TAG.tar.gz" | sha256sum | cut -d' ' -f1)"
           mcb_sha="$(curl -sSfL "https://github.com/openvanilla/McBopomofo/archive/$mcb.tar.gz" | sha256sum | cut -d' ' -f1)"
           # llama.cpp for the advanced model, at the tag's LLAMA_RELEASE.
-          llama="$(curl -sSfL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/LLAMA_RELEASE" | tr -d '[:space:]')"
+          llama="$(curl -sSfL "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/LLAMA_RELEASE" | tr -d '[:space:]')"
           llama_sha="$(curl -sSfL "https://github.com/ggml-org/llama.cpp/archive/refs/tags/$llama.tar.gz" | sha256sum | cut -d' ' -f1)"
           # The trained dictionary and context models, as pinned by the tag's fetch-models.sh and models.sha256.
-          raw="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_REF_NAME/tools/bigram-trainer"
+          raw="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG/tools/bigram-trainer"
           models_tag="$(curl -sSfL "$raw/fetch-models.sh" | sed -n 's/^TAG=//p')"
           sums="$(curl -sSfL "$raw/models.sha256")"
           if [ -z "$mcb" ] || [ -z "$llama" ] || [ -z "$models_tag" ] || [ -z "$sums" ]; then
