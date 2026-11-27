@@ -1,18 +1,18 @@
 Origin: Project Key
 Label: Project Key
 Codename: jammy
-Date: Thu, 26 Nov 2026 18:44:43 UTC
+Date: Fri, 27 Nov 2026 07:21:37 UTC
 Architectures: amd64
 Components: main
 MD5Sum:
- a983504996c847d6db2a3ae93687b5de 1247 main/binary-amd64/Packages
- 674fd8cd1ff5ff2b8ec98872e2f64029 696 main/binary-amd64/Packages.gz
+ 93553e9a96bb5d6aefa383d64bd3d1a8 1247 main/binary-amd64/Packages
+ 8ff4a3b9e185ffc0e2a7122b4197a5d8 697 main/binary-amd64/Packages.gz
  3d983cefd907751fc7be098599d00958 75 main/binary-amd64/Release
 SHA1:
- b01832515ed03560d68728401df7017459e8e722 1247 main/binary-amd64/Packages
- 7d9de8eca05e6ff9d6dd47ec1140604ef3026c99 696 main/binary-amd64/Packages.gz
+ 669eed550653f1ed21dcb7292c3182e07afec313 1247 main/binary-amd64/Packages
+ 9c2863389f3402963a55e94d6368d3c1c9f8d3f2 697 main/binary-amd64/Packages.gz
  98c05fe6c462b0ac1e1450f7884cf3c9658a1e92 75 main/binary-amd64/Release
 SHA256:
- 30a6aeb20e16d4be6283de6f97b0e48163ea3dbb50c5f9e054002efc25dc1a1f 1247 main/binary-amd64/Packages
- 05593773cfa93936461432712cca8194f52a766326f5f0130f2ef8f47455d4ae 696 main/binary-amd64/Packages.gz
+ b161e8b55775d067bfb4f236582c8ff4ba3c28db97c6b698a227c7a9aa8f5930 1247 main/binary-amd64/Packages
+ d026fc7a8fea4954b67a3b593918d0d341d845ceca963650f951d02ac702548f 697 main/binary-amd64/Packages.gz
  3607a1a94c098b2a50fa62f3eafdc0469ef9aebeca7ff087027fed92e1e491a8 75 main/binary-amd64/Release

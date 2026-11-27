@@ -10,10 +10,10 @@ Homepage: https://github.com/KoukeNeko/Project-Key
 Priority: optional
 Section: utils
 Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.12.2-1~jammy_amd64.deb
-Size: 2841400
-SHA256: 8689b0485833587b7b60670bf9e08e9b0383beaa878d95a67ffd3645b7c863ac
-SHA1: 5d48e9ad63eb20556ac2888a2f36cdfda343b1a7
-MD5sum: 24f383a1a705c968806c502b534706d4
+Size: 2841396
+SHA256: c7f91b8738913305abbf2ae85502de55afcb035f856a448079229bd3d138627c
+SHA1: 169fb5c8ce2f5f2786c24aaff0c5ec255aaaab86
+MD5sum: c5c8a4444e37483496689bb501d68cdd
 Description: Zhuyin input method for Fcitx5
  Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
  for Fcitx5 on GNOME, KDE and other desktops.

@@ -11,9 +11,9 @@ Priority: optional
 Section: utils
 Filename: pool/main/f/fcitx5-projectkey/fcitx5-projectkey_0.12.2-1~trixie_amd64.deb
 Size: 3248680
-SHA256: e571e71e419f397a4a3c7c644520975d2256cba38eb722283b95275d2098f94f
-SHA1: 6b7281ba988cf42ce3fb9f906cbc2d4c97f7c7fc
-MD5sum: 5ebca55e7432364df9e15185a6c50a1e
+SHA256: f1dccf54edcbf3b3e22ce87b1859362f4c1ec0407d4c0c82d6fe0729e5dd7e75
+SHA1: 33a2423c2e1ccffa72fad943e549dc45588817e5
+MD5sum: badb571e7e25bdbcab4213cdc0fbfaee
 Description: Zhuyin input method for Fcitx5
  Project Key, a Zhuyin (Bopomofo) input method with sentence prediction,
  for Fcitx5 on GNOME, KDE and other desktops.

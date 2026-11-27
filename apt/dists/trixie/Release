@@ -1,18 +1,18 @@
 Origin: Project Key
 Label: Project Key
 Codename: trixie
-Date: Thu, 26 Nov 2026 18:44:43 UTC
+Date: Fri, 27 Nov 2026 07:21:37 UTC
 Architectures: amd64
 Components: main
 MD5Sum:
- 073599849ca37b4524079f888dc6efb7 1367 main/binary-amd64/Packages
- f8c2dcad1244afd69c0c287887e847b4 753 main/binary-amd64/Packages.gz
+ f3d2c3dfe81f1fc948c3abf1c4c59bcb 1367 main/binary-amd64/Packages
+ 69701e07ec275826c9c5fc993814de3f 753 main/binary-amd64/Packages.gz
  3d983cefd907751fc7be098599d00958 75 main/binary-amd64/Release
 SHA1:
- 613f593e60d6bd6e727d365e716114aa3a2ad09f 1367 main/binary-amd64/Packages
- 652b1d0e5e2f5223e938ff72aad1d1ed8177922e 753 main/binary-amd64/Packages.gz
+ cd8ff917ec41f1ecc377a125cc6f15ab1bb8521d 1367 main/binary-amd64/Packages
+ 8e73eae4cdf261d54d645e40b61c63a125b56baf 753 main/binary-amd64/Packages.gz
  98c05fe6c462b0ac1e1450f7884cf3c9658a1e92 75 main/binary-amd64/Release
 SHA256:
- a233ce0063ead28009a8523962e907f904100c7f1ea73ffaf9a895e533d9a4d7 1367 main/binary-amd64/Packages
- 1b8d4e771e3fb2b5ae4c0ae61ed0a2be0118ddf2732dda5029dc3e369d2e7596 753 main/binary-amd64/Packages.gz
+ 0413ac53b7372e0d2ff6d9b36a9ef1ea7f5d703520213b1d1777b4211c48858c 1367 main/binary-amd64/Packages
+ 3b76b666b4e0ce618e80f632cb3c41284c03ed80215c4a391a6aaf5d0a65d6dd 753 main/binary-amd64/Packages.gz
  3607a1a94c098b2a50fa62f3eafdc0469ef9aebeca7ff087027fed92e1e491a8 75 main/binary-amd64/Release
