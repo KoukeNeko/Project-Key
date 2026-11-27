@@ -5,6 +5,9 @@
 # (tools/bigram-trainer/fetch-models.sh) are there, as releases need them.
 set -eu
 cd "$(dirname "$0")"
+# PROJECTKEY_SIGN_IDENTITY, the SHA-1 of a Developer ID Application identity, signs for notarization; otherwise ad-hoc.
+SIGN="--sign -"
+[ -n "${PROJECTKEY_SIGN_IDENTITY:-}" ] && SIGN="--sign $PROJECTKEY_SIGN_IDENTITY --options runtime --timestamp"
 TRAINED=../../tools/bigram-trainer/.cache
 if [ "${1:-}" = --require-models ]; then
   for file in data.txt bigram.bin chars.bin models-version.txt; do
@@ -84,7 +87,8 @@ if [ -f "$TRAINED/models-version.txt" ]; then cp "$TRAINED/models-version.txt" "
 if [ -f "$TRAINED/data.txt" ] || [ -f "$TRAINED/bigram.bin" ]; then
   cp ../../tools/bigram-trainer/MODELS-NOTICE.txt ../../tools/bigram-trainer/LICENSE-LGPL-2.1.txt "$APP/Contents/Resources/"
 fi
-codesign --force --sign - "$APP"
+# shellcheck disable=SC2086
+codesign --force $SIGN --entitlements Resources/ProjectKey.entitlements "$APP"
 echo "built $APP"
 
 # The settings app (Sources/SettingsApp): the same settings window, opened without the input menu.
@@ -99,5 +103,6 @@ for key in CFBundleShortVersionString CFBundleVersion; do  # the input method's,
   plutil -replace $key -string "$(plutil -extract $key raw Resources/Info.plist)" "$SETTINGS/Contents/Info.plist"
 done
 cp Resources/AppIcon.icns ../linux/fcitx-projectkey.svg "$SETTINGS/Contents/Resources/"
-codesign --force --sign - "$SETTINGS"
+# shellcheck disable=SC2086
+codesign --force $SIGN "$SETTINGS"
 echo "built $SETTINGS"

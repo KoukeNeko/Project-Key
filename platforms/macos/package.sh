@@ -37,5 +37,8 @@ cat > "$WORK/distribution.xml" <<XML
 </installer-gui-script>
 XML
 OUT="build/ProjectKey-$VERSION-macos.pkg"
-productbuild --distribution "$WORK/distribution.xml" --package-path "$WORK" "$OUT" >/dev/null
+# PROJECTKEY_INSTALLER_IDENTITY, a Developer ID Installer identity, signs it for notarization.
+set --
+[ -n "${PROJECTKEY_INSTALLER_IDENTITY:-}" ] && set -- --sign "$PROJECTKEY_INSTALLER_IDENTITY" --timestamp
+productbuild --distribution "$WORK/distribution.xml" --package-path "$WORK" "$@" "$OUT" >/dev/null
 echo "built $OUT"

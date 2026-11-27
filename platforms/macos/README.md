@@ -108,6 +108,6 @@ platforms/macos/install.sh   # 安裝到 ~/Library/Input Methods 並向系統註
 ## 尚未實作
 
 - 候選清單的排序仍依詞庫分數，未依前後文調整。
-- Universal binary：僅編譯本機架構。程式碼簽章為 ad-hoc，尚未經公證，無法散布至其他電腦。
+- Universal binary：僅編譯本機架構。本機建置為 ad-hoc 簽章；發行版以 Developer ID 簽章並經公證。
 
 `ProjectKey --preview <資料夾>` 將候選視窗的數個狀態繪製為 PNG，供設計檢查使用。
