@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Linq;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text.Json;
@@ -376,7 +377,9 @@ public sealed partial class MainWindow : Window {
         Update.Content = new TextBlock { Text = "已是最新版本" };
         return;
       }
-      string name = $"ProjectKey-{latest}-windows-x64.zip";
+      // The machine's, not this process's: an x64 copy on ARM64 moves to the native build.
+      string arch = RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "x64";
+      string name = $"ProjectKey-{latest}-windows-{arch}.zip";
       ModelsFile? zip = null;
       foreach (JsonElement asset in release.RootElement.GetProperty("assets").EnumerateArray()) {
         if (asset.GetProperty("name").GetString() == name && asset.TryGetProperty("digest", out JsonElement digest) &&

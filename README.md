@@ -42,7 +42,7 @@
 brew install --cask koukeneko/tap/project-key
 ```
 
-**Windows 11，x64**
+**Windows 11，x64 或 ARM64**
 
 ```sh
 scoop bucket add koukeneko https://github.com/KoukeNeko/scoop-bucket
@@ -153,7 +153,7 @@ curl -fsSL https://github.com/KoukeNeko/Project-Key/releases/latest/download/ins
 ## 相容性
 
 - **macOS** 13 以上，Apple 晶片；候選視窗於 macOS 26 以上可採用 Liquid Glass
-- **Windows** 11，x64；設定視窗使用 Windows 11 內建的 Windows App Runtime 2
+- **Windows** 11，x64 或 ARM64；設定視窗使用 Windows 11 內建的 Windows App Runtime 2
 - **Linux** 上的 Fcitx5：發行版與桌面見[安裝](#安裝)的表格
 - **iOS** 17 以上的鍵盤擴充，採大千排列；不含整句模型
 - **鍵盤排列**（macOS、Windows、Linux）：大千、倚天、許氏、倚天 26 鍵、IBM

@@ -96,7 +96,14 @@ jobs:
 
   windows:
     needs: version
-    runs-on: windows-2025
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm  # build.ps1 builds for the machine it runs on, and runs its tests
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
@@ -117,11 +124,11 @@ jobs:
           Copy-Item platforms/windows/build/out package -Recurse
           Get-ChildItem package -Recurse -Include *.lib, *.exp | Remove-Item
           Copy-Item platforms/windows/install.ps1, platforms/windows/uninstall.ps1 package
-          Compress-Archive package/* "ProjectKey-${{ needs.version.outputs.version }}-windows-x64.zip"
+          Compress-Archive package/* "ProjectKey-${{ needs.version.outputs.version }}-windows-${{ matrix.arch }}.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: windows
-          path: ProjectKey-*-windows-x64.zip
+          name: windows-${{ matrix.arch }}
+          path: ProjectKey-*-windows-${{ matrix.arch }}.zip
 
   arch:
     needs: version
@@ -429,10 +436,11 @@ jobs:
           TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
         run: |
           sha="$(awk '/-windows-x64.zip$/ { print $1 }' SHA256SUMS)"
+          arm_sha="$(awk '/-windows-arm64.zip$/ { print $1 }' SHA256SUMS)"
           git clone --depth 1 "https://x-access-token:$TOKEN@github.com/KoukeNeko/scoop-bucket.git" bucket
           # A Scoop update runs the old uninstaller first; install.ps1 replaces the files
           # in place, so only a real uninstall removes the keyboard and its files.
-          jq -n --arg version "$VERSION" --arg hash "$sha" '{
+          jq -n --arg version "$VERSION" --arg hash "$sha" --arg arm_hash "$arm_sha" '{
             version: $version,
             description: "Zhuyin input method",
             homepage: "https://github.com/KoukeNeko/Project-Key",
@@ -444,12 +452,18 @@ jobs:
             architecture: {"64bit": {
               url: "https://github.com/KoukeNeko/Project-Key/releases/download/v\($version)/ProjectKey-\($version)-windows-x64.zip",
               hash: $hash
+            }, "arm64": {
+              url: "https://github.com/KoukeNeko/Project-Key/releases/download/v\($version)/ProjectKey-\($version)-windows-arm64.zip",
+              hash: $arm_hash
             }},
             installer: {script: "& \"$dir\\install.ps1\" -Source $dir"},
             uninstaller: {script: "if ($cmd -eq \"uninstall\") { & \"$dir\\uninstall.ps1\" }"},
             checkver: {github: "https://github.com/KoukeNeko/Project-Key"},
             autoupdate: {
-              architecture: {"64bit": {url: "https://github.com/KoukeNeko/Project-Key/releases/download/v$version/ProjectKey-$version-windows-x64.zip"}},
+              architecture: {
+                "64bit": {url: "https://github.com/KoukeNeko/Project-Key/releases/download/v$version/ProjectKey-$version-windows-x64.zip"},
+                "arm64": {url: "https://github.com/KoukeNeko/Project-Key/releases/download/v$version/ProjectKey-$version-windows-arm64.zip"}
+              },
               hash: {url: "https://github.com/KoukeNeko/Project-Key/releases/download/v$version/SHA256SUMS"}
             }
           }' > bucket/bucket/project-key.json

@@ -131,4 +131,4 @@ platforms\windows\install.ps1    # 安裝到 C:\Program Files\Project Key 並註
 
 - 自行建置的上下文模型：`tools/bigram-trainer` 的訓練腳本為 shell script，於 Windows 上須另行執行，或以 Git Bash 執行 `fetch-models.sh` 下載發行版所用的同一組檔案。存在 `bigram.bin`、`chars.bin` 時，`build.ps1` 一併安裝；存在補充詞彙後的 `data.txt` 時，以其取代 McBopomofo 的詞庫。缺少這些檔案時，選字結果與 McBopomofo 相同。發行版已附有這些檔案。
 - 選過的字僅存於伺服器記憶體，登出或重新安裝後清空（同 macOS）；自送出文字學得的字串次數存於 `%LOCALAPPDATA%\Project Key\personal.txt`，設定中的「清除」一併清空。Store App、沙盒中與低完整性的 App 不依此紀錄排序，亦不寫入紀錄，以免經由候選順序得知於其他 App 輸入過的文字。
-- 程式碼簽章與安裝程式：目前以 PowerShell 腳本安裝，僅支援 x64。
+- 程式碼簽章與安裝程式：目前以 PowerShell 腳本安裝。

@@ -29,7 +29,10 @@ jobs:
 
   # Builds the text service, server and settings app, and runs the engine and protocol tests.
   windows:
-    runs-on: windows-2025
+    strategy:
+      matrix:
+        runner: [windows-2025, windows-11-arm]  # x64 and ARM64: build.ps1 builds for the machine it runs on
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6

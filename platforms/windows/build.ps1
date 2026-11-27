@@ -20,18 +20,20 @@ $Mcb = Join-Path $Build 'mcbopomofo'
 $Obj = Join-Path $Build 'obj'
 $Out = Join-Path $Build 'out'
 $Core = Join-Path $PSScriptRoot '..\..\core\engine'  # the engine shared with macOS
+# Built for the machine it runs on, x64 or ARM64, so the tests run too.
+$Arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 New-Item -ItemType Directory -Force $Build, $Obj, $Out | Out-Null
 
-# MSVC environment from vcvars64.bat.
+# MSVC environment from vcvars64.bat, or vcvarsarm64.bat.
 if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
   $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -products * `
-    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    -requires $(if ($Arch -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }) -property installationPath
   if (-not $vs) { throw 'Visual Studio with the C++ desktop workload is required' }
   # A stray quote in PATH breaks vcvars64.bat's parenthesized blocks.
   $env:PATH = $env:PATH.Replace('"', '')
   # A batch file avoids cmd's quoting of a path with spaces and parentheses.
   $bat = Join-Path $Build 'vcvars.cmd'
-  Set-Content $bat "@call `"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul`r`n@set" -Encoding ascii
+  Set-Content $bat "@call `"$vs\VC\Auxiliary\Build\vcvars$(if ($Arch -eq 'arm64') { 'arm64' } else { '64' }).bat`" >nul`r`n@set" -Encoding ascii
   cmd /c $bat | ForEach-Object {
     if ($_ -match '^([^=]+)=(.*)$') { Set-Item "env:$($Matches[1])" $Matches[2] }
   }
@@ -91,12 +93,16 @@ $CxxFlags = @('/nologo', '/Brepro', '/std:c++20', '/utf-8', '/EHsc', '/O2', '/MT
   "/I$PSScriptRoot\compat", "/I$Engine", "/I$Core", "/I$PSScriptRoot\Sources")
 
 # llama.cpp for the advanced model (core/engine/AdvancedModel.h): one static CPU backend for x86-64-v3
-# (AVX2 and FMA), as on Linux, with the static runtime the rest is built with.
+# (AVX2 and FMA), as on Linux, or ARMv8.2 with dot product, with the static runtime the rest is built with.
+# ggml takes the ARM level only from clang, as llama.cpp's own Windows ARM64 builds use.
 $LlamaLibs = @()
 if ($Llama) {
   $LlamaBuild = Join-Path $Build 'llama'
+  $LlamaCpu = if ($Arch -eq 'arm64') {
+    '-DCMAKE_C_COMPILER=clang', '-DCMAKE_CXX_COMPILER=clang++', '-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod'
+  } else { '-DGGML_AVX=ON', '-DGGML_AVX2=ON', '-DGGML_FMA=ON', '-DGGML_F16C=ON' }
   Invoke-Native cmake -S $Llama -B $LlamaBuild -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF `
-    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON `
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DGGML_NATIVE=OFF @LlamaCpu `
     -DGGML_OPENMP=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_SERVER=OFF -DLLAMA_CURL=OFF `
     -DLLAMA_BUILD_MTMD=ON -DMTMD_VIDEO=OFF
   # mtmd, llama.cpp's audio input, for the speech model (core/engine/SpeechModel.h); the microphone
@@ -196,6 +202,7 @@ if (-not (Test-Path $dotnet)) { throw 'the .NET SDK is required for the settings
 # The icon goes in the program for its Start menu shortcut, and beside it for the windows (AppWindow.SetIcon).
 # AdvancedModel shows the 進階模型 card only where the server can run what it downloads.
 Invoke-Native $dotnet build "$PSScriptRoot\Settings\ProjectKeySettings.csproj" -c Release -nologo -v q -o "$Out\Settings" "-p:ApplicationIcon=$Icon" `
+  "-p:Platform=$Arch" "-p:RuntimeIdentifier=win-$Arch" `
   "-p:AdvancedModel=$([bool]$Llama)"
 Copy-Item $Icon "$Out\Settings"
 
